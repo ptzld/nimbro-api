@@ -37,8 +37,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://nimbro.net"
-Repository = "https://github.com/ptzld/nimbro_api"
+Homepage = "https://www.ais.uni-bonn.de/index.html"
+Repository = "https://github.com/ptzld/nimbro-api"
 
 [tool.setuptools.package-data]
 nimbro_api = ["test/assets/*", "**/*.json"]
