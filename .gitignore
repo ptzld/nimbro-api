@@ -1,0 +1,6 @@
+build
+dist
+src/nimbro_api.egg-info
+src/nimbro_api/test/*.txt
+__pycache__/
+*.py[cod]
