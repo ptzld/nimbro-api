@@ -44,12 +44,11 @@ def normalize_string(string):
 def recursive_normalize(obj):
     if isinstance(obj, str):
         return normalize_string(obj)
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         return [recursive_normalize(item) for item in obj]
-    elif isinstance(obj, dict):
+    if isinstance(obj, dict):
         return {key: recursive_normalize(value) for key, value in obj.items()}
-    else:
-        return obj
+    return obj
 
 def parse(self, success, message, completion):
     if isinstance(completion, dict):

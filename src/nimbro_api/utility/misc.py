@@ -15,7 +15,6 @@ class UnrecoverableError(Exception):
         - While this package is generally designed to avoid raising exceptions to the user, this is
           the specific exception that may be raised in rare cases, such as during object initialization.
     """
-    pass
 
 def assert_type_value(obj, type_or_value, *, match_types=True, match_inherited_types=True, match_types_as_values=False, name="object", prefix="", logger=None):
     """
@@ -399,8 +398,7 @@ def count_duplicates(iterable, *, include_unique=False):
             count_dict[item] = 1
     if include_unique:
         return count_dict
-    else:
-        return {key: value for key, value in count_dict.items() if value > 1}
+    return {key: value for key, value in count_dict.items() if value > 1}
 
 # Printing
 
@@ -608,9 +606,15 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
     printed = ""
     for i, line in enumerate(final_lines):
         if i == 0:
-            p = f"{escape['end']}{style}{prefix_first_line}: {line}{escape['end']}"
+            if style == "":
+                p = f"{prefix_first_line}: {line}"
+            else:
+                p = f"{style}{prefix_first_line}: {line}{escape['end']}"
         else:
-            p = f"{escape['end']}{style}{prefix_next_lines}| {line}{escape['end']}"
+            if style == "":
+                p = f"{prefix_next_lines}| {line}"
+            else:
+                p = f"{style}{prefix_next_lines}| {line}{escape['end']}"
         print(p)
         printed = f"{printed}\n{p}"
     if len(printed) > 0:

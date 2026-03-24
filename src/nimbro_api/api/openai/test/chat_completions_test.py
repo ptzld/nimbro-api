@@ -12,11 +12,30 @@ from ..client.chat_completions import ChatCompletions
 def test_01_utilities():
     client = ChatCompletions()
 
+    settings = client.get_settings()
+    assert_type_value(obj=settings['endpoint']['key_type'], type_or_value="environment", name="key 'key_type' of default endpoint")
+    key_name = settings['endpoint']['key_value']
+    key_before = os.getenv(key_name)
+    key_now = "supersecretkey"
+    os.environ[key_name] = key_now
+
     success, message, api_key = client.get_api_key()
     assert_type_value(obj=success, type_or_value=bool, name="success")
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
-    assert_type_value(obj=api_key, type_or_value=str, name="message")
+    assert_type_value(obj=api_key, type_or_value=key_now, name="API key")
+
+    assert_type_value(obj=os.getenv(key_name), type_or_value=key_now, name=f"environment variable '{key_name}' (pre)")
+
+    if key_before is None:
+        key_before = key_now
+
+    success, message = nimbro_api.set_api_key(name=key_name, key=key_before)
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+
+    assert_type_value(obj=os.getenv(key_name), type_or_value=key_before, name=f"environment variable '{key_name}' (post)")
 
 def test_02_endpoint():
     client = ChatCompletions()
@@ -124,10 +143,9 @@ def _text_completions(**kwargs):
     try:
         context[3]['content'] = json.loads(context[3]['content'])
     except Exception as e:
-        raise UnrecoverableError(f"Expected message '3' in context to be JSON-compliant but '{context[3]}' is not: {repr(e)}")
-    else:
-        target = {'role': "assistant", 'content': completion['text']}
-        assert_log(expression=context[3] == target, message=f"Expected message '3' in context to be {target} but got {context[3]}.")
+        raise UnrecoverableError(f"Expected message '3' in context to be JSON-compliant but '{context[3]}' is not: {repr(e)}") from e
+    target = {'role': "assistant", 'content': completion['text']}
+    assert_log(expression=context[3] == target, message=f"Expected message '3' in context to be {target} but got {context[3]}.")
 
     # reset context
     success, message = client.set_context()
@@ -1147,7 +1165,7 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
 
-    success, messages = client.set_context(mode="insert", messages={'role': "system", 'content': "You are a helpful assistant."})
+    success, message = client.set_context(mode="insert", messages={'role': "system", 'content': "You are a helpful assistant."})
     assert_type_value(obj=success, type_or_value=bool, name="success")
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)

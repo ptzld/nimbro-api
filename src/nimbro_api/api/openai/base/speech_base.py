@@ -222,8 +222,7 @@ class SpeechBase(ClientBase):
                         if self._settings['return_path'] is True:
                             if os.path.isfile(speech_path):
                                 return speech_path
-                            else:
-                                self._logger.warn(f"Cache-index '{cache_path}' references audio-file '{speech_path}' that does not exist.")
+                            self._logger.warn(f"Cache-index '{cache_path}' references audio-file '{speech_path}' that does not exist.")
                         else:
                             # open file
                             self._logger.debug(f"Reading referenced audio-file '{speech_path}'.")
@@ -235,15 +234,15 @@ class SpeechBase(ClientBase):
                             else:
                                 if self._settings['return_encoding'] == "bytes":
                                     return speech_bytes
-                                elif self._settings['return_encoding'] == "base64":
+                                if self._settings['return_encoding'] == "base64":
                                     success, message, speech_b64 = encode_b64(obj=speech_bytes, name=f"audio-file '{speech_path}' referenced in cache-index '{cache_path}'", logger=self._logger)
                                     if success:
                                         self._logger.debug(message)
                                         return speech_b64
-                                    else:
-                                        self._logger.warn(message)
+                                    self._logger.warn(message)
                                 else:
                                     raise NotImplementedError(f"Unknown encoding '{self._settings['return_encoding']}'.")
+        return None
 
     def cache_speech(self, job):
         # validate job
@@ -347,8 +346,7 @@ class SpeechBase(ClientBase):
                         self._logger.debug(f"Aborting redundant cache-job for file '{job['file']}'.")
                         release_lock(lock_resource)
                         return
-                    else:
-                        self._logger.warn(f"Updating entry in cache-index '{index_path}' from '{now}' to '{job['file']}'.")
+                    self._logger.warn(f"Updating entry in cache-index '{index_path}' from '{now}' to '{job['file']}'.")
                 else:
                     cache[job['endpoint']][job['model']][job['voice']][job['speed']][job['instructions']][job['text']] = {}
 

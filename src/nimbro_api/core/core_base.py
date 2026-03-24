@@ -12,7 +12,7 @@ from ..utility.misc import UnrecoverableError, assert_type_value, assert_log
 
 class CoreBase(ClientBase):
 
-    def __init__(self, default_settings):
+    def __init__(self, settings, default_settings):
         super().__init__(settings=None, default_settings=default_settings)
         self._cache = {}
         self._defer_queue = SimpleQueue()

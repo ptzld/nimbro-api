@@ -193,8 +193,7 @@ class ImagesBase(ClientBase):
                         if self._settings['return_path'] is True:
                             if os.path.isfile(image_path):
                                 return image_path
-                            else:
-                                self._logger.warn(f"Cache-index '{cache_path}' references image-file '{image_path}' that does not exist.")
+                            self._logger.warn(f"Cache-index '{cache_path}' references image-file '{image_path}' that does not exist.")
                         else:
                             # open file
                             self._logger.debug(f"Reading referenced image-file '{image_path}'.")
@@ -206,15 +205,15 @@ class ImagesBase(ClientBase):
                             else:
                                 if self._settings['return_encoding'] == "bytes":
                                     return image_bytes
-                                elif self._settings['return_encoding'] == "base64":
+                                if self._settings['return_encoding'] == "base64":
                                     success, message, image_b64 = encode_b64(obj=image_bytes, name=f"image-file '{image_path}' referenced in cache-index '{cache_path}'", logger=self._logger)
                                     if success:
                                         self._logger.debug(message)
                                         return image_b64
-                                    else:
-                                        self._logger.warn(message)
+                                    self._logger.warn(message)
                                 else:
                                     raise NotImplementedError(f"Unknown encoding '{self._settings['return_encoding']}'.")
+        return None
 
     def cache_image(self, job):
         # validate job
@@ -322,8 +321,7 @@ class ImagesBase(ClientBase):
                         self._logger.debug(f"Aborting redundant cache-job for file '{job['file']}'.")
                         release_lock(lock_resource)
                         return
-                    else:
-                        self._logger.warn(f"Updating entry in cache-index '{index_path}' from '{now}' to '{job['file']}'.")
+                    self._logger.warn(f"Updating entry in cache-index '{index_path}' from '{now}' to '{job['file']}'.")
                 else:
                     cache[job['endpoint']][job['model']][job['quality']][job['style']][job['size']][job['prompt']] = {}
 

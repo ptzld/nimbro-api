@@ -1,12 +1,6 @@
 from .client_base import ClientBase
 from ..utility.misc import assert_type_value, assert_log
 
-default_settings = {
-    'logger_severity': None,
-    'logger_name': "Client",
-    'retry': 2
-}
-
 class Client:
     """
     This class serves as a container for all user-exposed API implementations
@@ -15,21 +9,20 @@ class Client:
     To be used in conjunction with `nimbro_api.client.ClientBase`.
     """
 
-    def __init__(self, client_base=ClientBase, settings=None, default_settings=default_settings, **kwargs):
+    def __init__(self, client_base, *, settings=None, default_settings=None, **kwargs):
         """
         Initialize the Client and its underlying implementation.
 
         Args:
-            client_base (type, optional):
+            client_base (type):
                 The class providing the API implementation. Must be a subclass of `ClientBase`.
-                Defaults to `ClientBase`.
             settings (dict | None, optional):
                 Settings initializing the client. Missing settings are drawn from 'default_settings'.
                 See the documentation of `get_settings()` for of comprehensive list of all available settings.
                 Use `None` to use default settings. Defaults to `None`.
-            default_settings (dict, optional):
+            default_settings (dict | None, optional):
                 The default settings of this client.
-                Defaults to the global dictionary.
+                Use `None` to use default settings. Defaults to `None`.
             **kwargs:
                 The initial settings (see `get_settings()`) can also be configured via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
@@ -39,6 +32,12 @@ class Client:
         """
         assert_type_value(obj=client_base, type_or_value=type, name="argument 'client_base'")
         assert_log(expression=issubclass(client_base, ClientBase), message="Expected value of argument 'ClientBase' to be a subclass of 'ClientBase'.")
+        if default_settings is None:
+            default_settings = {
+                'logger_severity': None,
+                'logger_name': "Client",
+                'retry': 2
+            }
         self._base = client_base(settings=settings, default_settings=default_settings, **kwargs)
 
     def get_settings(self, name=None):

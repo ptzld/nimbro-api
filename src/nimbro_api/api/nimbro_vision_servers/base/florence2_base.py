@@ -68,7 +68,7 @@ class Florence2Base(ClientBase):
         try:
             settings['prompt'] = copy.deepcopy(settings['prompt'])
         except Exception as e:
-            raise UnrecoverableError(f"Expected setting 'prompt' to hold a dictionary that is serializable: {repr(e)}")
+            raise UnrecoverableError(f"Expected setting 'prompt' to hold a dictionary that is serializable: {repr(e)}") from e
 
         # num_beams
         assert_type_value(obj=settings['num_beams'], type_or_value=int, name="setting 'num_beams'")
@@ -140,7 +140,7 @@ class Florence2Base(ClientBase):
             success, message, is_healthy = self.get_health(
                 age=0 if self._settings['validate_health'] is True else self._settings['validate_health']
             )
-            if success:
+            if success and is_healthy:
                 self._logger.debug(message)
             else:
                 return False, message, None

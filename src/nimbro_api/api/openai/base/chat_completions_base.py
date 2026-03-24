@@ -280,7 +280,7 @@ class ChatCompletionsBase(ClientBase):
                             raise CustomException(f"User message content element of type image_url must contain exactly two keys 'detail' and 'url' but it contains {list(element['image_url'].keys())}.")
                         if 'detail' not in element['image_url']:
                             raise CustomException("User message content element of type image_url must contain key 'detail'.")
-                        if not element['image_url']['detail'] in ["low", "high", "auto"]:
+                        if element['image_url']['detail'] not in ["low", "high", "auto"]:
                             raise CustomException(f"User message content element of type image_url must contain key 'detail' with value in ['low', 'high', 'auto'] but it is '{element['image_url']['detail']}'.")
                         if 'url' not in element['image_url']:
                             raise CustomException("User message content element of type image_url must contain key 'url'.")
@@ -802,7 +802,7 @@ class ChatCompletionsBase(ClientBase):
                             raise UnrecoverableError("Interrupted completion.")
                         break
 
-                    elif chunk['code'] == "COMPLETION":
+                    if chunk['code'] == "COMPLETION":
                         reasoning, text, tool_calls = self.parse_chunk(chunk['content'], reasoning, text, tool_calls)
 
                     elif chunk['code'] == "USAGE":
@@ -892,7 +892,7 @@ class ChatCompletionsBase(ClientBase):
                 is_valid, correction_messages, logs = self.validate_completion(response_type, text, tool_calls, logs)
                 if is_valid:
                     break
-                elif not is_correction and self._settings['correction']:
+                if not is_correction and self._settings['correction']:
                     is_correction = True
                     logs[-1] = f"Completion failed after '{time.perf_counter() - stamp_start:.3f}s': {logs[-1]}"
                     logs.append("Attempting to correct invalid completion: ")
@@ -1016,10 +1016,10 @@ class ChatCompletionsBase(ClientBase):
         # condense consecutive user messages
         while True:
             is_user = 0
-            for i in range(len(messages)):
-                if messages[i]['role'] == "user":
+            for i, message in enumerate(messages):
+                if message['role'] == "user":
                     is_user += 1
-                if is_user > 1 and (messages[i]['role'] != "user" or i == len(messages) - 1):
+                if is_user > 1 and (message['role'] != "user" or i == len(messages) - 1):
                     first = i - is_user
                     last = i - 1
                     if i == len(messages) - 1:
@@ -1033,25 +1033,25 @@ class ChatCompletionsBase(ClientBase):
                     new_message = {'role': "user", 'content': contents}
                     messages = messages[: first] + [new_message] + messages[last + 1:]
                     break
-                elif messages[i]['role'] != "user":
+                if message['role'] != "user":
                     is_user = 0
             else:
                 break
 
         messages_print = copy.deepcopy(messages)
         for i, message in enumerate(messages_print):
-            if messages[i]['role'] == "user":
+            if message['role'] == "user":
                 if isinstance(message['content'], list):
                     for j, element in enumerate(message['content']):
                         if element['type'] == "image_url":
                             if self._endpoint['api_flavor'] == "vllm":
-                                self._logger.debug(f"Temporarily stripping image detail '{messages[i]['content'][j]['image_url']['detail']}' for using vLLM.")
+                                self._logger.debug(f"Temporarily stripping image detail '{message['content'][j]['image_url']['detail']}' for using vLLM.")
                                 del messages[i]['content'][j]['image_url']['detail']
                                 del messages_print[i]['content'][j]['image_url']['detail']
                             messages_print[i]['content'][j]['image_url']['url'] = "<IMAGE>"
                         elif element['type'] == "input_audio":
                             # if self._endpoint['api_flavor'] == "mistral":
-                            #     self._logger.debug(f"Temporarily stripping audio format '{messages[i]['content'][j]['input_audio']['format']}' for using Mistral AI.")
+                            #     self._logger.debug(f"Temporarily stripping audio format '{message['content'][j]['input_audio']['format']}' for using Mistral AI.")
                             #     del messages[i]['content'][j]['input_audio']['format']
                             #     del messages_print[i]['content'][j]['input_audio']['format']
                             messages_print[i]['content'][j]['input_audio']['data'] = "<AUDIO>"
@@ -1327,36 +1327,36 @@ class ChatCompletionsBase(ClientBase):
                                                 pipe[1].send({'code': "ERROR", 'content': message})
                                                 early_stop = True
                                                 break
-                                            else:
-                                                # extract usage
-                                                if json_data.get('usage') is not None:
-                                                    if self._endpoint['api_flavor'] in ["vllm", "openrouter"]:
-                                                        usage = json_data['usage']
-                                                    else:
-                                                        pipe[1].send({'code': "USAGE", 'content': json_data['usage']})
 
-                                                # extract choices
-                                                if len(json_data.get('choices', [])) > 0:
-                                                    try:
-                                                        json_choice = json_data['choices'][0]
-                                                    except Exception as e:
-                                                        self._logger.warn(f"Ignoring data '{json_data}' after failure to parse choice as JSON: {repr(e)}")
-                                                    else:
-                                                        # unexpected finish reason
-                                                        if json_choice.get('finish_reason') not in [None, "stop", "tool_calls", "STOP", "end_turn"]:
-                                                            # forward usage before end of process
-                                                            if self._endpoint['api_flavor'] in ["vllm", "openrouter"]:
-                                                                if usage is None:
-                                                                    self._logger.warn("Expected to receive usage before [ERROR] message.")
-                                                                else:
-                                                                    pipe[1].send({'code': "USAGE", 'content': usage})
-                                                            message = f"Error while receiving completion: Unexpected finish reason '{json_choice.get('finish_reason')}'."
-                                                            pipe[1].send({'code': "ERROR", 'content': message})
-                                                            early_stop = True
-                                                            break
-                                                        else:
-                                                            # forward delta
-                                                            pipe[1].send({'code': "COMPLETION", 'content': json_choice['delta']})
+                                            # extract usage
+                                            if json_data.get('usage') is not None:
+                                                if self._endpoint['api_flavor'] in ["vllm", "openrouter"]:
+                                                    usage = json_data['usage']
+                                                else:
+                                                    pipe[1].send({'code': "USAGE", 'content': json_data['usage']})
+
+                                            # extract choices
+                                            if len(json_data.get('choices', [])) > 0:
+                                                try:
+                                                    json_choice = json_data['choices'][0]
+                                                except Exception as e:
+                                                    self._logger.warn(f"Ignoring data '{json_data}' after failure to parse choice as JSON: {repr(e)}")
+                                                else:
+                                                    # unexpected finish reason
+                                                    if json_choice.get('finish_reason') not in [None, "stop", "tool_calls", "STOP", "end_turn"]:
+                                                        # forward usage before end of process
+                                                        if self._endpoint['api_flavor'] in ["vllm", "openrouter"]:
+                                                            if usage is None:
+                                                                self._logger.warn("Expected to receive usage before [ERROR] message.")
+                                                            else:
+                                                                pipe[1].send({'code': "USAGE", 'content': usage})
+                                                        message = f"Error while receiving completion: Unexpected finish reason '{json_choice.get('finish_reason')}'."
+                                                        pipe[1].send({'code': "ERROR", 'content': message})
+                                                        early_stop = True
+                                                        break
+
+                                                    # forward delta
+                                                    pipe[1].send({'code': "COMPLETION", 'content': json_choice['delta']})
                                 else:
                                     error += line
                 else:
@@ -1601,12 +1601,12 @@ class ChatCompletionsBase(ClientBase):
             message['content'] = text
         if len(tool_calls) > 0:
             message['tool_calls'] = [{} for _ in range(len(tool_calls))]
-        for i in range(len(tool_calls)):
+        for i, call in enumerate(tool_calls):
             message['tool_calls'][i]['type'] = "function"
-            message['tool_calls'][i]['id'] = tool_calls[i]['id']
+            message['tool_calls'][i]['id'] = call['id']
             message['tool_calls'][i]['function'] = {}
-            message['tool_calls'][i]['function']['name'] = tool_calls[i]['name']
-            message['tool_calls'][i]['function']['arguments'] = tool_calls[i]['arguments']
+            message['tool_calls'][i]['function']['name'] = call['name']
+            message['tool_calls'][i]['function']['arguments'] = call['arguments']
 
         # validate message
         try:
@@ -1643,8 +1643,8 @@ class ChatCompletionsBase(ClientBase):
         if (len(self.tools) == 0 or response_type == "text") and len(tool_calls) > 0:
             is_valid = False
             logs.append(f"Completion contains a tool-call despite {'no tools being defined' if len(self.tools) == 0 else 'only text was requested'}.")
-            for i in range(len(correction_messages)):
-                if 'tool_call_id' in correction_messages[i]:
+            for i, message in enumerate(correction_messages):
+                if 'tool_call_id' in message:
                     correction_messages[i]['content'] = "Your response must not contain any tool-call, but only text content."
 
         # error case: tool-choice "use specific function" was violated
@@ -1661,39 +1661,39 @@ class ChatCompletionsBase(ClientBase):
                         valid_ids.append(c['id'])
                     else:
                         invalid_ids_names[c['id']] = c['name']
-                for i in range(len(correction_messages)):
-                    if correction_messages[i]['role'] == "tool":
-                        if not correction_messages[i]['tool_call_id'] in valid_ids:
+                for i, message in enumerate(correction_messages):
+                    if message['role'] == "tool":
+                        if message['tool_call_id'] not in valid_ids:
                             is_valid = False
-                            logs.append(f"Completion contains tool-call '{invalid_ids_names[correction_messages[i]['tool_call_id']]}' despite tool-choice being set to '{response_type}'.")
+                            logs.append(f"Completion contains tool-call '{invalid_ids_names[message['tool_call_id']]}' despite tool-choice being set to '{response_type}'.")
                             correction_messages[i]['content'] = f"Your response must only contain the tool-call '{response_type}'."
 
         # error case: exceeding maximum number of tool-calls per response
         if self._settings['max_tool_calls'] is not None and len(tool_calls) > self._settings['max_tool_calls']:
             is_valid = False
             logs.append(f"Completion contains '{len(tool_calls)}' tool-calls, but the maximum number of tool-calls allowed per completion is '{self._settings['max_tool_calls']}'.")
-            for i in range(len(correction_messages)):
-                if 'tool_call_id' in correction_messages[i]:
+            for i, message in enumerate(correction_messages):
+                if 'tool_call_id' in message:
                     correction_messages[i]['content'] = f"Your response must contain at most {self._settings['max_tool_calls']} tool-call{'' if self._settings['max_tool_calls'] == 1 else 's'}, but yours contains {len(tool_calls)} tool-calls. Please filter accordingly and try again!"
 
         # error case: custom tool-choice "always" was violated
         if response_type == "always" and len(tool_calls) == 0:
             is_valid = False
             logs.append("Completion does not contain a tool-call despite tool-choice being set to value 'always'.")
-            for i in range(len(correction_messages)):
-                if 'tool_call_id' not in correction_messages[i]:
+            for i, message in enumerate(correction_messages):
+                if 'tool_call_id' not in message:
                     correction_messages[i]['content'] = "Please express your last message in a tool-call instead of a text response!"
 
         # error case: function call violates JSON Schema
-        for i, call in enumerate(tool_calls):
-            for j in range(len(correction_messages)):
-                if 'tool_call_id' in correction_messages[j]:
-                    if call['id'] == correction_messages[j]['tool_call_id']:
-                        if correction_messages[j]['content'] == tool_call_is_valid_default_correction:
+        for call in tool_calls:
+            for i, message in enumerate(correction_messages):
+                if 'tool_call_id' in message:
+                    if call['id'] == message['tool_call_id']:
+                        if message['content'] == tool_call_is_valid_default_correction:
                             valid, reason, logs = self.validate_tool_call(call, logs)
                             if not valid:
                                 is_valid = False
-                                correction_messages[j]['content'] = reason
+                                correction_messages[i]['content'] = reason
                         else:
                             self._logger.debug(f"Skipping JSON Schema based validity check of tool-call '{call['name']}' as it is already considered invalid by some previous filter.")
 
@@ -1789,7 +1789,7 @@ class ChatCompletionsBase(ClientBase):
             completion['reasoning'] = reasoning
         if len(tool_calls) > 0:
             completion['tools'] = []
-        for i, call in enumerate(tool_calls):
+        for call in tool_calls:
             if call['arguments'] == "": # fix empty arguments (e.g. Claude does that)
                 logs.append(f"Fixing empty arguments of tool-call '{call['name']}' to empty dictionary.")
                 self._logger.debug(logs[-1])
@@ -2067,8 +2067,7 @@ class ChatCompletionsBase(ClientBase):
                         message = f"Failed to construct context at message {format_obj(msg)} (index '{i}'): {e}"
                         self.messages = messages_before
                         return success, message
-                    else:
-                        self.messages.append(msg)
+                    self.messages.append(msg)
                 success = True
                 message = f"Set new context with '{len(self.messages)}' message{'' if len(self.messages) == 1 else 's'}."
 
@@ -2094,8 +2093,7 @@ class ChatCompletionsBase(ClientBase):
                     message = f"Failed to construct context at message {format_obj(msg)} (index '{j}'): {e}"
                     self.messages = messages_before
                     return success, message
-                else:
-                    self.messages.append(msg)
+                self.messages.append(msg)
             success = True
             message = f"Inserted '{len(messages)}' message{'' if len(messages) == 1 else 's'} into context."
 
@@ -2125,8 +2123,7 @@ class ChatCompletionsBase(ClientBase):
                     message = f"Failed to construct context at message {format_obj(msg)} (index '{i}'): {e}"
                     self.messages = messages_before
                     return success, message
-                else:
-                    self.messages.append(msg)
+                self.messages.append(msg)
             success = True
             added = len(self.messages) - len(messages_before)
             if added == 0:
@@ -2157,8 +2154,7 @@ class ChatCompletionsBase(ClientBase):
                         message = f"Failed to construct context at message {format_obj(msg)} (index '{self.messages[j]}'): {e}"
                         self.messages = messages_before
                         return success, message
-                    else:
-                        self.messages.append(msg)
+                    self.messages.append(msg)
             success = True
             message = f"Removed message '{i}' from context."
 
@@ -2167,9 +2163,9 @@ class ChatCompletionsBase(ClientBase):
     def get_tools(self):
         if len(self.tools) == 0:
             return True, "There are no tools defined.", []
-        else:
-            tools = copy.deepcopy(self.tools)
-            return True, f"Retrieved '{len(tools)}' tool{'' if len(tools) == 1 else 's'}.", tools
+
+        tools = copy.deepcopy(self.tools)
+        return True, f"Retrieved '{len(tools)}' tool{'' if len(tools) == 1 else 's'}.", tools
 
     def set_tools(self, tools):
         # parse arguments
@@ -2196,96 +2192,90 @@ class ChatCompletionsBase(ClientBase):
         else:
             used_names = []
 
-            for i in range(len(tools)):
-                if set(tools[i].keys()) != {'type', 'function'}:
+            for i, tool in enumerate(tools):
+                if set(tool.keys()) != {'type', 'function'}:
                     success = False
-                    message = f"Tool '{i}' does not satisfy the required format: The top-level keys must be ['type', 'function'] but got {list(tools[i].keys())}."
+                    message = f"Tool '{i}' does not satisfy the required format: The top-level keys must be ['type', 'function'] but got {list(tool.keys())}."
                     break
 
-                if tools[i]['type'] != "function":
+                if tool['type'] != "function":
                     success = False
-                    message = f"Tool '{i}' does not satisfy the required format: Expected the value of key 'type' to be 'function' but got '{tools[i]['type']}'."
+                    message = f"Tool '{i}' does not satisfy the required format: Expected the value of key 'type' to be 'function' but got '{tool['type']}'."
                     break
 
-                if not isinstance(tools[i]['function'], dict):
+                if not isinstance(tool['function'], dict):
                     success = False
-                    message = f"Tool '{i}' does not satisfy the required format: Expected the value of key 'function' to be of type 'dict' but got '{type(tools[i]['function']).__name__}'."
+                    message = f"Tool '{i}' does not satisfy the required format: Expected the value of key 'function' to be of type 'dict' but got '{type(tool['function']).__name__}'."
                     break
 
                 keys_required = {'name', 'description', 'parameters'} # OpenAI allows omitting 'parameters', Mistral does not, and OpenRouter does with some models.
                 keys_optional = {'strict'}
 
-                if not (set(tools[i]['function'].keys()).issubset(keys_required | keys_optional) and keys_required.issubset(tools[i]['function'])):
+                if not (set(tool['function'].keys()).issubset(keys_required | keys_optional) and keys_required.issubset(tool['function'])):
                     success = False
-                    message = f"Function '{i}' does not satisfy the required format: The top-level keys must be {list(keys_required)} and optionally {list(keys_optional)} but got {list(tools[i]['function'].keys())}."
+                    message = f"Tool '{i}' does not satisfy the required format: The top-level keys must be {list(keys_required)} and optionally {list(keys_optional)} but got {list(tool['function'].keys())}."
                     break
 
-                if not isinstance(tools[i]['function']['name'], str):
+                if not isinstance(tool['function']['name'], str):
                     success = False
-                    message = f"Function '{tools[i]['function']['name']}' does not satisfy the required format: The field 'name' must be of type 'str' but got '{type(tools[i]['function']['name']).__name__}'."
+                    message = f"Tool '{tool['function']['name']}' does not satisfy the required format: The value of key 'name' must be of type 'str' but got '{type(tool['function']['name']).__name__}'."
                     break
 
-                if tools[i]['function']['name'] in used_names:
+                if tool['function']['name'] in used_names:
                     success = False
-                    message = f"All functions must feature a unique name - The name '{tools[i]['function']['name']}' is featured more than once."
+                    message = f"All tools must feature a unique name - The name '{tool['function']['name']}' is featured more than once."
                     break
 
-                used_names.append(tools[i]['function']['name'])
+                used_names.append(tool['function']['name'])
 
-                if not isinstance(tools[i]['function']['description'], str):
+                if not isinstance(tool['function']['description'], str):
                     success = False
-                    message = f"Function '{tools[i]['function']['name']}' does not satisfy the required format: The field 'description' must be of type 'str' but got '{type(tools[i]['function']['description']).__name__}'."
+                    message = f"Tool '{tool['function']['name']}' does not satisfy the required format: The value of key 'description' must be of type 'str' but got '{type(tool['function']['description']).__name__}'."
                     break
 
-                if 'strict' in tools[i]['function']:
-                    if not isinstance(tools[i]['function']['strict'], bool):
+                if 'strict' in tool['function']:
+                    if not isinstance(tool['function']['strict'], bool):
                         success = False
-                        message = f"Function '{tools[i]['function']['name']}' does not satisfy the required format: The field 'strict' must be of type 'bool' but got '{type(tools[i]['function']['strict']).__name__}'."
+                        message = f"Tool '{tool['function']['name']}' does not satisfy the required format: The value of key 'strict' must be of type 'bool' but got '{type(tool['function']['strict']).__name__}'."
                         break
 
-                if 'parameters' in tools[i]['function']:
-                    if not isinstance(tools[i]['function']['parameters'], dict):
+                if 'parameters' in tool['function']:
+                    if not isinstance(tool['function']['parameters'], dict):
                         success = False
-                        message = f"Function '{tools[i]['function']['name']}' does not satisfy the required format: The field 'parameters' must be of type 'dict' but got '{type(tools[i]['function']['parameters']).__name__}'."
+                        message = f"Tool '{tool['function']['name']}' does not satisfy the required format: The value of key 'parameters' must be of type 'dict' but got '{type(tool['function']['parameters']).__name__}'."
                         break
 
                     keys_required = {'type', 'properties'}
                     keys_optional = {'required', 'additionalProperties'}
-                    if not set(tools[i]['function']['parameters'].keys()).issubset(keys_required | keys_optional) and keys_required.issubset(tools[i]['function']['parameters']):
+                    if not set(tool['function']['parameters'].keys()).issubset(keys_required | keys_optional) and keys_required.issubset(tool['function']['parameters']):
                         success = False
-                        message = f"Function '{tools[i]['function']['name']}' does not satisfy the required format: The field 'parameters' must contain the keys {list(keys_required)} and optionally {list(keys_optional)}."
+                        message = f"Tool '{tool['function']['name']}' does not satisfy the required format: The value of key 'parameters' must contain the keys {list(keys_required)} and optionally {list(keys_optional)}."
                         break
 
-                    if tools[i]['function']['parameters']['type'] != "object":
+                    if tool['function']['parameters']['type'] != "object":
                         success = False
-                        message = f"Function '{tools[i]['function']['name']}' does not satisfy the required format: The field 'parameters'::'type' must be set to 'object'."
+                        message = f"Tool '{tool['function']['name']}' does not satisfy the required format: The value of key 'type' in 'parameters' must be 'object' but got '{tool['function']['parameters']['type']}'."
                         break
 
-                    success, message = self.validate_function_properties(schema=tools[i]['function']['parameters'], function_name=tools[i]['function']['name'], path="parameters", strict=tools[i]['function'].get('strict', False))
+                    success, message = self.validate_function_properties(schema=tool['function']['parameters'], function_name=tool['function']['name'], path="parameters", strict=tool['function'].get('strict', False))
                     if not success:
                         break
             else:
                 if len(self.tools) == 0:
-                    message = "Set tool definitions."
-                    if len(tools) == 1:
-                        tool_msg = f"Defined tools:\n0: {json.dumps(tools[0], indent=2)}"
-                    else:
-                        tool_msg = "Defined tools:\n" + str('\n'.join([f"{i}: {json.dumps(tool, indent=2)}" for i, tool in enumerate(tools)]))
+                    message = f"Set tool definition{'' if len(tools) == 1 else 's'}."
+                    tool_msg = message.rstrip(".") + ":\n" + '\n'.join([f"{i}: {json.dumps(tool, indent=2)}" for i, tool in enumerate(tools)])
                 else:
                     message = "Updated tool definitions."
-
                     updates = 0
-                    for tool in tools:
-                        if tool in self.tools:
+                    lines = []
+                    for i, tool in enumerate(tools):
+                        exists = tool in self.tools
+                        if exists:
                             updates += 1
-
-                    if updates == 1:
-                        tool_msg = f"Updated tools:\n{i}{'*' if tool in self.tools else ''}: {json.dumps(tools[0], indent=2)}"
-                    else:
-                        tool_msg = "Updated tools:\n" + str('\n'.join([f"{i}{'*' if tool in self.tools else ''}: {json.dumps(tool, indent=2)}" for i, tool in enumerate(tools)]))
-
+                        lines.append(f"{i}{'*' if exists else ''}: {json.dumps(tool, indent=2)}")
+                    tool_msg = message.rstrip(".") + ":\n" + '\n'.join(lines)
                     if updates > 0:
-                        tool_msg = f"{tool_msg}\n*tool existed before ({updates} of {len(tools)})\n"
+                        tool_msg += f"\n*tool existed before ({updates} of {len(tools)})"
 
                 self._logger.info(tool_msg)
                 self.tools = copy.deepcopy(tools)

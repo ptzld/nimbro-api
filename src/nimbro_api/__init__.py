@@ -1,6 +1,7 @@
 import sys
 from functools import wraps
 from inspect import getmembers
+from importlib.metadata import version, metadata, PackageNotFoundError
 
 from .core import Core
 from .test import test
@@ -8,8 +9,11 @@ from . import api as _api
 from .api import __all__ as api_all
 from .client import Client, ClientBase
 
-__version__ = "0.1.0"
-__author__ = "Bastian Pätzold"
+try:
+    __version__ = version("nimbro-api")
+    __author__ = metadata("nimbro-api").get("Author") or metadata("nimbro-api").get("Author-email", "")
+except PackageNotFoundError:
+    pass
 
 __all__ = ["test"]
 

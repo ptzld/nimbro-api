@@ -115,7 +115,7 @@ class Sam2RealtimeBase(ClientBase):
                 keys_box = {'object_id', 'bbox'}
                 keys_point = {'object_id', 'points', 'labels'}
                 assert_log(
-                    expression=keys_item == keys_box or keys_item == keys_point,
+                    expression=keys_item in (keys_box, keys_point),
                     message=f"Expected keys of element '{i}' in argument 'prompts' to be either {keys_box} or {keys_point} but got {keys_item}."
                 )
                 assert_type_value(obj=item['object_id'], type_or_value=int, name=f"key 'object_id' of element '{i}' in argument 'prompts'")
@@ -139,7 +139,7 @@ class Sam2RealtimeBase(ClientBase):
                         )
                         assert_type_value(obj=point[0], type_or_value=[float, int], name=f"element '0' of element '{j}' in value of key 'points' of element '{i}' in argument 'prompts'")
                         assert_type_value(obj=point[1], type_or_value=[float, int], name=f"element '1' of element '{j}' in value of key 'points' of element '{i}' in argument 'prompts'")
-                    for label in item['labels']:
+                    for j, label in enumerate(item['labels']):
                         assert_type_value(obj=label, type_or_value=[0, 1], name=f"element '{j}' in value of key 'labels' of element '{i}' in argument 'prompts'")
             prompts = copy.deepcopy(prompts)
 
@@ -148,7 +148,7 @@ class Sam2RealtimeBase(ClientBase):
             success, message, is_healthy = self.get_health(
                 age=0 if self._settings['validate_health'] is True else self._settings['validate_health']
             )
-            if success:
+            if success and is_healthy:
                 self._logger.debug(message)
             else:
                 return False, message, None
@@ -166,20 +166,22 @@ class Sam2RealtimeBase(ClientBase):
                         else:
                             message = f"Model flavor '{flavor}' is loaded but loading model flavor '{self._settings['flavor']}' would leave it uninitialized."
                         return False, message, None
+
+                    success, message = self.load(
+                        flavor=self._settings['flavor'],
+                        age=0
+                    )
+                    if success:
+                        self._logger.debug(message)
                     else:
-                        success, message = self.load(
-                            flavor=self._settings['flavor'],
-                            age=0
-                        )
-                        if success:
-                            self._logger.debug(message)
-                        else:
-                            return False, message, None
+                        return False, message, None
 
                     self._logger.debug(message)
                 elif prompts is None and not init:
                     message = "Tracker is not initialized."
                     return False, message, None
+                else:
+                    pass
             else:
                 return False, message, None
             self._logger.debug(message)

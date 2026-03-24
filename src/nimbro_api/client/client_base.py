@@ -386,8 +386,7 @@ class ClientBase:
                                 raise_error = True
                         if persist:
                             break
-                        else:
-                            stage += 1
+                        stage += 1
                     else:
                         valid = False
                         if not isinstance(response, tuple):
@@ -411,8 +410,7 @@ class ClientBase:
                                         message = f"Succeeded '{function.__name__}()' after attempt '{attempt}'."
                                     self._logger.debug(message)
                                     break
-                                else:
-                                    stage += 1
+                                stage += 1
                             else:
                                 if retry == -1 or retry >= attempt:
                                     if retry == -1:
@@ -438,8 +436,7 @@ class ClientBase:
                                         raise_error = True
                                     if persist:
                                         break
-                                    else:
-                                        stage += 1
+                                    stage += 1
                         else:
                             if self._initialized:
                                 if attempt == 1:
@@ -456,8 +453,7 @@ class ClientBase:
                             self._logger.fatal(message)
                             if persist:
                                 break
-                            else:
-                                stage += 1
+                            stage += 1
 
                 if stage == 2:
                     # revert settings
@@ -522,32 +518,31 @@ class ClientBase:
                                     message = f"Failed in '{function.__name__}()' after attempt '{attempt}'."
                             self._logger.debug(message)
                             break
-                        else:
-                            if retry == -1 or retry >= attempt:
-                                if retry == -1:
-                                    self._logger.warn(f"Retrying to revert settings after '{function.__name__}()' until successful after attempt '{attempt}': {message}")
-                                else:
-                                    retries_left = retry - attempt + 1
-                                    self._logger.warn(f"Retrying to revert settings after '{function.__name__}()' for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}': {message}")
-                                attempt += 1
+                        if retry == -1 or retry >= attempt:
+                            if retry == -1:
+                                self._logger.warn(f"Retrying to revert settings after '{function.__name__}()' until successful after attempt '{attempt}': {message}")
                             else:
-                                if self._initialized:
-                                    if attempt == 1:
-                                        message = f"Failed to revert settings after '{function.__name__}()': {message}"
-                                    else:
-                                        message = f"Failed to revert settings after '{function.__name__}()' after attempt '{attempt}': {message}"
-                                    self._logger.error(message)
-                                    # response = False, message, *[None] * responses
-                                    response[0] = False
-                                    response[1] = message
+                                retries_left = retry - attempt + 1
+                                self._logger.warn(f"Retrying to revert settings after '{function.__name__}()' for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}': {message}")
+                            attempt += 1
+                        else:
+                            if self._initialized:
+                                if attempt == 1:
+                                    message = f"Failed to revert settings after '{function.__name__}()': {message}"
                                 else:
-                                    if attempt == 1:
-                                        message = f"Failed to revert settings after '{function.__name__}()' during initialization: {message}"
-                                    else:
-                                        message = f"Failed to revert settings after '{function.__name__}()' after attempt '{attempt}' during initialization: {message}"
-                                    self._logger.fatal(message)
-                                    raise_error = True
-                                break
+                                    message = f"Failed to revert settings after '{function.__name__}()' after attempt '{attempt}': {message}"
+                                self._logger.error(message)
+                                # response = False, message, *[None] * responses
+                                response[0] = False
+                                response[1] = message
+                            else:
+                                if attempt == 1:
+                                    message = f"Failed to revert settings after '{function.__name__}()' during initialization: {message}"
+                                else:
+                                    message = f"Failed to revert settings after '{function.__name__}()' after attempt '{attempt}' during initialization: {message}"
+                                self._logger.fatal(message)
+                                raise_error = True
+                            break
 
         if reset_logger and (raise_error or not response[0]):
             self._logger.debug("Resetting fast tracked logger settings after failure in 'set_settings()'.")
@@ -690,7 +685,7 @@ class ClientBase:
             path_so_far = ""
 
             d = result
-            for i, part in enumerate(parts[:-1]):
+            for _, part in enumerate(parts[:-1]):
                 path_so_far = f"{path_so_far}.{part}" if path_so_far else part
 
                 if part not in d:
@@ -757,7 +752,7 @@ class ClientBase:
 
         return result
 
-    def _count_leaves(self, settings, prevent_dots=False):
+    def _count_leaves(self, settings):
         count = 0
         for value in settings.values():
             if isinstance(value, dict):
@@ -827,7 +822,7 @@ class ClientBase:
             settings = self._expand_dotted_keys(settings)
 
         n_leaves = self._count_leaves(settings)
-        n_total = self._count_leaves(self._default_settings, prevent_dots=True)
+        n_total = self._count_leaves(self._default_settings)
         leaf_keys = self._leaf_keys(settings)
 
         if mode == "set":

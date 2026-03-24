@@ -3,14 +3,6 @@ import time
 import json
 import threading
 
-IS_WINDOWS = os.name == "nt"
-if IS_WINDOWS:
-    import msvcrt
-else:
-    import fcntl
-LOCK_HANDLES = set() # storing locked resources for monitoring/debugging
-LOCK_HANDLES_LOCK = threading.Lock() # ensuring thread-safety for LOCK_HANDLES
-
 import requests
 
 try:
@@ -28,6 +20,14 @@ except ImportError:
 import nimbro_api
 from .misc import UnrecoverableError, assert_type_value
 from .string import is_url, is_base64
+
+IS_WINDOWS = os.name == "nt"
+if IS_WINDOWS:
+    import msvcrt
+else:
+    import fcntl
+LOCK_HANDLES = set() # storing locked resources for monitoring/debugging
+LOCK_HANDLES_LOCK = threading.Lock() # ensuring thread-safety for LOCK_HANDLES
 
 def download_file(url, *, retry=1, name="file", logger=None):
     """
@@ -83,26 +83,25 @@ def download_file(url, *, retry=1, name="file", logger=None):
                 logger.warn(f"Retrying download of {name} '{url}' after failure: {message}")
         try:
             headers = {'User-Agent': 'Mozilla/5.0'}
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=60.0)
         except Exception as e:
             message = f"Failed to download {name} from '{url}': {repr(e)}"
             if isinstance(retry, bool) and retry is True:
                 continue
-            elif isinstance(retry, int) and retry > 0:
+            if isinstance(retry, int) and retry > 0:
                 retry -= 1
                 continue
             return False, message, None
-        else:
-            message = f"Downloaded {name} '{url}' in '{time.perf_counter() - stamp:.3f}s'."
-            data = response.content
-            # cache response
-            _success, _message = nimbro_api.update_cache(category="download_file", identifier=url, data=data, mute=True)
-            if logger is not None:
-                if _success:
-                    logger.debug(_message)
-                else:
-                    logger.warn(_message)
-                return True, message, data
+        message = f"Downloaded {name} '{url}' in '{time.perf_counter() - stamp:.3f}s'."
+        data = response.content
+        # cache response
+        _success, _message = nimbro_api.update_cache(category="download_file", identifier=url, data=data, mute=True)
+        if logger is not None:
+            if _success:
+                logger.debug(_message)
+            else:
+                logger.warn(_message)
+            return True, message, data
 
 def read_json(file_path, *, name="file", logger=None):
     """
@@ -632,8 +631,8 @@ def release_lock(resource):
     with LOCK_HANDLES_LOCK:
         try:
             LOCK_HANDLES.remove(resource)
-        except KeyError:
-            raise UnrecoverableError(f"Resource key '{resource}' was not acquired or already released.")
+        except KeyError as e:
+            raise UnrecoverableError(f"Resource key '{resource}' was not acquired or already released.") from e
 
     if IS_WINDOWS:
         f = resource

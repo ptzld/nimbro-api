@@ -56,6 +56,18 @@ def _test_utilities():
     # "https://www.nimbro.net/AVATAR/images/NimbRo_Avatar_2022_11_01_Team.jpg"
     # "https://download.samplelib.com/mp3/sample-15s.mp3"
     # "https://bitcoin.org/bitcoin.pdf"
+
+    try:
+        nimbro_api.__author__
+    except Exception:
+        _report("[utility]", "Package attribute __author__ is not set.", escape['yellow'])
+        failures += 1
+    try:
+        nimbro_api.__version__
+    except Exception:
+        _report("[utility]", "Package attribute __version__ is not set.", escape['yellow'])
+        failures += 1
+
     _report("", f"Tested utilities with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['darkyellow'] if failures > 0 else escape['cyan'])
     return failures
 
@@ -75,11 +87,10 @@ def _test_function(prefix, fun, args):
             text = f"Failed in '{name}' after '{time.perf_counter() - stamp:.3f}s':\n{traceback.format_exc()}"
         _report(prefix, text, escape['darkred'])
         return 1
-    else:
-        text = f"Succeeded '{name}' in '{time.perf_counter() - stamp:.3f}s'"
-        text = f"{text}." if response is None else f"{text}: {response}"
-        _report(prefix, text, escape['white'])
-        return 0
+    text = f"Succeeded '{name}' in '{time.perf_counter() - stamp:.3f}s'"
+    text = f"{text}." if response is None else f"{text}: {response}"
+    _report(prefix, text, escape['white'])
+    return 0
 
 def _test_module(prefix, path, function):
     failures = 0
@@ -216,11 +227,12 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
 
     # set logger
     logger_mute = nimbro_api.get_settings(name='logger_mute')
+    keys_cache = nimbro_api.get_settings(name='keys_cache')
     if severity is None:
-        success, message = nimbro_api.set_settings(settings={'logger_mute': True})
+        success, message = nimbro_api.set_settings(settings={'logger_mute': True, 'keys_cache': False})
     else:
         logger_severity = nimbro_api.get_settings(name='logger_severity')
-        success, message = nimbro_api.set_settings(settings={'logger_mute': False, 'logger_severity': severity})
+        success, message = nimbro_api.set_settings(settings={'logger_mute': False, 'logger_severity': severity, 'keys_cache': False})
     assert_log(expression=success, message=message)
 
     global log_raw, log_pretty
@@ -245,7 +257,7 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
     _report("", f"Finished tests with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['red'] if failures > 0 else escape['green'])
 
     # reset logger severity
-    success, message = nimbro_api.set_settings(settings={'logger_mute': logger_mute})
+    success, message = nimbro_api.set_settings(settings={'logger_mute': logger_mute, 'keys_cache': keys_cache})
     assert_log(expression=success, message=message)
     if severity is not None:
         success, message = nimbro_api.set_settings(settings={'logger_severity': logger_severity})

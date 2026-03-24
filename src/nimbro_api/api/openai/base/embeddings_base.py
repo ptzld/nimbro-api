@@ -521,7 +521,7 @@ class EmbeddingsBase(ClientBase):
                 message = f"{prefix}{suffix}"
                 embedding = embeddings[0]
             return True, message, embedding
-        elif num_cached == 0:
+        if num_cached == 0:
             if len(texts) == 1:
                 self._logger.debug("Retrieving embedding from Embeddings API.")
             else:
@@ -542,9 +542,9 @@ class EmbeddingsBase(ClientBase):
 
         # associate missing embeddings
         missing_texts, missing_idx = [], []
-        for i in range(len(texts)):
+        for i, string in enumerate(texts):
             if embeddings[i] is None:
-                missing_texts.append(texts[i])
+                missing_texts.append(string)
                 missing_idx.append(i)
 
         # retrieve API key

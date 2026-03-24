@@ -135,7 +135,7 @@ class Kosmos2Base(ClientBase):
             success, message, is_healthy = self.get_health(
                 age=0 if self._settings['validate_health'] is True else self._settings['validate_health']
             )
-            if success:
+            if success and is_healthy:
                 self._logger.debug(message)
             else:
                 return False, message, None

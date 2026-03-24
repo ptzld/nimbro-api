@@ -111,8 +111,7 @@ def extract_json(string, *, first_over_longest=False):
                 for j in closing_indices:
                     if j < i:
                         continue
-                    else:
-                        options.append(string[i:j + 1])
+                    options.append(string[i:j + 1])
             if not first_over_longest:
                 options.sort(key=len, reverse=True)
             for option in options:
@@ -120,3 +119,5 @@ def extract_json(string, *, first_over_longest=False):
                     return json.loads(option)
                 except json.JSONDecodeError:
                     pass
+
+    return None

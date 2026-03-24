@@ -7,11 +7,30 @@ from ..client.dam import Dam
 def test_1_utilities():
     client = Dam()
 
+    settings = client.get_settings()
+    assert_type_value(obj=settings['endpoint']['key_type'], type_or_value="environment", name="key 'key_type' of default endpoint")
+    key_name = settings['endpoint']['key_value']
+    key_before = os.getenv(key_name)
+    key_now = "supersecretkey"
+    os.environ[key_name] = key_now
+
     success, message, api_key = client.get_api_key()
     assert_type_value(obj=success, type_or_value=bool, name="success")
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
-    assert_type_value(obj=api_key, type_or_value=str, name="message")
+    assert_type_value(obj=api_key, type_or_value=key_now, name="API key")
+
+    assert_type_value(obj=os.getenv(key_name), type_or_value=key_now, name=f"environment variable '{key_name}' (pre)")
+
+    if key_before is None:
+        key_before = key_now
+
+    success, message = nimbro_api.set_api_key(name=key_name, key=key_before)
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+
+    assert_type_value(obj=os.getenv(key_name), type_or_value=key_before, name=f"environment variable '{key_name}' (post)")
 
 def test_2_endpoint():
     client = Dam(validate_health=True)

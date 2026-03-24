@@ -156,7 +156,7 @@ class Dam(Client):
                 - str: A descriptive message about the operation result.
                 - str | None: The API key for the 'endpoint' currently set, or `None` if not successful.
         """
-        return self._base.wrap(1, self._base.get_api_key)
+        return self._base.wrap(1, self._base.get_api_key, **kwargs)
 
     def get_status(self, age=0, **kwargs):
         """

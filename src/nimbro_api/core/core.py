@@ -20,7 +20,7 @@ class Core(Client):
     All its methods can be accessed directly from the package level, e.g. `nimbro_api.get_settings()`.
     """
 
-    def __init__(self, default_settings=default_settings):
+    def __init__(self):
         """
         This object is created automatically when this package is imported for the first time within a process.
         It serves as a central hub for managing process-wide settings, API keys, and data caches.
@@ -28,7 +28,7 @@ class Core(Client):
 
         Do not instantiate this class manually.
         """
-        self._base = CoreBase(default_settings=default_settings)
+        super().__init__(client_base=CoreBase, default_settings=default_settings)
 
     # settings
 

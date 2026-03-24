@@ -37,8 +37,7 @@ def get_status(self, age):
                     message = f"Model flavor '{flavor}' was loaded '{delta:.3f}s' ago."
             if self._model_family == "sam2_realtime":
                 return success, message, flavor, init
-            else:
-                return success, message, flavor
+            return success, message, flavor
         self._logger.debug(message)
 
     # retrieve API key
@@ -97,8 +96,7 @@ def get_status(self, age):
 
     if self._model_family == "sam2_realtime":
         return success, message, flavor, init
-    else:
-        return success, message, flavor
+    return success, message, flavor
 
 def get_health(self, age):
     # parse arguments
@@ -294,7 +292,7 @@ def load(self, flavor=None, age=0):
     headers = {
         'Authorization': f"Bearer {api_key}"
     }
-    success, message, response = post_request(
+    success, message, _ = post_request(
         api_name="NimbRo-Vision-Servers API",
         api_url=f"{self._endpoint['api_url']}/load",
         headers=headers,

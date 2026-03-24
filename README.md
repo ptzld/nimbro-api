@@ -1,9 +1,9 @@
 # NimbRo API
 
+[![CI](https://github.com/ptzld/nimbro-api/actions/workflows/ci.yml/badge.svg)](https://github.com/ptzld/nimbro-api/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/nimbro-api.svg)](https://pypi.org/project/nimbro-api)
-[![Downloads](https://static.pepy.tech/badge/nimbro-api/month)](https://pepy.tech/project/nimbro-api)
 [![Supported Versions](https://img.shields.io/pypi/pyversions/nimbro-api.svg)](https://pypi.org/project/nimbro-api)
-[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](https://github.com/ptzld/nimbro-api/blob/main/LICENSE)
+[![Downloads](https://static.pepy.tech/badge/nimbro-api/month)](https://pepy.tech/project/nimbro-api)
 [![Docs](https://img.shields.io/badge/docs-latest-success.svg)](https://github.com/ptzld/nimbro-api#readme)
 
 **NimbRo API** is a robust and flexible framework for API clients in Python.

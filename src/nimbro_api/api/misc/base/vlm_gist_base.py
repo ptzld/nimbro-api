@@ -191,8 +191,7 @@ class VlmGistBase(ClientBase):
             image, data, settings = self.parse_arguments(image=image, scene_description=scene_description, structured_description=structured_description, detection=detection, data=data)
             if isinstance(image, list):
                 return self.batch_orchestrator(image=image, data=data, settings=settings, stamp_global=stamp_global)
-            else:
-                data['run']['settings'] = {name: settings[name] for name in ['logger_severity', 'logger_name', 'message_results', 'include_image', 'retry']}
+            data['run']['settings'] = {name: settings[name] for name in ['logger_severity', 'logger_name', 'message_results', 'include_image', 'retry']}
 
         success, message, data = self.read_image(image=image, data=data, stamp_global=stamp_global)
         if not success:
@@ -253,7 +252,7 @@ class VlmGistBase(ClientBase):
         for arg, name in zip([scene_description, structured_description, detection], ["scene_description", "structured_description", "detection"]):
             if arg is None:
                 continue
-            elif isinstance(arg, dict):
+            if isinstance(arg, dict):
                 assert_keys(obj=arg, keys=['data'], mode="required", name=f"argument '{name}' provided as 'dict'")
                 names = ['stamp', 'settings', 'success', 'logs', 'duration']
                 types = [str, dict, bool, list, float]
@@ -419,40 +418,39 @@ class VlmGistBase(ClientBase):
             data['image']['path'] = image_path
             data['image']['duration'] = time.perf_counter() - stamp_local
             return True, message, data
-        else:
-            return self.consolidate_error(key='image', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        return self.consolidate_error(key='image', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
     def generate_scene_description(self, data, settings, is_worker, stamp_global):
         if self._settings['scene_description']['skip']:
             return True, "Skipping scene description.", data
-        else:
-            stamp_local = time.perf_counter()
-            data['scene_description'] = {'stamp': datetime.datetime.now().isoformat()}
-            if not is_worker:
-                data['scene_description']['settings'] = copy.deepcopy(settings['scene_description'])
-            chat = ChatCompletions(settings=settings['scene_description']['chat_completions'])
-            messages = [
-                {'role': settings['scene_description']['system_prompt_role'], 'content': settings['scene_description']['system_prompt']},
-                {'role': settings['scene_description']['image_prompt_role'], 'content': [{'type': "image_url", 'image_url': {'url': data['image']['data'], 'detail': settings['scene_description']['image_prompt_detail']}}]},
-                {'role': settings['scene_description']['description_prompt_role'], 'content': [{'type': "text", 'text': settings['scene_description']['description_prompt']}]},
-            ]
-            data['scene_description']['success'], message, completion = chat.prompt(text=messages, response_type="text")
-            data['scene_description']['logs'] = [message]
-            if isinstance(completion, dict):
-                data['scene_description']['completion'] = completion
-            if data['scene_description']['success']:
-                required_keys = {'text', 'usage', 'logs'}
-                reserved_keys = ['stamp', 'settings', 'data', 'duration']
-                success, message, data = self.parse_completion(completion=completion, required_keys=required_keys, reserved_keys=reserved_keys, data=data, data_key='scene_description', name="scene description")
-                if not success:
-                    return self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-                success, message, data = self.parse_scene_description(data=data, stamp_local=stamp_local)
-                if success:
-                    return True, message, data
-                else:
-                    return self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-            else:
-                return self.consolidate_error(key='scene_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        stamp_local = time.perf_counter()
+        data['scene_description'] = {'stamp': datetime.datetime.now().isoformat()}
+        if not is_worker:
+            data['scene_description']['settings'] = copy.deepcopy(settings['scene_description'])
+        chat = ChatCompletions(settings=settings['scene_description']['chat_completions'])
+        messages = [
+            {'role': settings['scene_description']['system_prompt_role'], 'content': settings['scene_description']['system_prompt']},
+            {'role': settings['scene_description']['image_prompt_role'], 'content': [{'type': "image_url", 'image_url': {'url': data['image']['data'], 'detail': settings['scene_description']['image_prompt_detail']}}]},
+            {'role': settings['scene_description']['description_prompt_role'], 'content': [{'type': "text", 'text': settings['scene_description']['description_prompt']}]},
+        ]
+        data['scene_description']['success'], message, completion = chat.prompt(text=messages, response_type="text")
+        data['scene_description']['logs'] = [message]
+        if isinstance(completion, dict):
+            data['scene_description']['completion'] = completion
+        if data['scene_description']['success']:
+            required_keys = {'text', 'usage', 'logs'}
+            reserved_keys = ['stamp', 'settings', 'data', 'duration']
+            success, message, data = self.parse_completion(completion=completion, required_keys=required_keys, reserved_keys=reserved_keys, data=data, data_key='scene_description', name="scene description")
+            if not success:
+                return self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+            success, message, data = self.parse_scene_description(data=data, stamp_local=stamp_local)
+            if success:
+                return True, message, data
+            return self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        return self.consolidate_error(key='scene_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
     def parse_completion(self, completion, required_keys, reserved_keys, data, data_key, name):
         if not isinstance(completion, dict):
@@ -515,38 +513,37 @@ class VlmGistBase(ClientBase):
     def generate_structured_description(self, data, settings, is_worker, stamp_global):
         if self._settings['structured_description']['skip']:
             return True, "Skipping structured description.", data
-        else:
-            stamp_local = time.perf_counter()
-            data['structured_description'] = {'stamp': datetime.datetime.now().isoformat()}
-            if not is_worker:
-                data['structured_description']['settings'] = copy.deepcopy(settings['structured_description'])
-            chat = ChatCompletions(settings=settings['structured_description']['chat_completions'])
-            messages = [
-                {'role': settings['structured_description']['system_prompt_role'], 'content': settings['structured_description']['system_prompt']},
-                {'role': settings['structured_description']['image_prompt_role'], 'content': [{'type': "image_url", 'image_url': {'url': data['image']['data'], 'detail': settings['structured_description']['image_prompt_detail']}}]},
-            ]
-            if settings['structured_description']['use_scene_description']:
-                messages.append({'role': settings['scene_description']['description_prompt_role'], 'content': [{'type': "text", 'text': settings['scene_description']['description_prompt']}]})
-                messages.append({'role': "assistant", 'content': data['scene_description']['data']})
-            messages.append({'role': settings['structured_description']['description_prompt_role'], 'content': [{'type': "text", 'text': settings['structured_description']['description_prompt']}]})
-            data['structured_description']['success'], message, completion = chat.prompt(text=messages, reset_context=True, response_type=settings['structured_description']['response_type'])
-            data['structured_description']['logs'] = [message]
-            if isinstance(completion, dict):
-                data['structured_description']['completion'] = completion
-            if data['structured_description']['success']:
-                required_keys = {'text', 'usage', 'logs'}
-                reserved_keys = ['stamp', 'settings', 'raw', 'data', 'duration']
-                success, message, data = self.parse_completion(completion=completion, required_keys=required_keys, reserved_keys=reserved_keys, data=data, data_key='structured_description', name="structured description")
-                if not success:
-                    return self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-                success, message, data = self.parse_structured_description(settings=settings, data=data, stamp_local=stamp_local)
-                if success:
-                    return True, message, data
-                else:
-                    # TODO trigger correction using message
-                    return self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-            else:
-                return self.consolidate_error(key='structured_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        stamp_local = time.perf_counter()
+        data['structured_description'] = {'stamp': datetime.datetime.now().isoformat()}
+        if not is_worker:
+            data['structured_description']['settings'] = copy.deepcopy(settings['structured_description'])
+        chat = ChatCompletions(settings=settings['structured_description']['chat_completions'])
+        messages = [
+            {'role': settings['structured_description']['system_prompt_role'], 'content': settings['structured_description']['system_prompt']},
+            {'role': settings['structured_description']['image_prompt_role'], 'content': [{'type': "image_url", 'image_url': {'url': data['image']['data'], 'detail': settings['structured_description']['image_prompt_detail']}}]},
+        ]
+        if settings['structured_description']['use_scene_description']:
+            messages.append({'role': settings['scene_description']['description_prompt_role'], 'content': [{'type': "text", 'text': settings['scene_description']['description_prompt']}]})
+            messages.append({'role': "assistant", 'content': data['scene_description']['data']})
+        messages.append({'role': settings['structured_description']['description_prompt_role'], 'content': [{'type': "text", 'text': settings['structured_description']['description_prompt']}]})
+        data['structured_description']['success'], message, completion = chat.prompt(text=messages, reset_context=True, response_type=settings['structured_description']['response_type'])
+        data['structured_description']['logs'] = [message]
+        if isinstance(completion, dict):
+            data['structured_description']['completion'] = completion
+        if data['structured_description']['success']:
+            required_keys = {'text', 'usage', 'logs'}
+            reserved_keys = ['stamp', 'settings', 'raw', 'data', 'duration']
+            success, message, data = self.parse_completion(completion=completion, required_keys=required_keys, reserved_keys=reserved_keys, data=data, data_key='structured_description', name="structured description")
+            if not success:
+                return self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+            success, message, data = self.parse_structured_description(settings=settings, data=data, stamp_local=stamp_local)
+            if success:
+                return True, message, data
+            # TODO trigger correction using message
+            return self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        return self.consolidate_error(key='structured_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
     def parse_structured_description(self, settings, data, stamp_local):
         description = copy.deepcopy(data['structured_description']['raw'])
@@ -564,8 +561,7 @@ class VlmGistBase(ClientBase):
                         for j in closing_indices:
                             if j < i:
                                 continue
-                            else:
-                                options.append(description[i:j + 1])
+                            options.append(description[i:j + 1])
                     options.sort(key=len, reverse=True)
                     for option in options:
                         try:
@@ -604,7 +600,7 @@ class VlmGistBase(ClientBase):
             # object can feature required keys
             for j, target_key in enumerate(settings['structured_description']['keys_required'] + settings['structured_description']['keys_optional']):
                 target_key_norm = re.sub(r"[.,;:_\-\s]", "", target_key).lower().strip()
-                for k, source_key in enumerate(copy.deepcopy(keys_left)):
+                for source_key in copy.deepcopy(keys_left):
                     source_key_norm = re.sub(r"[.,;:_\-\s]", "", source_key).lower().strip()
                     if source_key_norm == target_key_norm:
                         # matched key
@@ -709,41 +705,40 @@ class VlmGistBase(ClientBase):
     def generate_detection(self, data, settings, is_worker, stamp_global):
         if self._settings['detection']['skip'] or len(data['structured_description']['data']) == 0:
             return True, "Skipping detection.", data
+
+        stamp_local = time.perf_counter()
+        data['detection'] = {'stamp': datetime.datetime.now().isoformat()}
+        if not is_worker:
+            data['detection']['settings'] = copy.deepcopy(settings['detection'])
+        if settings['detection']['extract_from_description']:
+            for i, item in enumerate(settings['structured_description']['keys_required_types']):
+                if "bbox" in item:
+                    bbox_key = settings['structured_description']['keys_required'][i]
+                    break
+            data['detection']['success'] = True
+            data['detection']['logs'] = ["Extracted from structured description."]
+            detection = []
+            prompts = []
+            for item in data['structured_description']['data']:
+                prompts.append(item[settings['detection']['prompt_key']])
+                detection.append({
+                    # this will not work for unit coordinates, but fixing this would require knowing the image dimensions differentiating bbox[float] and bbox[unit]
+                    'box_xyxy': [int(value) for value in item[bbox_key]],
+                    'prompt': prompts[-1]
+                })
         else:
-            stamp_local = time.perf_counter()
-            data['detection'] = {'stamp': datetime.datetime.now().isoformat()}
-            if not is_worker:
-                data['detection']['settings'] = copy.deepcopy(settings['detection'])
-            if settings['detection']['extract_from_description']:
-                for i, item in enumerate(settings['structured_description']['keys_required_types']):
-                    if "bbox" in item:
-                        bbox_key = settings['structured_description']['keys_required'][i]
-                        break
-                data['detection']['success'] = True
-                data['detection']['logs'] = ["Extracted from structured description."]
-                detection = []
-                prompts = []
-                for item in data['structured_description']['data']:
-                    prompts.append(item[settings['detection']['prompt_key']])
-                    detection.append({
-                        # this will not work for unit coordinates, but fixing this would require knowing the image dimensions differentiating bbox[float] and bbox[unit]
-                        'box_xyxy': [int(value) for value in item[bbox_key]],
-                        'prompt': prompts[-1]
-                    })
-            else:
-                detector = MmGroundingDino(settings=settings['detection']['mmgroundingdino'])
-                prompts = [item[settings['detection']['prompt_key']] for item in data['structured_description']['data']]
-                data['detection']['success'], message, detection = detector.get_detections(image=data['image']['data'], prompts=prompts)
-                data['detection']['logs'] = [message]
-            if data['detection']['success']:
-                data['detection']['raw'] = detection
-                success, message, data = self.parse_detection(data=data, prompts=prompts, stamp_local=stamp_local)
-                if success:
-                    return True, message, data
-                else:
-                    return self.consolidate_error(key='detection', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-            else:
-                return self.consolidate_error(key='detection', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+            detector = MmGroundingDino(settings=settings['detection']['mmgroundingdino'])
+            prompts = [item[settings['detection']['prompt_key']] for item in data['structured_description']['data']]
+            data['detection']['success'], message, detection = detector.get_detections(image=data['image']['data'], prompts=prompts)
+            data['detection']['logs'] = [message]
+        if data['detection']['success']:
+            data['detection']['raw'] = detection
+            success, message, data = self.parse_detection(data=data, prompts=prompts, stamp_local=stamp_local)
+            if success:
+                return True, message, data
+            return self.consolidate_error(key='detection', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        return self.consolidate_error(key='detection', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
     def parse_detection(self, data, prompts, stamp_local):
         detection = copy.deepcopy(data['detection']['raw'])
@@ -785,7 +780,7 @@ class VlmGistBase(ClientBase):
             prompt_counts[prompt] -= detection_counts.get(prompt, 0)
             if prompt_counts[prompt] > 0:
                 return False, f"Failed to detect '{prompt_counts[prompt]}' instance{'' if prompt_counts[prompt] == 1 else 's'} of prompt '{prompt_str}' requested '{prompt_counts_initial[prompt]}' time{'' if prompt_counts_initial[prompt] == 1 else 's'}.", data
-            elif prompt_counts[prompt] < 0:
+            if prompt_counts[prompt] < 0:
                 data['detection']['logs'].append(f"Over-detected '{-prompt_counts[prompt]}' instance{'' if prompt_counts[prompt] == -1 else 's'} of prompt '{prompt_str}' requested '{prompt_counts_initial[prompt]}' time{'' if prompt_counts_initial[prompt] == 1 else 's'}.")
                 self._logger.debug(data['detection']['logs'])
 
@@ -803,30 +798,29 @@ class VlmGistBase(ClientBase):
     def generate_segmentation(self, data, settings, is_worker, stamp_global):
         if self._settings['segmentation']['skip'] or len(data['detection']['data']) == 0:
             return True, "Skipping segmentation.", data
-        else:
-            stamp_local = time.perf_counter()
-            data['segmentation'] = {'stamp': datetime.datetime.now().isoformat()}
-            if not is_worker:
-                data['segmentation']['settings'] = copy.deepcopy(settings['segmentation'])
-            prompts = [{'object_id': i, 'bbox': item['box_xyxy']} for i, item in enumerate(data['detection']['data'])]
-            segmenter = Sam2Realtime(settings=settings['segmentation']['sam2_realtime'])
-            data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'], prompts=prompts)
-            data['segmentation']['logs'] = [message]
-            if data['segmentation']['success']:
-                if settings['segmentation']['track']:
-                    data['segmentation']['duration_init'] = time.perf_counter() - stamp_local
-                    data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'])
-                    data['segmentation']['logs'].append(message)
-                    if not data['segmentation']['success']:
-                        return self.consolidate_error(key='segmentation', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-                data['segmentation']['raw'] = segmentation
-                success, message, data = self.parse_segmentation(data=data, stamp_local=stamp_local)
-                if success:
-                    return True, message, data
-                else:
-                    return self.consolidate_error(key='segmentation', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-            else:
-                return self.consolidate_error(key='segmentation', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        stamp_local = time.perf_counter()
+        data['segmentation'] = {'stamp': datetime.datetime.now().isoformat()}
+        if not is_worker:
+            data['segmentation']['settings'] = copy.deepcopy(settings['segmentation'])
+        prompts = [{'object_id': i, 'bbox': item['box_xyxy']} for i, item in enumerate(data['detection']['data'])]
+        segmenter = Sam2Realtime(settings=settings['segmentation']['sam2_realtime'])
+        data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'], prompts=prompts)
+        data['segmentation']['logs'] = [message]
+        if data['segmentation']['success']:
+            if settings['segmentation']['track']:
+                data['segmentation']['duration_init'] = time.perf_counter() - stamp_local
+                data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'])
+                data['segmentation']['logs'].append(message)
+                if not data['segmentation']['success']:
+                    return self.consolidate_error(key='segmentation', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+            data['segmentation']['raw'] = segmentation
+            success, message, data = self.parse_segmentation(data=data, stamp_local=stamp_local)
+            if success:
+                return True, message, data
+            return self.consolidate_error(key='segmentation', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        return self.consolidate_error(key='segmentation', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
     def parse_segmentation(self, data, stamp_local):
         segmentation = copy.deepcopy(data['segmentation']['raw'])

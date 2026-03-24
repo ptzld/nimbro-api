@@ -127,7 +127,7 @@ def parse(self, success, message, completion):
     else:
         completion['logs'].append("Cannot extract grounding without text-completion.")
 
-    return True, message, completion
+    return success, message, completion
 
 
 # [2026-03-18 20:39:57.177][INFO ][ChatCompletions]: Text-completion:

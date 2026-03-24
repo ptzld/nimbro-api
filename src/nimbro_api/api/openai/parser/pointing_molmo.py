@@ -99,11 +99,11 @@ def extract_points(text):
 def parse(self, success, message, completion):
     if 'text' not in completion:
         completion['logs'].append("Cannot extract grounding without text-completion.")
-        return True, message, completion
+        return success, message, completion
 
     if not isinstance(completion['text'], str):
         completion['logs'].append(f"Cannot extract grounding from text-completion of type '{type(completion['text']).__name__}' instead of 'str'.")
-        return True, message, completion
+        return success, message, completion
 
     grounding_content = extract_points(completion['text'])
 
@@ -122,4 +122,4 @@ def parse(self, success, message, completion):
     completion['logs'].append(log)
     self._logger.info(log)
 
-    return True, message, completion
+    return success, message, completion

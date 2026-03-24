@@ -119,7 +119,7 @@ class MmGroundingDinoBase(ClientBase):
         assert_type_value(obj=prompts, type_or_value=list, name="argument 'prompts'")
         assert_log(expression=len(prompts) > 0, message="Expected argument 'prompts' to be a non-empty list.")
         _prompts = []
-        for i, item in enumerate(prompts):
+        for item in prompts:
             assert_type_value(obj=item, type_or_value=str, name="all elements in argument 'prompts'")
             item = item.strip()
             assert_log(expression=len(item) > 0, message="Expected all elements in argument 'prompts' to be non-empty strings.")
@@ -131,7 +131,7 @@ class MmGroundingDinoBase(ClientBase):
             success, message, is_healthy = self.get_health(
                 age=0 if self._settings['validate_health'] is True else self._settings['validate_health']
             )
-            if success:
+            if success and is_healthy:
                 self._logger.debug(message)
             else:
                 return False, message, None

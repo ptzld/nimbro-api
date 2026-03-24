@@ -5,12 +5,11 @@
 def recursive_strip(obj):
     if isinstance(obj, str):
         return obj.strip()
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         return [recursive_strip(item) for item in obj]
-    elif isinstance(obj, dict):
+    if isinstance(obj, dict):
         return {key: recursive_strip(value) for key, value in obj.items()}
-    else:
-        return obj
+    return obj
 
 def parse(self, success, message, completion):
     message = message.strip()
