@@ -50,8 +50,8 @@ class Client:
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
         Settings: See the global dictionary for defaults.
-            logger_severity (int | None):
-                Logger severity in [10, 20, 30, 40, 50] or None to adopt global severity.
+            logger_severity (str | None):
+                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log for identifying this object.
             retry (bool | int):

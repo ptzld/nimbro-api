@@ -2,7 +2,7 @@ from .core_base import CoreBase
 from ..client import Client
 
 default_settings = {
-    'logger_severity': 20,
+    'logger_severity': "info",
     'logger_name': "nimbro_api",
     'logger_mute': False,
     'logger_line_length': None,
@@ -42,8 +42,8 @@ class Core(Client):
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
         Settings: See the global dictionary for defaults.
-            logger_severity (int):
-                Logger severity in [10, 20, 30, 40, 50] (DEBUG, INFO, WARN, ERROR, FATAL).
+            logger_severity (str | None):
+                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str).
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
             logger_mute (bool):

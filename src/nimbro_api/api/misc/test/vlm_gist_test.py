@@ -464,7 +464,7 @@ def test_12_structured_description_bbox():
         'scene_description.skip': True,
         'structured_description.skip': False,
         'structured_description.use_scene_description': False,
-        # 'structured_description.chat_completions.logger_severity': 20,
+        # 'structured_description.chat_completions.logger_severity': "info",
         'structured_description.description_prompt':
             "Provide a list in JSON format that contains each object (including furniture, persons, and animals) visible in the image above. "
             "Explicitly include each object instance as an individual list element, and never group multiple instances that are clearly distinct from one another. "
@@ -494,7 +494,7 @@ def test_13_structured_description_bbox_as_detection():
         'scene_description.skip': True,
         'structured_description.skip': False,
         'structured_description.use_scene_description': False,
-        # 'structured_description.chat_completions.logger_severity': 20,
+        # 'structured_description.chat_completions.logger_severity': "info",
         'structured_description.description_prompt':
             "Provide a list in JSON format that contains each object (including furniture, persons, and animals) visible in the image above. "
             "Explicitly include each object instance as an individual list element, and never group multiple instances that are clearly distinct from one another. "

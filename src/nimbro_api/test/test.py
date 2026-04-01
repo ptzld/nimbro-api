@@ -203,8 +203,8 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
             If `True`, performs common client tests across the selected APIs. Defaults to `True`.
         utilities (bool, optional):
             If `True`, performs general level-package tests. Defaults to `True`.
-        severity (int | None, optional):
-            The logging severity level to apply during test execution (e.g., 10, 20, 30, 49, 50). If `None`, the logger is muted. Defaults to `None`.
+        severity (str | None, optional):
+            Logger severity of all tests in ["debug", "info", "warn", "error", "fatal"] (str) or `None` to decativate all test-internal loggers. Defaults to `None`.
 
     Raises:
         UnrecoverableError: If input arguments are invalid or if internal assertions fail during test preparation.
@@ -223,7 +223,7 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
     assert_type_value(obj=function, type_or_value=[str, None], name="argument 'function'")
     assert_type_value(obj=common, type_or_value=bool, name="argument 'common'")
     assert_type_value(obj=utilities, type_or_value=bool, name="argument 'utilities'")
-    assert_type_value(obj=severity, type_or_value=[10, 20, 30, 49, 50, None], name="argument 'severity'")
+    assert_type_value(obj=severity, type_or_value=["debug", "info", "warn", "error", "fatal", None], name="argument 'severity'")
 
     # set logger
     logger_mute = nimbro_api.get_settings(name='logger_mute')

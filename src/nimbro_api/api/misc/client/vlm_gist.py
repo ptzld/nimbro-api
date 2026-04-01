@@ -9,7 +9,7 @@ default_settings = {
     'scene_description': {
         'skip': True,
         'chat_completions': {
-            'logger_severity': 30
+            'logger_severity': "warn"
         },
         'system_prompt_role': "system",
         'system_prompt': "You are a robot's visual perception system that identifies and analyzes objects in an image. Be concise and factual.",
@@ -25,7 +25,7 @@ default_settings = {
     'structured_description': {
         'skip': False,
         'chat_completions': {
-            'logger_severity': 30
+            'logger_severity': "warn"
         },
         'use_scene_description': False,
         'system_prompt_role': "system",
@@ -51,7 +51,7 @@ default_settings = {
         'skip': False,
         'extract_from_description': False,
         'mmgroundingdino': {
-            'logger_severity': 30,
+            'logger_severity': "warn",
             'message_results': False,
             'nms_iou': None
         },
@@ -61,12 +61,12 @@ default_settings = {
         'skip': False,
         'track': False,
         'sam2_realtime': {
-            'logger_severity': 30
+            'logger_severity': "warn"
         }
     },
     'batch_size': 0,
     'batch_style': "multiprocessing",
-    'batch_logger_severity': 30,
+    'batch_logger_severity': "warn",
     'retry': 1
 }
 
@@ -94,8 +94,8 @@ class VlmGist(Client):
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
         Settings:
-            logger_severity (int):
-                Logger severity in [10, 20, 30, 40, 50] (DEBUG, INFO, WARN, ERROR, FATAL).
+            logger_severity (str | None):
+                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
             message_results (bool):
@@ -142,8 +142,8 @@ class VlmGist(Client):
                 Number of parallel workers when processing a list of images (>= 0). Use `0` to spawn one worker per image.
             batch_style (str):
                 Parallelization backend used for batch processing. One of ["threading", "multiprocessing"].
-            batch_logger_severity (int | None):
-                Logger severity applied to each worker. One of [10, 20, 30, 40, 50, None].
+            batch_logger_severity (str | None):
+                Logger severity applied to each worker in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
                 - If `True`, retries indefinitely. If `False`, failure is returned immediately.

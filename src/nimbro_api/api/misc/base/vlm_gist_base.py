@@ -172,7 +172,7 @@ class VlmGistBase(ClientBase):
         assert_type_value(obj=settings['batch_style'], type_or_value=["threading", "multiprocessing"], name="setting 'batch_style'")
 
         # batch_logger_severity
-        assert_type_value(obj=settings['batch_logger_severity'], type_or_value=[10, 20, 30, 40, 50, None], name="setting 'batch_logger_severity'")
+        assert_type_value(obj=settings['batch_logger_severity'], type_or_value=["off", "debug", "info", "warn", "error", "fatal", None], name="setting 'batch_logger_severity'")
 
         # do not skip all steps
         assert_log(expression=not (settings['scene_description']['skip'] and settings['structured_description']['skip'] and settings['detection']['skip'] and settings['segmentation']['skip']), message="Expected at least one setting 'skip' to be 'False'.")

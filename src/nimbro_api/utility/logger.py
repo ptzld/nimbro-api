@@ -10,18 +10,16 @@ from .misc import escape, assert_type_value, assert_keys, assert_log, print_line
 lock = threading.Lock()
 
 default_settings = {
-    # Logger severity in [10, 20, 30, 40, 50] (int) or None to adopt global process-wide severity.
     'severity': None,
-    # Logger name (str).
     'name': None
 }
 
 class Logger:
     """
-    Easily configurable Logger with severity, name, suffix, and various filters.
+    Easily configurable Logger with severity, name, and various filters.
     """
 
-    def __init__(self, settings=None, *, core_settings=None):
+    def __init__(self, settings=None, *, core_settings=None, **kwargs):
         """
         Initialize the Logger.
 
@@ -31,10 +29,19 @@ class Logger:
             core_settings (dict | None, optional):
                 Global process-wide configuration settings.
                 If provided, they are not pulled from the nimbro_api module. Defaults to `None`.
+            **kwargs:
+                The initial settings (see `get_settings()`) can also be configured via keyword arguments.
+                When doing so, 'settings' must be None or an empty `dict`.
 
         Raises:
             UnrecoverableError: If input arguments are invalid.
         """
+        # parse arguments
+        assert_type_value(obj=settings, type_or_value=[dict, None], name="argument 'settings'", prefix="Failed during initialization: ")
+        if len(kwargs) > 0:
+            assert_log(expression=settings is None or len(settings) == 0, message="Failed during initialization: Expected settings to be passed as either a dictionary via the 'settings' argument or as keyword arguments, but not both.")
+            settings = kwargs
+
         # state
         self._settings = default_settings
         self._core_settings = core_settings
@@ -128,8 +135,8 @@ class Logger:
         severity = self._settings['severity']
         if severity is None:
             severity = core_settings['logger_severity']
-        mute = core_settings['logger_mute']
-        if mute or severity > self._method_severity[method]:
+        mute = core_settings['logger_mute'] or severity == "off"
+        if mute or self._method_severity[severity] > self._method_severity[method]:
             lock.release()
             return False
 
@@ -196,32 +203,70 @@ class Logger:
 
     # settings
 
-    def get_settings(self):
+    def get_settings(self, name=None):
         """
-        Retrieve the current settings of the Logger.
-
-        Returns:
-            dict: A deep copy of the current settings.
-        """
-        return copy.deepcopy(self._settings)
-
-    def set_settings(self, settings):
-        """
-        Update settings of the Logger.
+        Retrieve all current settings or a specific one.
 
         Args:
-            settings (dict):
-                New settings to apply.
+            name (str | None, optional):
+                If provided, the one setting with this name is returned directly.
+                Use `None` to return all settings as a dictionary. Defaults to `None`.
+
+        Settings: See the global dictionary for defaults.
+            severity (int | None):
+                Logger severity in ["off", "debug", "info", "warn", "error", "fatal"] (str)
+                or `None` to adopt global process-wide severity.
+            name (str | None):
+                Logger name shown in each log.
+
+        Raises:
+            UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
+
+        Returns:
+            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+        """
+        assert_type_value(obj=name, type_or_value=list(default_settings.keys()) + [None], name="argument 'name'")
+        if name is None:
+            settings = copy.deepcopy(self._settings)
+        else:
+            settings = copy.deepcopy(self._settings[name])
+        return settings
+
+    def set_settings(self, settings=None, **kwargs):
+        """
+        Configure all settings or a subset of them.
+
+        Args:
+            settings (dict | None, optional):
+                New settings to apply. Settings not contained are kept.
+                See the documentation of `get_settings()` for a comprehensive list of all available settings.
+                Use `None` to reset all settings to their initial values. Defaults to `None`.
+            **kwargs:
+                All settings (see `get_settings()`) can also be configured via keyword arguments.
+                When doing so, 'settings' must be `None` or an empty `dict`.
 
         Raises:
             UnrecoverableError: If input arguments or provided settings are invalid.
         """
         assert_type_value(obj=settings, type_or_value=[dict, None], name="argument 'settings'")
-        settings = update_dict(old_dict=self._settings, new_dict=settings)
-        assert_keys(obj=settings, keys=default_settings.keys(), mode="match", name="settings")
 
-        assert_type_value(obj=settings['severity'], type_or_value=[10, 20, 30, 40, 50, None], name="setting 'severity'")
+        if len(kwargs) > 0:
+            assert_log(expression=settings is None or len(settings) == 0, message="Expected settings to be passed as either a dictionary via the 'settings' argument or as keyword arguments, but not both.")
+            settings = kwargs
+
+        settings = update_dict(old_dict=self._settings, new_dict=settings)
+
+        assert_keys(obj=settings, keys=default_settings.keys(), mode="match", name="settings")
+        if isinstance(settings['severity'], str):
+            settings['severity'] = settings['severity'].lower().strip()
+        elif settings['severity'] in self._method_severity:
+            settings['severity'] = self._method_severity[settings['severity']]
+
+        if settings['severity'] in [0, 10, 20, 30, 40, 50]:
+            settings['severity'] = {0: "off", 10: "debug", 20: "info", 30: "warn", 40: "error", 50: "fatal"}[settings['severity']]
+        assert_type_value(obj=settings['severity'], type_or_value=["off", "debug", "info", "warn", "error", "fatal", None], name="setting 'severity'")
         assert_type_value(obj=settings['name'], type_or_value=[str, None], name="setting 'name'")
+
         if isinstance(settings['name'], str) and len(settings['name']) == 0:
             settings['name'] = None
 

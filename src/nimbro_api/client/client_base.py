@@ -40,6 +40,13 @@ class ClientBase:
         """
         self._initialized = False
 
+        # parse arguments
+        assert_type_value(obj=settings, type_or_value=[dict, None], name="argument 'settings'", prefix="Failed during initialization: ")
+        assert_type_value(obj=default_settings, type_or_value=dict, name="argument 'default_settings'", prefix="Failed during initialization: ")
+        for key in ['logger_severity', 'logger_name', 'retry']:
+            assert_log(expression=key in default_settings, message=f"Failed during initialization: Expected default settings to contain the mandatory key '{key}'.")
+        self._assert_no_dots_in_keys(settings=default_settings)
+
         # locks
         self._lock_api = threading.Lock()
         self._lock_settings = threading.Lock()
@@ -64,7 +71,7 @@ class ClientBase:
             severity = default_settings['logger_severity']
             name = default_settings['logger_name']
             if isinstance(settings, dict):
-                if settings.get('logger_severity') in [10, 20, 30, 40, 50, None]:
+                if settings.get('logger_severity') in [0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off", None]:
                     severity = settings.get('logger_severity')
                 if 'logger_name' in settings and isinstance(settings['logger_name'], (str, type(None))):
                     name = settings.get('logger_name')
@@ -74,12 +81,6 @@ class ClientBase:
             self._logger.debug(f"Initializing '{type(self).__name__}' object.")
 
         # settings
-        assert_type_value(obj=settings, type_or_value=[dict, None], name="argument 'settings'", logger=self._logger, prefix="Failed during initialization: ")
-        assert_type_value(obj=default_settings, type_or_value=dict, name="argument 'default_settings'", logger=self._logger, prefix="Failed during initialization: ")
-        for key in ['logger_severity', 'logger_name', 'retry']:
-            assert_log(expression=key in default_settings, message=f"Failed during initialization: Expected default settings to contain the mandatory key '{key}'.")
-        self._assert_no_dots_in_keys(settings=default_settings)
-
         if settings is None or len(settings) == 0:
             self._initial_settings = copy.deepcopy(default_settings)
         else:
@@ -206,7 +207,7 @@ class ClientBase:
                     logger_settings_target = self._logger.get_settings()
                     if 'logger_name' in args[0] and isinstance(args[0]['logger_name'], str):
                         logger_settings_target['name'] = args[0]['logger_name']
-                    if 'logger_severity' in args[0] and args[0]['logger_severity'] in [None, 10, 20, 30, 40, 50]:
+                    if 'logger_severity' in args[0] and args[0]['logger_severity'] in [0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off", None]:
                         logger_settings_target['severity'] = args[0]['logger_severity']
                     if logger_settings_reset != logger_settings_target:
                         reset_logger = True
@@ -630,24 +631,6 @@ class ClientBase:
         settings = self._introduce_settings(settings=settings, mode=mode)
 
         # Validate all settings
-
-        # logger_severity
-        assert_type_value(obj=settings['logger_severity'], type_or_value=[10, 20, 30, 40, 50, None], name="setting 'logger_severity'")
-
-        # logger_name
-        assert_type_value(obj=settings['logger_name'], type_or_value=[str, None], name="setting 'logger_name'")
-
-        # retry
-        assert_type_value(obj=settings['retry'], type_or_value=[int, bool], name="setting 'retry'")
-        if not isinstance(settings['retry'], bool):
-            assert_log(
-                expression=settings['retry'] >= 0,
-                message=f"Expected setting 'retry' to be of type 'bool' or a non-negative 'int' but got '{settings['retry']}'."
-            )
-            if settings['retry'] == 0:
-                settings['retry'] = False
-
-        # my_setting
         # assert_type_value(obj=settings['my_setting'], type_or_value=int, name="setting 'my_setting'")
 
         # Accommodate any member variable according to the new settings
@@ -852,7 +835,7 @@ class ClientBase:
         self._logger.debug("Validating settings.")
 
         # required settings
-        assert_type_value(obj=settings['logger_severity'], type_or_value=[10, 20, 30, 40, 50, None], name="setting 'logger_severity'")
+        assert_type_value(obj=settings['logger_severity'], type_or_value=[0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off", None], name="setting 'logger_severity'")
         assert_type_value(obj=settings['logger_name'], type_or_value=[str, None], name="setting 'logger_name'")
         assert_type_value(obj=settings['retry'], type_or_value=[int, bool], name="setting 'retry'")
         if not isinstance(settings['retry'], bool):
@@ -877,6 +860,8 @@ class ClientBase:
         else:
             self._walk_settings(self._default_settings, settings, mode="init", tense="past")
         self._logger.set_settings({'severity': settings['logger_severity'], 'name': settings['logger_name']})
+        settings['logger_severity'] = self._logger.get_settings(name="severity")
+
         self._settings = settings
         self._lock_settings.release()
         if mode == "set":

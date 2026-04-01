@@ -41,8 +41,8 @@ class No(Client):
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
         Settings:
-            logger_severity (int):
-                Logger severity in [10, 20, 30, 40, 50] (DEBUG, INFO, WARN, ERROR, FATAL).
+            logger_severity (str | None):
+                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
             endpoints (dict[dict]):
