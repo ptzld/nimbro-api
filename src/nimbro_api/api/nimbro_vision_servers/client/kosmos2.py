@@ -270,7 +270,7 @@ class Kosmos2(Client):
 
         Args:
             image (str | bytes):
-                The image file to be transcribed as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
+                The image file to be processed as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passes to `wrap()`:

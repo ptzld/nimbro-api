@@ -548,9 +548,8 @@ def test_44_vllm_video_file_input():
         'name': "spark",
         'api_flavor': "vllm",
         'api_url': "http://asus-gx10-0.ais.uni-bonn.de:8000/v1/chat/completions",
-        # 'api_url': "https://api-code.ais.uni-bonn.de/video/v1/chat/completions",
         'key_type': "plain",
-        'key_value': "xnxcScUkYIsXZ7"
+        'key_value': "xnxcScUkYIsXZ7" # This key is not secret
     }
     return _video_file_input(endpoint=endpoint, model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
 

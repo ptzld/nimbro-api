@@ -276,7 +276,7 @@ class Dam(Client):
 
         Args:
             image (str | bytes):
-                The image file to be transcribed as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
+                The image file to be processed as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
             prompts (list[dict]):
                 A list (`list`) of dictionaries (`dict`) with the following items:
                 - 'bbox': A list (`list`) of four integers (`int`) marking a bounding (x0, y0, x1, y1) within the image bounds.

@@ -53,12 +53,6 @@ class CoreBase(ClientBase):
         assert_type_value(obj=settings['keys_cache'], type_or_value=bool, name="setting 'keys_cache'")
         assert_type_value(obj=settings['defer_delay'], type_or_value=[int, float], name="setting 'defer_delay'")
         assert_log(expression=settings['defer_delay'] >= 0, message=f"Expected setting 'defer_delay' to be non-negative but got '{settings['defer_delay']}'.")
-        assert_type_value(obj=settings['retry'], type_or_value=[int, bool], name="setting 'retry'")
-        if isinstance(settings['retry'], int):
-            assert_log(
-                expression=settings['retry'] >= 0,
-                message=f"Expected setting 'retry' provided as 'int' to be non-negative but got '{settings['retry']}'."
-            )
 
         # apply settings
         self._logger_settings['logger_mute'] = settings['logger_mute']

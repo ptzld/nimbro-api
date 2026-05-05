@@ -442,6 +442,14 @@ class ChatCompletionsBase(ClientBase):
             'image_url': {
                 'name': "image",
                 'prefix': "data:image/jpeg;base64,",
+                # TODO "anthropic/claude-sonnet-4.6" via OpenRouter using Azure:
+                # "data:image/jpeg;base64," with PNG -> Error: The image was specified using the image/jpeg media type, but the image appears to be a image/png image.
+                # "data:image/jpeg;base64," with JPEG -> Works
+                # "data:image/jpg;base64," with PNG -> Error: Input should be 'image/jpeg', 'image/png', 'image/gif' or 'image/webp'.
+                # "data:image/jpg;base64," with JPEG -> Works
+                # "data:image/png;base64," with PNG -> Works
+                # "data:image/png;base64," with JPEG -> Error: The image was specified using the image/png media type, but the image appears to be a image/jpeg image.
+                # Fix: Guess type based on header/path/URL. Probably do the same for video_url and file. Check this is compatible with other providers/models.
                 'data': "url"
             },
             'input_audio': {
@@ -1201,7 +1209,15 @@ class ChatCompletionsBase(ClientBase):
                             pipe[1].send({'code': "USAGE", 'content': json_data['usage']})
                         # choices
                         if 'choices' not in json_data:
-                            message = "Error while receiving completion: Expected POST response to contain key 'choices'."
+                            # This typically triggers when providers are not using HTTP error codes to signal errors.
+                            if 'error' in json_data and len(str(json_data['error'])) > 0:
+                                if isinstance(json_data['error'], dict):
+                                    message = json.dumps(json_data['error'], indent=2)
+                                else:
+                                    message = str(json_data['error'])
+                            else:
+                                message = "Expected POST response to contain key 'choices'."
+                            message = f"Error while receiving completion: {message}"
                             pipe[1].send({'code': "ERROR", 'content': message})
                         elif not isinstance(json_data['choices'], list):
                             message = f"Error while receiving completion: Expected value of key 'choices' to be of type 'list' but got '{type(json_data['choices']).__name__}'."

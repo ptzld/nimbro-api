@@ -273,7 +273,7 @@ class MmGroundingDino(Client):
 
         Args:
             image (str | bytes):
-                The image file to be transcribed as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
+                The image file to be processed as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
             prompts (list[str]):
                 A list (possibly duplicate) prompts to be detected in the 'image'.
             **kwargs:
