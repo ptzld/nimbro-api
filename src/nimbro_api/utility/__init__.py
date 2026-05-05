@@ -17,6 +17,8 @@ from .misc import (
 
 from .string import is_url, is_base64, extract_json
 
+from .visual import Color, ColorPalette, nimbro_colors, kelly_colors, visualize_detections, draw_rectangle, draw_text, convert_boxes
+
 __all__ = [
     name for name, obj in globals().items()
     if not name.startswith("_") and not isinstance(obj, types.ModuleType)
