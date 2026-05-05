@@ -124,82 +124,73 @@ class Logger:
         if isinstance(suffix, str):
             assert_log(len(suffix) > 0, "Expected argument 'suffix' provided as 'str' to be non-empty.")
 
-        lock.acquire()
-
-        if self._core_settings is None:
-            core_settings = nimbro_api.get_settings()
-        else:
-            core_settings = self._core_settings
-
-        # check severity and global mute
-        severity = self._settings['severity']
-        if severity is None:
-            severity = core_settings['logger_severity']
-        mute = core_settings['logger_mute'] or severity == "off"
-        if mute or self._method_severity[severity] > self._method_severity[method]:
-            lock.release()
-            return False
-
         # identify call-site key
         frame = inspect.currentframe().f_back
         key = (frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno)
 
-        # apply filter "once"
-        if once:
-            if key in self._once_fired:
-                lock.release()
+        with lock:
+            if self._core_settings is None:
+                core_settings = nimbro_api.get_settings()
+            else:
+                core_settings = self._core_settings
+
+            # check severity and global mute
+            severity = self._settings['severity']
+            if severity is None:
+                severity = core_settings['logger_severity']
+            mute = core_settings['logger_mute'] or severity == "off"
+            if mute or self._method_severity[severity] > self._method_severity[method]:
                 return False
-            self._once_fired.add(key)
 
-        # apply filter "skip_first"
-        if skip_first:
-            if key not in self._skip_first_seen:
-                self._skip_first_seen.add(key)
-                lock.release()
-                return False
+            # apply filter "once"
+            if once:
+                if key in self._once_fired:
+                    return False
+                self._once_fired.add(key)
 
-        # apply filter "throttle"
-        if throttle is not None:
-            now = time.time()
-            last = self._last_throttle_time.get(key)
-            if last is not None and (now - last) < throttle:
-                lock.release()
-                return False
-            self._last_throttle_time[key] = now
+            # apply filter "skip_first"
+            if skip_first:
+                if key not in self._skip_first_seen:
+                    self._skip_first_seen.add(key)
+                    return False
 
-        # cast text to string
-        try:
-            text_str = str(text)
-        except Exception:
-            if method in ["debug", "info"]:
-                method = "warn"
-            text_str = f"Failed to cast log to string ({key})."
-            once = False
-            skip_first = False
-            throttle = None
+            # apply filter "throttle"
+            if throttle is not None:
+                now = time.time()
+                last = self._last_throttle_time.get(key)
+                if last is not None and (now - last) < throttle:
+                    return False
+                self._last_throttle_time[key] = now
 
-        # log
-        stamp_str = f"[{stamp.isoformat()[:23]}]"
-        stamp_str = stamp_str[:11] + " " + stamp_str[12:]
-        # stamp_str = f"[{stamp.isoformat()}]"
-        name_str = f"[{self._settings['name']}]" if self._settings['name'] else ""
-        suffix_str = f"[{suffix}]" if suffix else ""
-        prefix_first_line = f"{stamp_str}{self._method_prefix[method]}{name_str}{suffix_str}"
-        if core_settings['logger_multi_line_prefix']:
-            prefix_next_lines = prefix_first_line
-        else:
-            prefix_next_lines = " " * len(prefix_first_line)
+            # cast text to string
+            try:
+                text_str = str(text)
+            except Exception:
+                if method in ["debug", "info"]:
+                    method = "warn"
+                text_str = f"Failed to cast log to string ({key})."
 
-        print_lines(
-            string=text_str,
-            prefix_first_line=prefix_first_line,
-            prefix_next_lines=prefix_next_lines,
-            line_length=core_settings['logger_line_length'],
-            style=self._method_escape[method]
-        )
+            # log
+            stamp_str = f"[{stamp.isoformat()[:23]}]"
+            stamp_str = stamp_str[:11] + " " + stamp_str[12:]
+            # stamp_str = f"[{stamp.isoformat()}]"
+            name_str = f"[{self._settings['name']}]" if self._settings['name'] else ""
+            suffix_str = f"[{suffix}]" if suffix else ""
+            prefix_first_line = f"{stamp_str}{self._method_prefix[method]}{name_str}{suffix_str}"
+            if core_settings['logger_multi_line_prefix']:
+                prefix_next_lines = prefix_first_line
+            else:
+                prefix_next_lines = " " * len(prefix_first_line)
 
-        lock.release()
-        return True
+            print_lines(
+                string=text_str,
+                prefix_first_line=prefix_first_line,
+                prefix_next_lines=prefix_next_lines,
+                line_length=core_settings['logger_line_length'],
+                style=self._method_escape[method]
+            )
+
+            return True
 
     # settings
 
