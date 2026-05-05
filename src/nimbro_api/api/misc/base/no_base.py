@@ -57,7 +57,11 @@ class NoBase(ClientBase):
         success, message, response = get_request(
             api_name="no-as-a-service API",
             api_url=f"{self._endpoint['api_url']}",
-            headers={},
+            headers={
+                'Content-Type': "application/json",
+                'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+                'X-Title': "NimbRo API"
+            },
             timeout=(self._settings['timeout_connect'], self._settings['timeout_read']),
             logger=self._logger
         )

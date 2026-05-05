@@ -426,7 +426,9 @@ class SpeechBase(ClientBase):
         # construct payload
         headers = {
             'Content-Type': "application/json",
-            'Authorization': f"Bearer {api_key}"
+            'Authorization': f"Bearer {api_key}",
+            'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+            'X-Title': "NimbRo API"
         }
         data = {
             'input': text,

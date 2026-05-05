@@ -156,7 +156,10 @@ class Kosmos2Base(ClientBase):
 
         # construct payload
         headers = {
-            'Authorization': f"Bearer {api_key}"
+            'Content-Type': "application/json",
+            'Authorization': f"Bearer {api_key}",
+            'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+            'X-Title': "NimbRo API"
         }
         data = {
             'images': [image_file],

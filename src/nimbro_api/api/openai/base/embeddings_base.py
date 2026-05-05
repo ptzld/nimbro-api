@@ -577,7 +577,9 @@ class EmbeddingsBase(ClientBase):
         # construct header
         headers = {
             'Content-Type': "application/json",
-            'Authorization': f"Bearer {api_key}"
+            'Authorization': f"Bearer {api_key}",
+            'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+            'X-Title': "NimbRo API"
         }
 
         # retrieve batched embeddings

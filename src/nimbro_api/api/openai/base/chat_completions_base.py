@@ -1065,10 +1065,10 @@ class ChatCompletionsBase(ClientBase):
 
         try:
             headers = {
-                'Authorization': f"Bearer {api_key}",
-                "HTTP-Referer": "https://github.com/AIS-Bonn/nimbro_api",
-                "X-Title": "NimbRo-API",
                 'Content-Type': "application/json",
+                'Authorization': f"Bearer {api_key}",
+                'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+                'X-Title': "NimbRo API"
             }
 
             if self._endpoint['api_flavor'] == "openai":

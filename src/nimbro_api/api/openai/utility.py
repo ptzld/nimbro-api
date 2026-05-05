@@ -85,8 +85,10 @@ def get_models(self, age, api_key=None):
 
     # use Models API
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {api_key}",
+        'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+        'X-Title': "NimbRo API"
     }
     success, message, response = get_request(
         api_name="Models API",

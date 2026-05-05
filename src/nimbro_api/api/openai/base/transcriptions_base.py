@@ -106,7 +106,9 @@ class TranscriptionsBase(ClientBase):
 
         # construct payload
         headers = {
-            'Authorization': f"Bearer {api_key}"
+            'Authorization': f"Bearer {api_key}",
+            'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+            'X-Title': "NimbRo API"
         }
         data = {
             'model': self._settings['model'],

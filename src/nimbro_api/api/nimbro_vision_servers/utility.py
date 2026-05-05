@@ -45,7 +45,10 @@ def get_status(self, age):
 
     # use status API
     headers = {
-        'Authorization': f"Bearer {api_key}"
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {api_key}",
+        'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+        'X-Title': "NimbRo API"
     }
     success, message, response = get_request(
         api_name="NimbRo-Vision-Servers API",
@@ -133,7 +136,10 @@ def get_health(self, age):
 
     # use health API
     headers = {
-        'Authorization': f"Bearer {api_key}"
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {api_key}",
+        'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+        'X-Title': "NimbRo API"
     }
     success, message, response = get_request(
         api_name="NimbRo-Vision-Servers API",
@@ -208,7 +214,10 @@ def get_flavors(self, age):
 
     # use model_flavors API
     headers = {
-        'Authorization': f"Bearer {api_key}"
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {api_key}",
+        'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+        'X-Title': "NimbRo API"
     }
     success, message, response = get_request(
         api_name="NimbRo-Vision-Servers API",
@@ -290,7 +299,10 @@ def load(self, flavor=None, age=0):
 
     # use load API
     headers = {
-        'Authorization': f"Bearer {api_key}"
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {api_key}",
+        'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+        'X-Title': "NimbRo API"
     }
     success, message, _ = post_request(
         api_name="NimbRo-Vision-Servers API",
@@ -331,7 +343,10 @@ def unload(self):
 
     # use unload API
     headers = {
-        'Authorization': f"Bearer {api_key}"
+        'Content-Type': "application/json",
+        'Authorization': f"Bearer {api_key}",
+        'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
+        'X-Title': "NimbRo API"
     }
     success, message, response = post_request(
         api_name="NimbRo-Vision-Servers API",
