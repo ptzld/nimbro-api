@@ -207,8 +207,13 @@ class ClientBase:
                     logger_settings_target = self._logger.get_settings()
                     if 'logger_name' in args[0] and isinstance(args[0]['logger_name'], str):
                         logger_settings_target['name'] = args[0]['logger_name']
-                    if 'logger_severity' in args[0] and args[0]['logger_severity'] in [0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off", None]:
-                        logger_settings_target['severity'] = args[0]['logger_severity']
+                    from ..core import CoreBase
+                    if isinstance(self, CoreBase):
+                        if 'logger_severity' in args[0] and args[0]['logger_severity'] in [0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off"]:
+                            logger_settings_target['severity'] = args[0]['logger_severity']
+                    else:
+                        if 'logger_severity' in args[0] and args[0]['logger_severity'] in [0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off", None]:
+                            logger_settings_target['severity'] = args[0]['logger_severity']
                     if logger_settings_reset != logger_settings_target:
                         reset_logger = True
                         self._logger.debug("Fast tracking logger settings within 'set_settings()'.")
@@ -835,7 +840,11 @@ class ClientBase:
         self._logger.debug("Validating settings.")
 
         # required settings
-        assert_type_value(obj=settings['logger_severity'], type_or_value=[0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off", None], name="setting 'logger_severity'")
+        from ..core import CoreBase
+        if isinstance(self, CoreBase):
+            assert_type_value(obj=settings['logger_severity'], type_or_value=[0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off"], name="setting 'logger_severity'")
+        else:
+            assert_type_value(obj=settings['logger_severity'], type_or_value=[0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off", None], name="setting 'logger_severity'")
         assert_type_value(obj=settings['logger_name'], type_or_value=[str, None], name="setting 'logger_name'")
         assert_type_value(obj=settings['retry'], type_or_value=[int, bool], name="setting 'retry'")
         if not isinstance(settings['retry'], bool):

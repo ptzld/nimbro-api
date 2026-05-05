@@ -44,8 +44,6 @@ class CoreBase(ClientBase):
         settings = self._introduce_settings(settings=settings, mode=mode)
 
         # validate settings
-        assert_type_value(obj=settings['logger_severity'], type_or_value=["off", "debug", "info", "warn", "error", "fatal"], name="setting 'logger_severity'")
-        assert_type_value(obj=settings['logger_name'], type_or_value=[str, None], name="setting 'logger_name'")
         assert_type_value(obj=settings['logger_mute'], type_or_value=bool, name="setting 'logger_mute'")
         assert_type_value(obj=settings['logger_line_length'], type_or_value=[int, None], name="setting 'logger_mute'")
         if isinstance(settings['logger_line_length'], int):

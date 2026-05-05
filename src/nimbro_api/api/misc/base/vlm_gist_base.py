@@ -172,7 +172,7 @@ class VlmGistBase(ClientBase):
         assert_type_value(obj=settings['batch_style'], type_or_value=["threading", "multiprocessing"], name="setting 'batch_style'")
 
         # batch_logger_severity
-        assert_type_value(obj=settings['batch_logger_severity'], type_or_value=["off", "debug", "info", "warn", "error", "fatal", None], name="setting 'batch_logger_severity'")
+        assert_type_value(obj=settings['batch_logger_severity'], type_or_value=[0, 10, 20, 30, 40, 50, "off", "debug", "info", "warn", "error", "fatal", None], name="setting 'batch_logger_severity'")
 
         # do not skip all steps
         assert_log(expression=not (settings['scene_description']['skip'] and settings['structured_description']['skip'] and settings['detection']['skip'] and settings['segmentation']['skip']), message="Expected at least one setting 'skip' to be 'False'.")
@@ -246,7 +246,9 @@ class VlmGistBase(ClientBase):
         if validate_settings:
             from ..client.vlm_gist import VlmGist
             client = VlmGist(logger_severity=50)
-            success, message = client.set_settings(settings=settings)
+            temp = copy.deepcopy(settings)
+            temp['logger_severity'] = "off"
+            success, message = client.set_settings(settings=temp)
             assert_log(expression=success, message=message)
 
         for arg, name in zip([scene_description, structured_description, detection], ["scene_description", "structured_description", "detection"]):

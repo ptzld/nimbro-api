@@ -204,7 +204,7 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
         utilities (bool, optional):
             If `True`, performs general level-package tests. Defaults to `True`.
         severity (str | None, optional):
-            Logger severity of all tests in ["debug", "info", "warn", "error", "fatal"] (str) or `None` to decativate all test-internal loggers. Defaults to `None`.
+            Logger severity of all tests in ["debug", "info", "warn", "error", "fatal", "off"] (str). Defaults to `None`.
 
     Raises:
         UnrecoverableError: If input arguments are invalid or if internal assertions fail during test preparation.
@@ -213,7 +213,6 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
         int: The total number of test failures encountered during execution.
 
     Notes:
-        - The function automatically manages the project's global logger settings, restoring them to their original state after completion.
         - Two log files are generated in the "test" sub-directory of the package: "test.txt" (raw text) and "test_pretty.txt" (with ANSI color codes).
         - Test discovery relies on the directory structure where each API resides in a sub-directory of the "api" folder containing a "test" directory.
     """
@@ -223,7 +222,6 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
     assert_type_value(obj=function, type_or_value=[str, None], name="argument 'function'")
     assert_type_value(obj=common, type_or_value=bool, name="argument 'common'")
     assert_type_value(obj=utilities, type_or_value=bool, name="argument 'utilities'")
-    assert_type_value(obj=severity, type_or_value=["debug", "info", "warn", "error", "fatal", None], name="argument 'severity'")
 
     # set logger
     logger_mute = nimbro_api.get_settings(name='logger_mute')

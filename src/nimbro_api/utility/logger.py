@@ -60,7 +60,7 @@ class Logger:
         self._method_escape = {
             'debug': f"{escape['darkgreen']}",
             'info': "",
-            'warn': f"{escape['yellow']}",
+            'warn': f"{escape['darkyellow']}",
             'error': f"{escape['darkred']}",
             'fatal': f"{escape['red']}"
         }

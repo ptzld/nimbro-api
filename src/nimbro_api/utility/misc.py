@@ -1,3 +1,4 @@
+import re
 import json
 import copy
 import shutil
@@ -496,6 +497,70 @@ escape = {
     'cursor_show': "\033[?25h",
 }
 
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
+def visible_len(string):
+    """
+    Get the visible terminal width of a string by ignoring ANSI escape sequences.
+
+    Args:
+        string (str):
+            The string whose visible length is to be measured.
+
+    Raises:
+        UnrecoverableError: If input arguments are invalid.
+
+    Returns:
+        int: The visible length of the string.
+    """
+    # parse arguments
+    assert_type_value(obj=string, type_or_value=str, name="argument 'string'")
+
+    return len(ANSI_ESCAPE_RE.sub("", string))
+
+def split_visible(string, max_visible_length):
+    """
+    Split a string at a given visible length while preserving ANSI escape sequences.
+
+    Args:
+        string (str):
+            The string to be split.
+        max_visible_length (int):
+            The maximum visible length of the first returned part.
+
+    Raises:
+        UnrecoverableError: If input arguments are invalid.
+
+    Returns:
+        tuple[str, str]: A tuple containing:
+            - str: The first part with visible length at most `max_visible_length`.
+            - str: The remaining part.
+    """
+    # parse arguments
+    assert_type_value(obj=string, type_or_value=str, name="argument 'string'")
+    assert_type_value(obj=max_visible_length, type_or_value=int, name="argument 'max_visible_length'")
+    assert_log(expression=max_visible_length >= 0, message=f"Expected argument 'max_visible_length' to be non-negative but it is '{max_visible_length}'.")
+
+    visible_length = 0
+    index = 0
+
+    while index < len(string) and visible_length < max_visible_length:
+        match = ANSI_ESCAPE_RE.match(string, index)
+        if match is not None:
+            index = match.end()
+            continue
+        index += 1
+        visible_length += 1
+
+    while index < len(string):
+        match = ANSI_ESCAPE_RE.match(string, index)
+        if match is not None:
+            index = match.end()
+        else:
+            break
+
+    return string[:index], string[index:]
+
 def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, style):
     """
     Format and print a string to the terminal with line-wrapping and line-specific prefixes.
@@ -543,7 +608,7 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
     for line in string.splitlines():
         # If the line fits without wrapping, preserve it exactly (keeping all spaces)
         max_len = first_line_length if len(final_lines) == 0 else next_line_length
-        if len(line) <= max_len:
+        if visible_len(line) <= max_len:
             final_lines.append(line)
             continue
 
@@ -553,7 +618,7 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
             leading_space = line[:len(line) - len(stripped)]
             words = stripped.split()
             parts = [leading_space] if len(leading_space) > 0 else []
-            current_len = len(leading_space)
+            current_len = visible_len(leading_space)
             has_content = False
 
             for word in words:
@@ -572,21 +637,21 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
                         parts = [" " * remaining_len] if remaining_len > 0 else []
                         current_len = remaining_len if remaining_len > 0 else 0
                         has_content = False
-                    elif len(word) <= space_left:
+                    elif visible_len(word) <= space_left:
                         if has_content:
                             parts.append(" ")
                             current_len += 1
                         parts.append(word)
-                        current_len += len(word)
+                        current_len += visible_len(word)
                         word = ""
                         has_content = True
-                    elif not has_content or len(word) > max_len:
+                    elif not has_content or visible_len(word) > max_len:
                         if has_content:
                             parts.append(" ")
                             current_len += 1
-                        parts.append(word[:space_left])
-                        current_len += space_left
-                        word = word[space_left:]
+                        head, word = split_visible(word, space_left)
+                        parts.append(head)
+                        current_len += visible_len(head)
                         final_lines.append("".join(parts))
                         parts = []
                         current_len = 0
