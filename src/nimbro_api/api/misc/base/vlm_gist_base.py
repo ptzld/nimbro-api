@@ -915,8 +915,7 @@ class VlmGistBase(ClientBase):
                         data['image']['width'] = dimensions[0]
                         data['image']['height'] = dimensions[1]
                         break
-                    else:
-                        raise UnrecoverableError(message)
+                    raise UnrecoverableError(message)
             if dimensions is not None:
                 break
 

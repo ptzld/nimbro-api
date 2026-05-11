@@ -1,7 +1,5 @@
-import os
 from importlib.resources import files
 
-import nimbro_api
 from .io import decode_b64, parse_image_b64
 from .misc import assert_type_value, assert_log
 
@@ -21,38 +19,38 @@ class Color:
 
     Attributes:
         name (str): The name of the color (e.g. "red").
-        hex (str): The hexadecimal color code (e.g. "#FF0000").
+        hexa (str): The hexadecimal color code (e.g. "#FF0000").
         rgb (Tuple[int, int, int]): The 8bit RGB representation as a tuple of integers.
         bgr (Tuple[int, int, int]): The 8bit BGR representation as a tuple of integers.
     """
 
-    def __init__(self, hex_code, name="Color"):
+    def __init__(self, hexa_code, name="Color"):
         """
         Initializes a Color instance.
 
         Args:
-            hex_code (str): The hex code of the color (e.g. "#AABBCC").
+            hexa_code (str): The hexa code of the color (e.g. "#AABBCC").
             name (str): The name of the color.
 
         Raises:
             UnrecoverableError: If input arguments are invalid.
         """
         # parse arguments
-        assert_type_value(obj=hex_code, type_or_value=str, name="argument 'hex_code'")
+        assert_type_value(obj=hexa_code, type_or_value=str, name="argument 'hexa_code'")
         assert_type_value(obj=name, type_or_value=str, name="argument 'name'")
-        assert_log(expression=name not in ["name", "hex", "rgb", "bgr"], message=f"Color name refers to reserved keyword '{name}'.")
+        assert_log(expression=name not in ["name", "hexa", "rgb", "bgr"], message=f"Color name refers to reserved keyword '{name}'.")
 
         self.name = name
-        self.hex = hex_code
-        self.rgb = self._hex_to_rgb(hex_code)
+        self.hexa = hexa_code
+        self.rgb = self._hexa_to_rgb(hexa_code)
         self.bgr = self.rgb[::-1]
 
-    def _hex_to_rgb(self, hex_code):
-        hex_code = hex_code.lstrip("#")
-        return tuple(int(hex_code[i:i + 2], 16) for i in (0, 2, 4))
+    def _hexa_to_rgb(self, hexa_code):
+        hexa_code = hexa_code.lstrip("#")
+        return tuple(int(hexa_code[i:i + 2], 16) for i in (0, 2, 4))
 
     def __repr__(self):
-        return f"{self.name}(hex='{self.hex}', rgb={self.rgb}, bgr={self.bgr})"
+        return f"{self.name}(hexa='{self.hexa}', rgb={self.rgb}, bgr={self.bgr})"
 
 class ColorPalette:
     """
@@ -62,8 +60,8 @@ class ColorPalette:
     Attributes:
         name (str): Name of the palette.
         names (Tuple[str]): All color names in the palette.
-        hex (Tuple[str]): All hex codes in the palette.
-        hex_shuffle (Tuple[str]): All hex codes in the palette in random order.
+        hexa (Tuple[str]): All hexa codes in the palette.
+        hexa_shuffle (Tuple[str]): All hexa codes in the palette in random order.
         rgb (Tuple[Tuple[int, int, int]]): All 8bit RGB tuples in the palette.
         rgb_shuffle (Tuple[Tuple[int, int, int]]): All 8bit RGB tuples in the palette in random order.
         bgr (Tuple[Tuple[int, int, int]]): All 8bit BGR tuples in the palette.
@@ -81,7 +79,7 @@ class ColorPalette:
                 "blue": "#0000FF"
             }, groups={"primary": ["red", "blue"]})
             palette.red.rgb     # (255, 0, 0)
-            palette.primary.hex # ("#FF0000", "#0000FF")
+            palette.primary.hexa # ("#FF0000", "#0000FF")
             ```
     """
     def __init__(self, colors, name="ColorPalette", groups=None):
@@ -89,7 +87,7 @@ class ColorPalette:
         Initialize a ColorPalette.
 
         Args:
-            colors (dict[str, str]): Mapping of color names to hex codes.
+            colors (dict[str, str]): Mapping of color names to hexa codes.
             name (str, optional): Name of the ColorPalette.
             groups (dict[str, list[str]] | None, optional): Mapping of group names to lists of color names.
 
@@ -105,10 +103,10 @@ class ColorPalette:
         self.names = []
         self._colors = []
         assert_log(expression=len(colors) > 0, message="Palette must at least contain one color.")
-        for name, hex_code in colors.items():
-            assert_log(expression=name not in ["name", "names", "hex", "rgb", "bgr", "groups"], message=f"Color name refers to reserved keyword '{name}'.")
+        for name, hexa_code in colors.items():
+            assert_log(expression=name not in ["name", "names", "hexa", "rgb", "bgr", "groups"], message=f"Color name refers to reserved keyword '{name}'.")
             self.names.append(name)
-            self._colors.append(Color(hex_code=hex_code, name=name))
+            self._colors.append(Color(hexa_code=hexa_code, name=name))
             setattr(self, name, self._colors[-1])
         self.names = tuple(self.names)
         self._colors = tuple(self._colors)
@@ -116,7 +114,7 @@ class ColorPalette:
         self.groups = {}
         if groups:
             for group_name, group_keys in groups.items():
-                assert_log(expression=group_name not in ["name", "names", "hex", "rgb", "bgr"], message=f"Group name refers to reserved keyword '{group_name}'.")
+                assert_log(expression=group_name not in ["name", "names", "hexa", "rgb", "bgr"], message=f"Group name refers to reserved keyword '{group_name}'.")
                 assert_log(expression=group_name not in colors, message=f"Group name refers to known color '{group_name}'.")
                 for key in group_keys:
                     assert_log(expression=key in colors, message=f"Group name '{group_name}' refers to unknown color '{key}'.")
@@ -128,18 +126,18 @@ class ColorPalette:
     def __getitem__(self, key):
         if isinstance(key, int):
             return self._colors[key]
-        elif isinstance(key, str):
+        if isinstance(key, str):
             if hasattr(self, key):
                 return getattr(self, key)
         raise KeyError(f"Invalid key: {key}")
 
     @property
-    def hex(self):  # noqa: A003
-        return tuple(c.hex for c in self._colors)
+    def hexa(self):  # noqa: A003
+        return tuple(c.hexa for c in self._colors)
 
     @property
-    def hex_shuffle(self):
-        colors = [c.hex for c in self._colors]
+    def hexa_shuffle(self):
+        colors = [c.hexa for c in self._colors]
         np.random.shuffle(colors)
         return tuple(colors)
 
@@ -167,13 +165,15 @@ class ColorPalette:
         return len(self.names)
 
     def __repr__(self):
-        if len(self.groups) > 0:
-            colors = "\n\t\t" + ",\n\t\t".join(repr(c) for c in self._colors) + "\n\t"
-            groups = "\n\t\t" + ",\n\t\t".join(f"{name}{repr(self.groups[name]).replace("'", "")}" for name in self.groups) + "\n\t" # noqa: E999
-            return f"{self.name}(\n\tcolors: [{colors}],\n\tgroups: [{groups}]\n)"
-        else:
-            colors = "\n\t" + ",\n\t".join(repr(c) for c in self._colors) + "\n"
-            return f"{self.name}([{colors}])"
+        if not self.groups:
+            colors_str = ",\n\t".join(repr(c) for c in self._colors)
+            return f"{self.name}([\n\t{colors_str}\n])"
+
+        colors_str = ",\n\t\t".join(repr(c) for c in self._colors)
+        group_items = (f'{name}{repr(value).replace("'", "")}' for name, value in self.groups.items())
+        groups_str = ",\n\t\t".join(group_items)
+
+        return f"{self.name}(\n\tcolors: [\n\t\t{colors_str}\n\t],\n\tgroups: [\n\t\t{groups_str}\n\t]\n)"
 
 nimbro_colors = ColorPalette(
     colors={
