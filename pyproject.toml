@@ -47,7 +47,7 @@ Homepage = "https://www.ais.uni-bonn.de/index.html"
 Repository = "https://github.com/ptzld/nimbro-api"
 
 [tool.setuptools.package-data]
-nimbro_api = ["test/assets/*", "**/*.json"]
+nimbro_api = ["**/*.json", "fonts/*", "test/assets/*"]
 
 [tool.pylint.messages_control]
 disable = [

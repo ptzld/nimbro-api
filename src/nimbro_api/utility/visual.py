@@ -1,3 +1,7 @@
+import os
+from importlib.resources import files
+
+import nimbro_api
 from .io import decode_b64, parse_image_b64
 from .misc import assert_type_value, assert_log
 
@@ -232,27 +236,37 @@ kelly_colors = ColorPalette(
     groups={'accent': ['yellow', 'purple', 'orange', 'aqua', 'red', 'buff', 'green', 'pink', 'blue', 'papaya', 'violet', 'manilla', 'plum', 'lemon', 'brown', 'lime', 'dirt', 'crimson', 'olive']}
 )
 
-def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_format="xyxy_normalized", is_rgb=False, **kwargs):
+def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=None, box_format="xyxy_normalized", point_format="xy_normalized", is_rgb=False, **kwargs):
     """
-    Draws bounding boxes and labels on an image with customizable options.
+    Draws bounding boxes, masks, labels, and points on an image with customizable options.
 
     Args:
         image (str | bytes | numpy.ndarray):
             The image to be processed as a local file path, URL, Base64 encoding (all `str`), raw `bytes`, or cv2 style `numpy.ndarray`.
         boxes (list | tuple | numpy.ndarray | None, optional):
-            A list of bounding boxes. Each box must be a 4-element sequence according to `box_format`.
+            A list of bounding boxes. Each box must be a 4-element sequence according to 'box_format'.
             Individual entries may also be `None` to indicate that a detection has no box.
             Defaults to `None`.
         masks (list | None, optional):
             A list of boolean masks corresponding to detections.
-            Use `None` or a list containing None to not show masks. Defaults to `None`.
+            Each mask must be of type `list`, `tuple`, `np.ndarray`, or `None`.
+            Use `None` or a list containing `None` to not show masks. Defaults to `None`.
         labels (list | None, optional):
             List of string labels for each detection. Use `None` to deactivate all or a single label.
             Providing a label for a detection requires that the detection also has a box. Defaults to `None`.
+        points (list | tuple | numpy.ndarray | None, optional):
+            A list of points (one per detection) pointing to the object. Each point must be a
+            2-element sequence (x, y) according to 'point_format', or `None` to indicate that a
+            detection has no point. Defaults to `None`.
         box_format (str, optional):
             Format of the input boxes. See `convert_boxes()`.
             One of ["xyxy_normalized", "xyxy_absolute", "xywh_normalized", "xywh_absolute"].
-            Defaults to 'xyxy_normalized'
+            Defaults to 'xyxy_normalized'.
+        point_format (str, optional):
+            Format of the input points. One of ["xy_normalized", "xy_absolute"].
+            For 'xy_normalized', coordinates are floats in [0.0, 1.0].
+            For 'xy_absolute', coordinates are non-negative integer pixel coordinates.
+            Defaults to 'xy_normalized'.
         is_rgb (bool, optional):
             For 3-channel NumPy inputs, indicates if the data is in RGB (`True`) or BGR (`False`) order.
             Defaults to `False`.
@@ -279,7 +293,7 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
                 Defaults to 0.022.
             label_font_path (str):
                 Path to .ttf or .otf font file used.
-                Defaults to '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'.
+                Defaults to 'DejaVuSans.ttf'.
             label_padding (float):
                 Padding around box labels relative to the smaller image dimension in [0.0, 1.0].
                 Defaults to 0.006.
@@ -306,10 +320,10 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
                     - Use `None` to adopt the color of the detection.
                 Defaults to 'auto'.
             mask_alpha (float):
-                Opacity of the masks in [0.0, 1.0]. Defaults to 0.2.
+                Opacity of the masks in [0.0, 1.0]. Defaults to 0.25.
             contour_thickness (float):
                 Thickness of mask contours relative to the smaller image dimension in [0.0, 1.0].
-                Defaults to 0.002.
+                Defaults to 0.0005.
             contour_color (str | list | tuple | None):
                 Defines the colors of the mask contours.
                     - Use 'auto' to adopt the color of the detection.
@@ -317,7 +331,29 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
                     - Use `None` to adopt the color of the detection.
                 Defaults to 'auto'.
             contour_alpha (float):
-                Opacity of the contours around masks in [0.0, 1.0]. Defaults to 0.7.
+                Opacity of the contours around masks in [0.0, 1.0]. Defaults to 0.6.
+            point_radius (float):
+                Radius of the point marker relative to the smaller image dimension in [0.0, 1.0].
+                Defaults to 0.007.
+            point_color (str | list | tuple | None):
+                Defines the fill colors of the points.
+                    - Use 'auto' to adopt the color of the detection.
+                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all points.
+                    - Use `None` to adopt the color of the detection.
+                Defaults to 'auto'.
+            point_alpha (float):
+                Opacity of the point fill in [0.0, 1.0]. Defaults to 0.9.
+            point_outline_thickness (float):
+                Thickness of the point outline relative to the smaller image dimension in [0.0, 1.0].
+                Use 0.0 to disable the outline. Defaults to 0.0005.
+            point_outline_color (str | list | tuple | None):
+                Defines the colors of the point outlines.
+                    - Use 'auto' to automatically select black or white per point based on contrast towards the point fill color.
+                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all point outlines.
+                    - Use `None` to adopt the color of the detection.
+                Defaults to 'auto'.
+            point_outline_alpha (float):
+                Opacity of the point outline in [0.0, 1.0]. Defaults to 0.9.
             auto_color_palette (ColorPalette):
                 Color palette used for automatic color selection. Defaults to `nimbro_colors`.
             auto_color_shuffle (bool):
@@ -354,18 +390,23 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
         is_rgb = False # cv2 explicitly decodes as BGR
 
     assert_type_value(obj=box_format, type_or_value=["xyxy_normalized", "xyxy_absolute", "xywh_normalized", "xywh_absolute"], name="argument 'box_format'")
+    assert_type_value(obj=point_format, type_or_value=["xy_normalized", "xy_absolute"], name="argument 'point_format'")
     assert_type_value(obj=boxes, type_or_value=[list, tuple, np.ndarray, None], name="argument 'boxes'")
     assert_type_value(obj=masks, type_or_value=[list, tuple, None], name="argument 'masks'")
     assert_type_value(obj=labels, type_or_value=[list, tuple, None], name="argument 'labels'")
+    assert_type_value(obj=points, type_or_value=[list, tuple, np.ndarray, None], name="argument 'points'")
     assert_type_value(obj=is_rgb, type_or_value=bool, name="argument 'is_rgb'")
 
     if isinstance(boxes, np.ndarray):
         boxes = boxes.tolist()
+    if isinstance(points, np.ndarray):
+        points = points.tolist()
 
     num_boxes = 0 if boxes is None else len(boxes)
     num_masks = 0 if masks is None else len(masks)
     num_labels = 0 if labels is None else len(labels)
-    num_detections = max(num_boxes, num_masks, num_labels)
+    num_points = 0 if points is None else len(points)
+    num_detections = max(num_boxes, num_masks, num_labels, num_points)
 
     if boxes is None:
         boxes = [None] * num_detections
@@ -381,6 +422,11 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
         labels = [None] * num_detections
     else:
         assert_log(expression=len(labels) == num_detections, message=f"Expected number of values in argument 'labels' to match the number of detections '{num_detections}' but got '{len(labels)}'.")
+
+    if points is None:
+        points = [None] * num_detections
+    else:
+        assert_log(expression=len(points) == num_detections, message=f"Expected number of values in argument 'points' to match the number of detections '{num_detections}' but got '{len(points)}'.")
 
     if box_format in ["xyxy_normalized", "xywh_normalized"]:
         for i, box in enumerate(boxes):
@@ -413,6 +459,27 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
                 assert_log(expression=box[0] + box[2] <= image.shape[1], message=f"Expected value in argument 'boxes' for x0 '{box[0]}' + width '{box[2]}' <= image width '{image.shape[1]}'.")
                 assert_log(expression=box[1] + box[3] <= image.shape[0], message=f"Expected value in argument 'boxes' for y0 '{box[1]}' + height '{box[3]}' <= image height '{image.shape[0]}'.")
 
+    if point_format == "xy_normalized":
+        for i, point in enumerate(points):
+            if point is None:
+                continue
+            assert_type_value(obj=point, type_or_value=[list, tuple], name=f"item '{i}' in argument 'points'")
+            assert_log(expression=len(point) == 2, message=f"Expected item '{i}' in argument 'points' to contain '2' values but got '{len(point)}'.")
+            for j, value in enumerate(point):
+                assert_type_value(obj=value, type_or_value=float, name=f"item '{j}' in point '{i}' argument 'points'")
+                assert_log(expression=value >= 0.0 and value <= 1.0, message=f"Expected value in argument 'points' to be in [0.0, 1.0] but got '{value}'.")
+    else:
+        for i, point in enumerate(points):
+            if point is None:
+                continue
+            assert_type_value(obj=point, type_or_value=[list, tuple], name=f"item '{i}' in argument 'points'")
+            assert_log(expression=len(point) == 2, message=f"Expected item '{i}' in argument 'points' to contain '2' values but got '{len(point)}'.")
+            for j, value in enumerate(point):
+                assert_type_value(obj=value, type_or_value=int, name=f"item '{j}' in point '{i}' argument 'points'")
+                assert_log(expression=value >= 0, message=f"Expected value in argument 'points' to be non-negative but got '{value}'.")
+            assert_log(expression=point[0] < image.shape[1], message=f"Expected value in argument 'points' for x '{point[0]}' < image width '{image.shape[1]}'.")
+            assert_log(expression=point[1] < image.shape[0], message=f"Expected value in argument 'points' for y '{point[1]}' < image height '{image.shape[0]}'.")
+
     for i, label in enumerate(labels):
         assert_type_value(obj=label, type_or_value=[str, None], name=f"item '{i}' in argument 'labels'")
 
@@ -426,17 +493,23 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
     fill_alpha = kwargs.pop('fill_alpha', 0.0)
     box_alpha = kwargs.pop('box_alpha', 1.0)
     label_font_size = kwargs.pop('label_font_size', 0.022)
-    label_font_path = kwargs.pop('label_font_path', "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+    label_font_path = kwargs.pop("label_font_path", str(files("nimbro_api").joinpath("fonts", "DejaVuSans.ttf")))
     label_padding = kwargs.pop('label_padding', 0.006)
     label_text_color = kwargs.pop('label_text_color', "auto")
     label_background_color = kwargs.pop('label_background_color', "auto")
     label_text_alpha = kwargs.pop('label_text_alpha', 1.0)
     label_background_alpha = kwargs.pop('label_background_alpha', 1.0)
     mask_color = kwargs.pop('mask_color', "auto")
-    mask_alpha = kwargs.pop('mask_alpha', 0.2)
-    contour_thickness = kwargs.pop('contour_thickness', 0.002)
+    mask_alpha = kwargs.pop('mask_alpha', 0.25)
+    contour_thickness = kwargs.pop('contour_thickness', 0.0005)
     contour_color = kwargs.pop('contour_color', "auto")
-    contour_alpha = kwargs.pop('contour_alpha', 0.7)
+    contour_alpha = kwargs.pop('contour_alpha', 0.6)
+    point_radius = kwargs.pop('point_radius', 0.007)
+    point_color = kwargs.pop('point_color', "auto")
+    point_alpha = kwargs.pop('point_alpha', 0.9)
+    point_outline_thickness = kwargs.pop('point_outline_thickness', 0.0005)
+    point_outline_color = kwargs.pop('point_outline_color', "auto")
+    point_outline_alpha = kwargs.pop('point_outline_alpha', 0.9)
     auto_color_palette = kwargs.pop('auto_color_palette', nimbro_colors if num_detections > 10 else nimbro_colors.ten)
     auto_color_shuffle = kwargs.pop('auto_color_shuffle', False)
     draw_order = kwargs.pop('draw_order', "size")
@@ -524,6 +597,30 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
     assert_type_value(obj=contour_alpha, type_or_value=float, name="argument 'contour_alpha'")
     assert_log(expression=contour_alpha >= 0, message=f"Expected value of argument 'contour_alpha' to be zero or greater but got '{contour_alpha}'.")
     assert_log(expression=contour_alpha <= 1, message=f"Expected value of argument 'contour_alpha' to be one or less but got '{contour_alpha}'.")
+    assert_type_value(obj=point_radius, type_or_value=float, name="argument 'point_radius'")
+    assert_log(expression=point_radius > 0, message=f"Expected value of argument 'point_radius' to be greater zero but got '{point_radius}'.")
+    assert_log(expression=point_radius <= 1, message=f"Expected value of argument 'point_radius' to be one or less but got '{point_radius}'.")
+    assert_type_value(obj=point_color, type_or_value=["auto", list, tuple, None], name="argument 'point_color'")
+    if isinstance(point_color, (list, tuple)):
+        assert_log(expression=len(point_color) == 3, message=f"Expected argument 'point_color' to contain '3' values but got '{len(point_color)}'.")
+        for i, value in enumerate(point_color):
+            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'point_color'")
+            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'point_color' to be 8-bit values but got '{value}'.")
+    assert_type_value(obj=point_alpha, type_or_value=float, name="argument 'point_alpha'")
+    assert_log(expression=point_alpha >= 0, message=f"Expected value of argument 'point_alpha' to be zero or greater but got '{point_alpha}'.")
+    assert_log(expression=point_alpha <= 1, message=f"Expected value of argument 'point_alpha' to be one or less but got '{point_alpha}'.")
+    assert_type_value(obj=point_outline_thickness, type_or_value=float, name="argument 'point_outline_thickness'")
+    assert_log(expression=point_outline_thickness >= 0, message=f"Expected value of argument 'point_outline_thickness' to be zero or greater but got '{point_outline_thickness}'.")
+    assert_log(expression=point_outline_thickness <= 1, message=f"Expected value of argument 'point_outline_thickness' to be one or less but got '{point_outline_thickness}'.")
+    assert_type_value(obj=point_outline_color, type_or_value=["auto", list, tuple, None], name="argument 'point_outline_color'")
+    if isinstance(point_outline_color, (list, tuple)):
+        assert_log(expression=len(point_outline_color) == 3, message=f"Expected argument 'point_outline_color' to contain '3' values but got '{len(point_outline_color)}'.")
+        for i, value in enumerate(point_outline_color):
+            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'point_outline_color'")
+            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'point_outline_color' to be 8-bit values but got '{value}'.")
+    assert_type_value(obj=point_outline_alpha, type_or_value=float, name="argument 'point_outline_alpha'")
+    assert_log(expression=point_outline_alpha >= 0, message=f"Expected value of argument 'point_outline_alpha' to be zero or greater but got '{point_outline_alpha}'.")
+    assert_log(expression=point_outline_alpha <= 1, message=f"Expected value of argument 'point_outline_alpha' to be one or less but got '{point_outline_alpha}'.")
     assert_type_value(obj=auto_color_palette, type_or_value=ColorPalette, name="argument 'auto_color_palette'")
     assert_type_value(obj=auto_color_shuffle, type_or_value=bool, name="argument 'auto_color_shuffle'")
     assert_type_value(obj=draw_order, type_or_value=["size", "input"], name="argument 'draw_order'")
@@ -540,6 +637,8 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
     label_font_size = max(1, int(round(label_font_size * unit)))
     label_padding = max(0, int(round(label_padding * unit)))
     contour_thickness = max(0, int(round(contour_thickness * unit)))
+    point_radius = max(1, int(round(point_radius * unit)))
+    point_outline_thickness = max(0, int(round(point_outline_thickness * unit)))
 
     # read image
     if num_detections == 0:
@@ -598,6 +697,23 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
             boxes_xyxy[i] = box
     boxes = boxes_xyxy
 
+    # convert points to absolute pixel coordinates
+    points_abs = [None] * num_detections
+    h_img, w_img = image.shape[:2]
+    for i, point in enumerate(points):
+        if point is None:
+            continue
+        if point_format == "xy_normalized":
+            px = int(round(point[0] * (w_img - 1)))
+            py = int(round(point[1] * (h_img - 1)))
+        else:
+            px = int(point[0])
+            py = int(point[1])
+        px = max(0, min(w_img - 1, px))
+        py = max(0, min(h_img - 1, py))
+        points_abs[i] = (px, py)
+    points = points_abs
+
     for i in range(len(masks)):
         assert_type_value(obj=masks[i], type_or_value=[list, tuple, np.ndarray, None], name=f"item '{i}' in argument 'masks'")
         if isinstance(masks[i], (list, tuple)):
@@ -650,11 +766,11 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
                 color = colors[i] if contour_color in ["auto", None] else contour_color
 
                 for contour in contours:
-                    points = contour[:, 0]
+                    points_c = contour[:, 0]
                     lines_to_draw = []
-                    for j in range(len(points)):
-                        pt1 = tuple(points[j])
-                        pt2 = tuple(points[(j + 1) % len(points)])
+                    for j in range(len(points_c)):
+                        pt1 = tuple(points_c[j])
+                        pt2 = tuple(points_c[(j + 1) % len(points_c)])
                         if any((
                             pt1[0] <= 0, pt1[0] >= w - 1, pt1[1] <= 0, pt1[1] >= h - 1,
                             pt2[0] <= 0, pt2[0] >= w - 1, pt2[1] <= 0, pt2[1] >= h - 1
@@ -679,6 +795,53 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, box_form
 
             if box_alpha > 0:
                 overlay = draw_rectangle(image=overlay, box=boxes[i], box_format="xyxy_absolute", color=colors[i], thickness=box_thickness, alpha=box_alpha, is_rgb=is_rgb)
+
+        if points[i] is not None:
+            # determine fill color
+            if point_color in ["auto", None]:
+                fill_color = colors[i]
+            else:
+                fill_color = point_color
+
+            # determine outline color
+            if point_outline_color is None:
+                outline_color = colors[i]
+            elif point_outline_color == "auto":
+                # calculate luminance using ITU-R BT.709 coefficients
+                b, g, r = fill_color
+                luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+                if luminance > 0.5:
+                    outline_color = (0, 0, 0)
+                else:
+                    outline_color = (255, 255, 255)
+            else:
+                outline_color = point_outline_color
+
+            # build a per-point mask for the fill (filled disk)
+            h, w = overlay.shape[:2]
+            if point_alpha > 0:
+                fill_canvas = np.zeros((h, w), dtype=np.uint8)
+                cv2.circle(fill_canvas, points[i], radius=point_radius, color=255, thickness=-1, lineType=cv2.LINE_AA)
+                fill_mask = fill_canvas.astype(bool)
+                if np.any(fill_mask):
+                    # use soft alpha weights from the anti-aliased canvas
+                    weights = (fill_canvas.astype(np.float32) / 255.0) * point_alpha
+                    weights = weights[fill_mask][:, None]
+                    overlay_roi = overlay[fill_mask].astype(np.float32)
+                    target_color = np.array(fill_color, dtype=np.float32)
+                    overlay[fill_mask] = np.clip((1 - weights) * overlay_roi + weights * target_color, 0, 255).astype(np.uint8)
+
+            # outline (annular ring) drawn on top
+            if point_outline_thickness > 0 and point_outline_alpha > 0:
+                outline_canvas = np.zeros((h, w), dtype=np.uint8)
+                cv2.circle(outline_canvas, points[i], radius=point_radius, color=255, thickness=point_outline_thickness, lineType=cv2.LINE_AA)
+                outline_mask = outline_canvas.astype(bool)
+                if np.any(outline_mask):
+                    weights = (outline_canvas.astype(np.float32) / 255.0) * point_outline_alpha
+                    weights = weights[outline_mask][:, None]
+                    overlay_roi = overlay[outline_mask].astype(np.float32)
+                    target_color = np.array(outline_color, dtype=np.float32)
+                    overlay[outline_mask] = np.clip((1 - weights) * overlay_roi + weights * target_color, 0, 255).astype(np.uint8)
 
         if labels[i] is not None:
             display_text = labels[i]
@@ -861,9 +1024,7 @@ def draw_text(image, text, *, anchor=(0, 0), is_rgb=False, **kwargs):
         **kwargs:
             font_path (str):
                 Path to .ttf or .otf font file used to draw text.
-                Commonly found monospaced fonts are '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'
-                and '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf'.
-                Defaults to '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'.
+                Defaults to 'DejaVuSans.ttf'.
             font_size (int):
                 Font size (>0) of the text. Defaults to 22.
             text_color (tuple | list):
@@ -911,7 +1072,7 @@ def draw_text(image, text, *, anchor=(0, 0), is_rgb=False, **kwargs):
     assert_log(expression=len(anchor) == 2, message=f"Expected argument 'anchor' to be a 2-tuple (x, y) but got a tuple of length '{len(anchor)}'.")
     assert_log(expression=isinstance(anchor[0], (int, float)) and isinstance(anchor[1], (int, float)), message="Expected argument 'anchor' to be a 2-tuple (x, y) of numbers.")
     assert_type_value(obj=is_rgb, type_or_value=bool, name="argument 'is_rgb'")
-    font_path = kwargs.pop('font_path', "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+    font_path = kwargs.pop("font_path", str(files("nimbro_api").joinpath("fonts", "DejaVuSans.ttf")))
     font_size = kwargs.pop('font_size', 22)
     text_color = kwargs.pop('text_color', (255, 255, 255))
     background_color = kwargs.pop('background_color', None)
