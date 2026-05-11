@@ -1,16 +1,19 @@
+import os
 import re
 import copy
 import json
 import time
 import datetime
+import traceback
 import concurrent.futures
 
 from nimbro_api.api.openai import ChatCompletions
 from nimbro_api.api.nimbro_vision_servers import MmGroundingDino, Sam2Realtime
 
 from nimbro_api.client import ClientBase
-from nimbro_api.utility.io import parse_image_b64
-from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log, assert_keys, count_duplicates
+from nimbro_api.utility.io import read_json, decode_b64, parse_image_b64
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log, assert_keys, count_duplicates, get_image_dimensions
+from nimbro_api.utility.visual import IMPORT_ERROR, visualize_detections
 
 class VlmGistBase(ClientBase):
 
@@ -22,6 +25,9 @@ class VlmGistBase(ClientBase):
     def set_settings(self, settings, mode="set"):
         settings = self._introduce_settings(settings=settings, mode=mode)
 
+        # message_process
+        assert_type_value(obj=settings['message_process'], type_or_value=bool, name="setting 'message_process'")
+
         # message_results
         assert_type_value(obj=settings['message_results'], type_or_value=bool, name="setting 'message_results'")
 
@@ -30,10 +36,16 @@ class VlmGistBase(ClientBase):
 
         # scene_description
         assert_type_value(obj=settings['scene_description'], type_or_value=dict, name="setting 'scene_description'")
-        assert_keys(obj=settings['scene_description'], keys=['skip', 'chat_completions', 'system_prompt_role', 'system_prompt', 'image_prompt_role', 'image_prompt_detail', 'description_prompt_role', 'description_prompt'], mode="match", name="setting 'scene_description'")
+        assert_keys(obj=settings['scene_description'], keys=['skip', 'message_process', 'message_results', 'chat_completions', 'system_prompt_role', 'system_prompt', 'image_prompt_role', 'image_prompt_detail', 'description_prompt_role', 'description_prompt'], mode="match", name="setting 'scene_description'")
 
         # scene_description.skip
         assert_type_value(obj=settings['scene_description']['skip'], type_or_value=bool, name="setting 'scene_description.skip'")
+
+        # scene_description.message_process
+        assert_type_value(obj=settings['scene_description']['message_process'], type_or_value=bool, name="setting 'scene_description.message_process'")
+
+        # scene_description.message_results
+        assert_type_value(obj=settings['scene_description']['message_results'], type_or_value=bool, name="setting 'scene_description.message_results'")
 
         # scene_description.chat_completions
         client = ChatCompletions()
@@ -61,10 +73,16 @@ class VlmGistBase(ClientBase):
 
         # structured_description
         assert_type_value(obj=settings['structured_description'], type_or_value=dict, name="setting 'structured_description'")
-        assert_keys(obj=settings['structured_description'], keys=['skip', 'chat_completions', 'use_scene_description', 'system_prompt_role', 'system_prompt', 'image_prompt_role', 'image_prompt_detail', 'description_prompt_role', 'description_prompt', 'response_type', 'keys_required', 'keys_required_types', 'keys_optional', 'keys_optional_types'], mode="match", name="setting 'structured_description'")
+        assert_keys(obj=settings['structured_description'], keys=['skip', 'message_process', 'message_results', 'chat_completions', 'use_scene_description', 'system_prompt_role', 'system_prompt', 'image_prompt_role', 'image_prompt_detail', 'description_prompt_role', 'description_prompt', 'response_type', 'keys_required', 'keys_required_types', 'keys_optional', 'keys_optional_types'], mode="match", name="setting 'structured_description'")
 
         # structured_description.skip
         assert_type_value(obj=settings['structured_description']['skip'], type_or_value=bool, name="setting 'structured_description.skip'")
+
+        # structured_description.message_process
+        assert_type_value(obj=settings['structured_description']['message_process'], type_or_value=bool, name="setting 'structured_description.message_process'")
+
+        # structured_description.message_results
+        assert_type_value(obj=settings['structured_description']['message_results'], type_or_value=bool, name="setting 'structured_description.message_results'")
 
         # structured_description.chat_completions
         client = ChatCompletions()
@@ -103,11 +121,14 @@ class VlmGistBase(ClientBase):
             assert_type_value(obj=item, type_or_value=str, name="all elements of setting 'structured_description.keys_required'")
             assert_log(expression=len(item), message="Expected all elements of setting 'structured_description.keys_required' to be non-empty strings.")
 
+        types = ["str", "bool", "int", "likert5", "likert7", "float", "unit", "list", "point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"]
+        box_types = "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"
+
         # structured_description.keys_required_types
         assert_type_value(obj=settings['structured_description']['keys_required_types'], type_or_value=list, name="setting 'structured_description.keys_required_types'")
         assert_log(expression=len(settings['structured_description']['keys_required_types']) == len(settings['structured_description']['keys_required']), message=f"Expected setting 'structured_description.keys_required_types' to be a list of length '{len(settings['structured_description']['keys_required'])}' but got '{len(settings['structured_description']['keys_required_types'])}'.")
         for item in settings['structured_description']['keys_required_types']:
-            assert_type_value(obj=item, type_or_value=["str", "bool", "int", "float", "unit", "list", "bbox[int]", "bbox[float]"], name="all elements of setting 'structured_description.keys_required_types'")
+            assert_type_value(obj=item, type_or_value=types, name="all elements of setting 'structured_description.keys_required_types'")
 
         # structured_description.keys_optional
         assert_type_value(obj=settings['structured_description']['keys_optional'], type_or_value=list, name="setting 'structured_description.keys_optional'")
@@ -119,22 +140,31 @@ class VlmGistBase(ClientBase):
         assert_type_value(obj=settings['structured_description']['keys_optional_types'], type_or_value=list, name="setting 'structured_description.keys_optional_types'")
         assert_log(expression=len(settings['structured_description']['keys_optional_types']) == len(settings['structured_description']['keys_optional']), message=f"Expected setting 'structured_description.keys_optional_types' to be a list of length '{len(settings['structured_description']['keys_optional'])}' but got '{len(settings['structured_description']['keys_optional_types'])}'.")
         for item in settings['structured_description']['keys_optional_types']:
-            assert_type_value(obj=item, type_or_value=["str", "bool", "int", "float", "unit", "list", "bbox[int]", "bbox[float]"], name="all elements of setting 'structured_description.keys_optional_types'")
+            assert_type_value(obj=item, type_or_value=types, name="all elements of setting 'structured_description.keys_optional_types'")
 
         # detection
         assert_type_value(obj=settings['detection'], type_or_value=dict, name="setting 'detection'")
-        assert_keys(obj=settings['detection'], keys=['skip', 'extract_from_description', 'mmgroundingdino', 'prompt_key'], mode="match", name="setting 'detection'")
+        assert_keys(obj=settings['detection'], keys=['skip', 'message_process', 'message_results', 'extract_from_description', 'prompt_key', 'mmgroundingdino'], mode="match", name="setting 'detection'")
 
         # detection.skip
         assert_type_value(obj=settings['detection']['skip'], type_or_value=bool, name="setting 'detection.skip'")
 
+        # detection.message_process
+        assert_type_value(obj=settings['detection']['message_process'], type_or_value=bool, name="setting 'detection.message_process'")
+
+        # detection.message_results
+        assert_type_value(obj=settings['detection']['message_results'], type_or_value=bool, name="setting 'detection.message_results'")
+
         # detection.extract_from_description
         assert_type_value(obj=settings['detection']['extract_from_description'], type_or_value=bool, name="setting 'detection.extract_from_description'")
         if settings['detection']['extract_from_description']:
-            num_required_bbox_keys = sum([t in settings['structured_description']['keys_required_types'] for t in ["bbox[int]", "bbox[float]"]])
-            num_optional_bbox_keys = sum([t in settings['structured_description']['keys_optional_types'] for t in ["bbox[int]", "bbox[float]"]])
-            assert_log(expression=num_required_bbox_keys == 1, message=f"Expected setting 'structured_description.keys_required_types' to contain exactly one bbox type when 'detection.extract_from_description' is 'True' but got '{num_required_bbox_keys}': {settings['structured_description']['keys_required_types']}")
-            assert_log(expression=num_optional_bbox_keys == 0, message=f"Expected setting 'structured_description.keys_optional_types' to contain exactly one bbox type when 'detection.extract_from_description' is 'True' but got '{num_optional_bbox_keys}': {settings['structured_description']['keys_optional_types']}")
+            num_required_bbox_keys = sum(t in settings['structured_description']['keys_required_types'] for t in box_types)
+            num_optional_bbox_keys = sum(t in settings['structured_description']['keys_optional_types'] for t in box_types)
+            assert_log(expression=num_required_bbox_keys == 1, message=f"Expected setting 'structured_description.keys_required_types' to contain exactly one box type when 'detection.extract_from_description' is 'True' but got '{num_required_bbox_keys}': {settings['structured_description']['keys_required_types']}")
+            assert_log(expression=num_optional_bbox_keys == 0, message=f"Expected setting 'structured_description.keys_optional_types' to contain exactly one box type when 'detection.extract_from_description' is 'True' but got '{num_optional_bbox_keys}': {settings['structured_description']['keys_optional_types']}")
+
+        # detection.prompt_key
+        assert_type_value(obj=settings['detection']['prompt_key'], type_or_value=settings['structured_description']['keys_required'], name="setting 'detection.prompt_key'")
 
         # detection.mmgroundingdino
         client = MmGroundingDino()
@@ -142,15 +172,18 @@ class VlmGistBase(ClientBase):
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['detection']['mmgroundingdino'] = client.get_settings()
 
-        # detection.prompt_key
-        assert_type_value(obj=settings['detection']['prompt_key'], type_or_value=settings['structured_description']['keys_required'], name="setting 'detection.prompt_key'")
-
         # segmentation
         assert_type_value(obj=settings['segmentation'], type_or_value=dict, name="setting 'segmentation'")
-        assert_keys(obj=settings['segmentation'], keys=['skip', 'track', 'sam2_realtime'], mode="match", name="setting 'segmentation'")
+        assert_keys(obj=settings['segmentation'], keys=['skip', 'message_process', 'message_results', 'track', 'sam2_realtime'], mode="match", name="setting 'segmentation'")
 
         # segmentation.skip
         assert_type_value(obj=settings['segmentation']['skip'], type_or_value=bool, name="setting 'segmentation.skip'")
+
+        # segmentation.message_process
+        assert_type_value(obj=settings['segmentation']['message_process'], type_or_value=bool, name="setting 'segmentation.message_process'")
+
+        # segmentation.message_results
+        assert_type_value(obj=settings['segmentation']['message_results'], type_or_value=bool, name="setting 'segmentation.message_results'")
 
         # segmentation.track
         if settings['segmentation']['skip']:
@@ -164,21 +197,266 @@ class VlmGistBase(ClientBase):
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['segmentation']['sam2_realtime'] = client.get_settings()
 
-        # batch_size
-        assert_type_value(obj=settings['batch_size'], type_or_value=int, name="setting 'batch_size'")
-        assert_log(expression=settings['batch_size'] >= 0, message=f"Expected setting 'batch_size' to be non-negative but got '{settings['batch_size']}'.")
+        # batch
+        assert_type_value(obj=settings['batch'], type_or_value=dict, name="setting 'batch'")
+        assert_keys(obj=settings['batch'], keys=['logger_severity', 'size', 'style', 'retry'], mode="match", name="setting 'batch'")
 
-        # batch_style
-        assert_type_value(obj=settings['batch_style'], type_or_value=["threading", "multiprocessing"], name="setting 'batch_style'")
+        # batch.logger_severity
+        assert_type_value(obj=settings['batch']['logger_severity'], type_or_value=[0, 10, 20, 30, 40, 50, "off", "debug", "info", "warn", "error", "fatal", None], name="setting 'batch.logger_severity'")
 
-        # batch_logger_severity
-        assert_type_value(obj=settings['batch_logger_severity'], type_or_value=[0, 10, 20, 30, 40, 50, "off", "debug", "info", "warn", "error", "fatal", None], name="setting 'batch_logger_severity'")
+        # batch.size
+        assert_type_value(obj=settings['batch']['size'], type_or_value=int, name="setting 'batch.size'")
+        assert_log(expression=settings['batch']['size'] >= 0, message=f"Expected setting 'batch.size' to be non-negative but got '{settings['batch']['size']}'.")
+
+        # batch.style
+        assert_type_value(obj=settings['batch']['style'], type_or_value=["threading", "multiprocessing"], name="setting 'batch.style'")
+
+        # batch.retry
+        assert_type_value(obj=settings['batch']['retry'], type_or_value=[int, bool], name="setting 'batch.retry'")
+        if not isinstance(settings['batch']['retry'], bool):
+            assert_log(
+                expression=settings['batch']['retry'] >= 0,
+                message=f"Expected setting 'retry' to be of type 'bool' or a non-negative 'int' but got '{settings['batch']['retry']}'."
+            )
+            if settings['batch']['retry'] == 0:
+                settings['batch']['retry'] = False
 
         # do not skip all steps
         assert_log(expression=not (settings['scene_description']['skip'] and settings['structured_description']['skip'] and settings['detection']['skip'] and settings['segmentation']['skip']), message="Expected at least one setting 'skip' to be 'False'.")
 
         # apply settings
         return self._apply_settings(settings, mode)
+
+    def visualize(self, result, image, output_dir):
+        # parse arguments
+        assert_type_value(obj=output_dir, type_or_value=[None, str], name="argument 'output_dir'")
+        if isinstance(output_dir, str):
+            output_dir = os.path.realpath(output_dir)
+        assert_log(expression=IMPORT_ERROR is None, message=f"Visual utilities are not available due to missing dependencies: {IMPORT_ERROR}")
+        if isinstance(result, str):
+            success, message, result = read_json(file_path=result, name="result", logger=self._logger)
+            if not success:
+                raise UnrecoverableError(message)
+        assert_type_value(obj=result, type_or_value=dict, name="argument 'result'")
+        assert_keys(obj=result, keys=['run'], mode="required", name="argument 'result'")
+        assert_type_value(obj=result['run'], type_or_value=dict, name="value of key 'run' in argument 'result'")
+        assert_keys(obj=result['run'], keys=['type'], mode="required", name="value of key 'run' in argument 'result'")
+        assert_type_value(obj=result['run']['type'], type_or_value=["normal", "batch"], name="value of key 'run.type' in argument 'result'")
+        if result['run']['type'] == "batch":
+            assert_keys(obj=result['run'], keys=['settings'], mode="required", name="value of key 'run' in argument 'result'")
+            assert_type_value(obj=result['run']['settings'], type_or_value=dict, name="value of key 'run.settings' in argument 'result'")
+            assert_keys(obj=result['run']['settings'], keys=['structured_description'], mode="required", name="value of key 'run.settings.structured_description' in argument 'result'")
+            structured_description_settings = result['run']['settings']['structured_description']
+            assert_keys(obj=result, keys=['batch'], mode="required", name="argument 'result' of type 'batch'")
+            assert_type_value(obj=result['batch'], type_or_value=list, name="value of key 'batch' in argument 'result'")
+            batch = result['batch']
+        else:
+            assert_keys(obj=result, keys=['structured_description'], mode="required", name="argument 'result'")
+            assert_type_value(obj=result['structured_description'], type_or_value=dict, name="value of key 'structured_description' in argument 'result'")
+            assert_keys(obj=result['structured_description'], keys=['settings'], mode="required", name="value of key 'structured_description' in argument 'result'")
+            structured_description_settings = result['structured_description']['settings']
+            batch = [result]
+        assert_type_value(obj=structured_description_settings, type_or_value=dict, name="settings of structured description")
+        attribute_settings = ['keys_required', 'keys_required_types', 'keys_optional', 'keys_optional_types']
+        assert_keys(obj=structured_description_settings, keys=attribute_settings, mode="required", name="settings of structured description")
+        for key in attribute_settings:
+            assert_type_value(obj=structured_description_settings[key], type_or_value=list, name=f"structured description setting '{key}'")
+        assert_log(
+            expression=len(structured_description_settings[attribute_settings[0]]) == len(structured_description_settings[attribute_settings[1]]),
+            message=f"Expected structured descriptions settings '{attribute_settings[0]}' and '{attribute_settings[1]}' to contain the same number if items but got '{len(structured_description_settings[attribute_settings[0]])}' and '{len(structured_description_settings[attribute_settings[1]])}'.")
+        assert_log(
+            expression=len(structured_description_settings[attribute_settings[2]]) == len(structured_description_settings[attribute_settings[3]]),
+            message=f"Expected structured descriptions settings '{attribute_settings[2]}' and '{attribute_settings[3]}' to contain the same number if items but got '{len(structured_description_settings[attribute_settings[2]])}' and '{len(structured_description_settings[attribute_settings[3]])}'.")
+        point_attributes = []
+        for attribute_name, attribute_type in zip(structured_description_settings['keys_required'] + structured_description_settings['keys_optional'], structured_description_settings['keys_required_types'] + structured_description_settings['keys_optional_types']):
+            assert_type_value(obj=attribute_name, type_or_value=str, name="attribute name")
+            assert_type_value(obj=attribute_type, type_or_value=str, name="attribute type")
+            if 'point' in attribute_type:
+                point_attributes.append((attribute_name, attribute_type))
+
+        # import
+        try:
+            import cv2
+            import numpy as np
+        except Exception as e:
+            raise UnrecoverableError("Failed to import visual dependencies (cv2, numpy).") from e
+
+        # read image
+        num_images = len(batch)
+        if image is None:
+            images = [None] * num_images
+        else:
+            if not isinstance(image, list):
+                image = [image]
+            assert_log(expression=len(image) == num_images, message=f"Expected argument 'image' provided as list to contain '{num_images}' item{'' if num_images == 1 else 's'} but got '{len(image)}'.")
+            images = [None] * num_images
+            for i, item in enumerate(image):
+                if item is not None:
+                    success, message, images[i], _ = parse_image_b64(image=item, logger=self._logger)
+                    if not success:
+                        self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}': {message}")
+        # visualize
+        visualizations = [None] * num_images
+        paths = [None] * num_images
+
+        for i, batch_item in enumerate(batch):
+            # validate data
+            if images[i] is None and image is not None:
+                continue
+            try:
+                assert_type_value(obj=batch_item, type_or_value=dict, name=f"result '{i + 1}' of '{num_images}'")
+                if images[i] is None:
+                    assert_keys(obj=batch_item, keys=['image'], mode="required", name=f"result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=batch_item['image'], type_or_value=dict, name=f"value of key 'image' in result '{i + 1}' of '{num_images}'")
+                    assert_keys(obj=batch_item['image'], keys=['data'], mode="required", name=f"value of key 'image' in result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=batch_item['image']['data'], type_or_value=str, name=f"value of key 'image.data' in result '{i + 1}' of '{num_images}'")
+                    images[i] = copy.deepcopy(batch_item['image']['data'])
+
+                # validate structured description structure
+                if len(point_attributes) > 0:
+                    assert_keys(obj=batch_item, keys=['structured_description'], mode="required", name=f"result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=batch_item['structured_description'], type_or_value=dict, name=f"value of key 'structured_description' in result '{i + 1}' of '{num_images}'")
+                    assert_keys(obj=batch_item['structured_description'], keys=['success'], mode="required", name=f"value of key 'structured_description' in result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=batch_item['structured_description']['success'], type_or_value=True, name=f"value of key 'structured_description.success' in result '{i + 1}' of '{num_images}'")
+                    assert_keys(obj=batch_item['structured_description'], keys=['data'], mode="required", name=f"value of key 'structured_description' in result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=batch_item['structured_description']['data'], type_or_value=list, name=f"value of key 'structured_description.data' in result '{i + 1}' of '{num_images}'")
+                    for k, item in enumerate(batch_item['structured_description']['data']):
+                        assert_type_value(obj=item, type_or_value=dict, name=f"item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}'")
+
+                # validate detection structure
+                assert_keys(obj=batch_item, keys=['detection'], mode="required", name=f"result '{i + 1}' of '{num_images}'")
+                assert_type_value(obj=batch_item['detection'], type_or_value=dict, name=f"value of key 'detection' in result '{i + 1}' of '{num_images}'")
+                assert_keys(obj=batch_item['detection'], keys=['success'], mode="required", name=f"value of key 'detection' in result '{i + 1}' of '{num_images}'")
+                assert_type_value(obj=batch_item['detection']['success'], type_or_value=bool, name=f"value of key 'detection.success' in result '{i + 1}' of '{num_images}'")
+                if not batch_item['detection']['success']:
+                    assert_keys(obj=batch_item['detection'], keys=['logs'], mode="required", name=f"value of key 'detection' in result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=batch_item['detection']['logs'], type_or_value=list, name=f"value of key 'detection.logs' in result '{i + 1}' of '{num_images}'")
+                    assert_log(expression=len(batch_item['detection']['logs']) > 0, message=f"Expected value of key 'detection.logs' in result '{i + 1}' of '{num_images}' to be non-empty.")
+                else:
+                    assert_keys(obj=batch_item['detection'], keys=['data'], mode="required", name=f"value of key 'detection' in result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=batch_item['detection']['data'], type_or_value=list, name=f"value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                    for k, item in enumerate(batch_item['detection']['data']):
+                        assert_type_value(obj=item, type_or_value=dict, name=f"item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                        assert_keys(obj=item, keys=['prompt', 'box_xyxy'], mode="required", name=f"item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+
+                # validate segmentation structure (only if present)
+                if 'segmentation' in batch_item:
+                    assert_type_value(obj=batch_item['segmentation'], type_or_value=dict, name=f"value of key 'segmentation' in result '{i + 1}' of '{num_images}'")
+                    assert_keys(obj=batch_item['segmentation'], keys=['success'], mode="required", name=f"value of key 'segmentation' in result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=batch_item['segmentation']['success'], type_or_value=bool, name=f"value of key 'segmentation.success' in result '{i + 1}' of '{num_images}'")
+                    if not batch_item['segmentation']['success']:
+                        assert_keys(obj=batch_item['segmentation'], keys=['logs'], mode="required", name=f"value of key 'segmentation' in result '{i + 1}' of '{num_images}'")
+                        assert_type_value(obj=batch_item['segmentation']['logs'], type_or_value=list, name=f"value of key 'segmentation.logs' in result '{i + 1}' of '{num_images}'")
+                        assert_log(expression=len(batch_item['segmentation']['logs']) > 0, message=f"Expected value of key 'segmentation.logs' in result '{i + 1}' of '{num_images}' to be non-empty.")
+                    else:
+                        assert_keys(obj=batch_item['segmentation'], keys=['data'], mode="required", name=f"value of key 'segmentation' in result '{i + 1}' of '{num_images}'")
+                        assert_type_value(obj=batch_item['segmentation']['data'], type_or_value=list, name=f"value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
+                        for k, item in enumerate(batch_item['segmentation']['data']):
+                            assert_type_value(obj=item, type_or_value=dict, name=f"item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
+                            assert_keys(obj=item, keys=['box_xyxy', 'mask'], mode="required", name=f"item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
+                            assert_type_value(obj=item['mask'], type_or_value=str, name=f"value of key 'mask' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
+            except UnrecoverableError as e:
+                self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}': {e}")
+                continue
+
+            if not batch_item['detection']['success']:
+                self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}': {batch_item['detection']['logs'][-1]}")
+                continue
+
+            # collect data
+            labels = [item['prompt'] for item in batch_item['detection']['data']]
+            points = []
+            if len(point_attributes) > 0:
+                for item in batch_item['structured_description']['data']:
+                    found = False
+                    for key in item:
+                        for attribute in point_attributes:
+                            if key == attribute[0]:
+                                if "xy" in attribute[1]:
+                                    points.append((item[key][0], item[key][1]))
+                                else:
+                                    points.append((item[key][1], item[key][0]))
+                                found = True
+                                break
+                        if found:
+                            break
+                    if not found:
+                        points.append(None)
+            if sum(item is None for item in points):
+                points = None
+            if 'segmentation' not in batch_item:
+                boxes = [item['box_xyxy'] for item in batch_item['detection']['data']]
+                masks = None
+            elif not batch_item['segmentation']['success']:
+                self._logger.warn(f"There is no valid segmentation for image '{i + 1}' of '{num_images}': {batch_item['segmentation']['logs'][-1]}")
+                boxes = [item['box_xyxy'] for item in batch_item['detection']['data']]
+                masks = None
+            else:
+                boxes = [item['box_xyxy'] for item in batch_item['segmentation']['data']]
+                masks = [item['mask'] for item in batch_item['segmentation']['data']]
+                for j, mask in enumerate(masks):
+                    success, message, masks[j] = decode_b64(string=mask, logger=self._logger)
+                    if success:
+                        try:
+                            masks[j] = np.frombuffer(masks[j], np.uint8)
+                            masks[j] = cv2.imdecode(masks[j], cv2.IMREAD_GRAYSCALE)
+                            masks[j] = masks[j].astype(bool)
+                        except Exception as e:
+                            masks[j] = None
+                            self._logger.warn(f"Failed to visualize mask of result '{i + 1}' of '{num_images}': {repr(e)}")
+                    else:
+                        masks[j] = None
+                        self._logger.warn(f"Failed to visualize mask of result '{i + 1}' of '{num_images}': {message}")
+
+            # visualize
+            self._logger.debug(f"Visualizing result '{i + 1}' of '{num_images}'.")
+            tic = time.perf_counter()
+            try:
+                visual = visualize_detections(
+                    image=images[i],
+                    boxes=boxes,
+                    masks=masks,
+                    labels=labels,
+                    points=points,
+                    box_format="xyxy_absolute",
+                    mask_format="box_local",
+                    point_format="xy_absolute",
+                )
+            except Exception:
+                self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}':\n{traceback.format_exc()}")
+                continue
+            else:
+                self._logger.debug(f"Visualized result '{i + 1}' of '{num_images}' in '{time.perf_counter() - tic:.3f}s'.")
+                visualizations[i] = visual
+
+            # save
+            if output_dir is not None:
+                success, visual = cv2.imencode('.png', visual)
+                if success:
+                    visual = visual.tobytes()
+                    os.makedirs(output_dir, exist_ok=True)
+                    out_path = os.path.join(output_dir, f"{i}_{datetime.datetime.now().isoformat()[:23].replace('-', '_').replace(':', '_').replace('.', '_')}.png")
+                    with open(out_path, "wb") as file:
+                        file.write(visual)
+                    paths[i] = out_path
+                    self._logger.info(f"Saved visualization for result '{i + 1}' of '{num_images}' to '{out_path}'.")
+                else:
+                    visualizations[i] = None
+                    self._logger.error(f"Failed to encode visualization for result '{i + 1}' of '{num_images}'.")
+            else:
+                self._logger.info(f"Visualized result '{i + 1}' of '{num_images}'.")
+
+        # consolidate
+        num_success = sum(item is not None for item in visualizations)
+        success = num_success == num_images
+        if num_success == 0:
+            visualizations = None
+            paths = None
+        elif sum(item is not None for item in paths) == 0:
+            paths = None
+        message = f"Visualized '{num_success}' of '{num_images}' result{'' if num_images == 1 else 's'}."
+
+        return success, message, visualizations, paths
 
     def run(self, image, scene_description, structured_description, detection, is_worker=False):
         stamp_global = time.perf_counter()
@@ -188,12 +466,12 @@ class VlmGistBase(ClientBase):
             settings = self._settings
             data['run']['type'] = "worker"
         else:
-            image, data, settings = self.parse_arguments(image=image, scene_description=scene_description, structured_description=structured_description, detection=detection, data=data)
+            image, data, settings = self.parse_arguments(image=image, scene_description=scene_description, structured_description=structured_description, detection=detection, data=data, stamp_global=stamp_global)
             if isinstance(image, list):
                 return self.batch_orchestrator(image=image, data=data, settings=settings, stamp_global=stamp_global)
             data['run']['settings'] = {name: settings[name] for name in ['logger_severity', 'logger_name', 'message_results', 'include_image', 'retry']}
 
-        success, message, data = self.read_image(image=image, data=data, stamp_global=stamp_global)
+        success, message, data = self.read_image(image=image, settings=settings, data=data, stamp_global=stamp_global)
         if not success:
             return False, message, data
 
@@ -215,12 +493,9 @@ class VlmGistBase(ClientBase):
 
         return self.finalize_result(data=data, settings=settings, stamp_global=stamp_global)
 
-    def parse_arguments(self, image, scene_description, structured_description, detection, data):
+    def parse_arguments(self, image, scene_description, structured_description, detection, data, stamp_global):
         if isinstance(image, list):
-            if len(image) == 1:
-                image = image[0]
-            else:
-                assert_log(expression=len(image) != 0, message="Expected argument 'image' provided as 'list' to contain at least one element.")
+            assert_log(expression=len(image) > 0, message="Expected argument 'image' provided as 'list' to contain at least one element.")
 
         assert_log(expression=scene_description is None or self._settings['scene_description']['skip'], message="Expected setting 'scene_description.skip' to be 'True' when passing argument 'scene_description'.")
         assert_log(expression=structured_description is None or self._settings['structured_description']['skip'], message="Expected setting 'structured_description.skip' to be 'True' when passing argument 'structured_description'.")
@@ -302,6 +577,10 @@ class VlmGistBase(ClientBase):
                     raise UnrecoverableError(message)
 
             elif name == "structured_description":
+                success, message, data = self.read_image(image=image, settings=settings, data=data, stamp_global=stamp_global)
+                if not success:
+                    return False, message, data
+
                 success, message, dummy_data = self.parse_structured_description(settings=settings, data=dummy_data, stamp_local=None)
                 if success:
                     if not self._settings['detection']['skip'] and settings['detection']['extract_from_description'] and (not isinstance(arg, dict) or 'settings' not in arg):
@@ -338,10 +617,10 @@ class VlmGistBase(ClientBase):
     def batch_orchestrator(self, image, data, settings, stamp_global):
         # log
         message = (
-            f"Processing '{len(image)}' images using "
-            f"'{settings['batch_size']}' "
-            f"{('thread' if settings['batch_style'] == 'threading' else 'process')}"
-            f"{'' if settings['batch_size'] == 1 else ('s' if settings['batch_style'] == 'threading' else 'es')}."
+            f"Processing batch with '{len(image)}' image{'' if len(image) == 1 else 's'} using "
+            f"'{settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)}' "
+            f"{('thread' if settings['batch']['style'] == 'threading' else 'process')}"
+            f"{'' if (settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)) == 1 else ('s' if settings['batch']['style'] == 'threading' else 'es')}."
         )
         self._logger.info(message)
 
@@ -355,8 +634,8 @@ class VlmGistBase(ClientBase):
         detection = data.get('detection')
 
         # configure workers
-        max_workers = settings['batch_size'] if settings['batch_size'] > 0 else len(image)
-        if settings['batch_style'] == "multiprocessing":
+        max_workers = settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)
+        if settings['batch']['style'] == "multiprocessing":
             executor_class = concurrent.futures.ProcessPoolExecutor
         else:
             executor_class = concurrent.futures.ThreadPoolExecutor
@@ -366,11 +645,12 @@ class VlmGistBase(ClientBase):
             futures = []
             for i, img in enumerate(image):
                 worker_settings = copy.deepcopy(settings)
-                worker_settings['logger_severity'] = worker_settings['batch_logger_severity']
-                worker_settings['logger_name'] = f"{settings['logger_name']}_{i}"
-                del worker_settings['batch_size']
-                del worker_settings['batch_style']
-                del worker_settings['batch_logger_severity']
+                worker_settings['logger_severity'] = worker_settings['batch']['logger_severity']
+                worker_settings['logger_name'] = f"{settings['logger_name']}-{i}"
+                del worker_settings['batch']['logger_severity']
+                del worker_settings['batch']['size']
+                del worker_settings['batch']['style']
+                worker_settings['retry'] = worker_settings['batch'].pop('retry')
                 futures.append(executor.submit(VlmGistBase.batch_worker, img, scene_description, structured_description, detection, worker_settings))
 
             # evaluate in original submission order
@@ -379,13 +659,13 @@ class VlmGistBase(ClientBase):
         # extract batch results
         successes = [res[0] for res in results]
         failures = len(image) - sum(successes)
-        data['run']['success'] = failures == 0
+        data['run']['success'] = failures == 0 # TODO keep 0 but make retry in batch mode only be applied to workers while using different retry for batch (zero or other setting)
         duration = time.perf_counter() - stamp_global
         data['run']['message'] = (
-            f"Processed '{len(image)}' images using "
-            f"'{settings['batch_size']}' "
-            f"{('thread' if settings['batch_style'] == 'threading' else 'process')}"
-            f"{'' if settings['batch_size'] == 1 else ('s' if settings['batch_style'] == 'threading' else 'es')} "
+            f"Processed batch with '{len(image)}' image{'' if len(image) == 1 else 's'} using "
+            f"'{settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)}' "
+            f"{('thread' if settings['batch']['style'] == 'threading' else 'process')}"
+            f"{'' if (settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)) == 1 else ('s' if settings['batch']['style'] == 'threading' else 'es')} "
             f"with '{failures}' failure{'' if failures == 1 else 's'} "
             f"in '{duration:.3f}s'."
         )
@@ -399,7 +679,11 @@ class VlmGistBase(ClientBase):
         client = VlmGist(settings=settings)
         return client.run(image=image, scene_description=scene_description, structured_description=structured_description, detection=detection, is_worker=True)
 
-    def read_image(self, image, data, stamp_global):
+    def read_image(self, image, data, settings, stamp_global):
+        if 'image' in data:
+            # Skipping when `parse_arguments()` already read the image when a structured description was passed as an argument to allow `parse_structured_description()` to obtain image dimensions.
+            return data['image']['success'], data['image']['logs'][-1], data
+
         if isinstance(image, dict):
             assert_keys(obj=image, keys=['stamp', 'success', 'logs', 'path', 'duration'], mode="blacklist", name="image provided as 'dict'")
             assert_keys(obj=image, keys=['data'], mode="required", name="image provided as 'dict'")
@@ -419,6 +703,11 @@ class VlmGistBase(ClientBase):
             data['image']['data'] = image_data
             data['image']['path'] = image_path
             data['image']['duration'] = time.perf_counter() - stamp_local
+            if settings['message_process']:
+                if data['image']['path'] is not None:
+                    self._logger.info(f"Processing image '{data['image']['path']}'.")
+                else:
+                    self._logger.info("Processing image provided as object.")
             return True, message, data
 
         return self.consolidate_error(key='image', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
@@ -426,6 +715,12 @@ class VlmGistBase(ClientBase):
     def generate_scene_description(self, data, settings, is_worker, stamp_global):
         if self._settings['scene_description']['skip']:
             return True, "Skipping scene description.", data
+
+        # log
+        if settings['scene_description']['message_process']:
+            self._logger.info("Generating scene description.")
+        else:
+            self._logger.debug("Generating scene description.")
 
         stamp_local = time.perf_counter()
         data['scene_description'] = {'stamp': datetime.datetime.now().isoformat()}
@@ -449,6 +744,14 @@ class VlmGistBase(ClientBase):
                 return self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
             success, message, data = self.parse_scene_description(data=data, stamp_local=stamp_local)
             if success:
+                # log
+                if settings['scene_description']['message_process']:
+                    if settings['scene_description']['message_results']:
+                        self._logger.info(f"Generated scene description in '{data['scene_description']['duration']:.3f}s': '{data['scene_description']['data']}'")
+                    else:
+                        self._logger.info(f"Generated scene description in '{data['scene_description']['duration']:.3f}s'.")
+                else:
+                    self._logger.debug(f"Generated scene description in '{data['scene_description']['duration']:.3f}s'.")
                 return True, message, data
             return self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
@@ -487,7 +790,7 @@ class VlmGistBase(ClientBase):
             del data[data_key]['completion']
         else:
             data[data_key]['logs'].append(f"The {name} completion contains '{len(data[data_key]['completion'])}' excessive key{'' if len(data[data_key]['completion']) == 1 else 's'}: {list(data[data_key]['completion'].keys())}")
-            self._logger.warn(data[data_key]['logs'][-1])
+            self._logger.debug(data[data_key]['logs'][-1])
 
         data[data_key]['logs'].append(f"Validated {name} completion.")
 
@@ -503,7 +806,7 @@ class VlmGistBase(ClientBase):
 
         if data['scene_description']['raw'] == description:
             del data['scene_description']['raw']
-            data['scene_description']['logs'].append("Removed raw data identical to validated data.")
+            data['scene_description']['logs'].append("Removed raw data identical to validated data (scene description).")
             self._logger.debug(data['scene_description']['logs'][-1])
         data['scene_description']['data'] = description
         data['scene_description']['logs'].append("Validated scene description.")
@@ -515,6 +818,12 @@ class VlmGistBase(ClientBase):
     def generate_structured_description(self, data, settings, is_worker, stamp_global):
         if self._settings['structured_description']['skip']:
             return True, "Skipping structured description.", data
+
+        # log
+        if settings['structured_description']['message_process']:
+            self._logger.info("Generating structured description.")
+        else:
+            self._logger.debug("Generating structured description.")
 
         stamp_local = time.perf_counter()
         data['structured_description'] = {'stamp': datetime.datetime.now().isoformat()}
@@ -541,6 +850,15 @@ class VlmGistBase(ClientBase):
                 return self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
             success, message, data = self.parse_structured_description(settings=settings, data=data, stamp_local=stamp_local)
             if success:
+                # log
+                num_described = len(data['structured_description']['data'])
+                if settings['structured_description']['message_process']:
+                    if settings['structured_description']['message_results'] and num_described > 0:
+                        self._logger.info(f"Generated structured description with '{num_described}' object{'' if num_described == 1 else 's'}in '{data['structured_description']['duration']:.3f}s': '\n{json.dumps(data['structured_description']['data'], indent=4)}'")
+                    else:
+                        self._logger.info(f"Generated structured description with '{num_described}' object{'' if num_described == 1 else 's'} in '{data['structured_description']['duration']:.3f}s'.")
+                else:
+                    self._logger.debug(f"Generated structured description with '{num_described}' object{'' if num_described == 1 else 's'} in '{data['structured_description']['duration']:.3f}s'.")
                 return True, message, data
             # TODO trigger correction using message
             return self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
@@ -586,6 +904,21 @@ class VlmGistBase(ClientBase):
         # structured description must be list
         if not isinstance(description, list):
             return False, f"Expected structured description to be of type 'list' but got '{type(description).__name__}'.", data
+
+        # obtain image dimensions if required
+        dimensions = None
+        for key in ["point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int1000]", "box_yxyx[int1000]"]:
+            for setting in ['keys_required_types', 'keys_optional_types']:
+                if key in settings['structured_description'][setting]:
+                    success, message, dimensions = get_image_dimensions(image=data['image']['data'], logger=self._logger)
+                    if success:
+                        data['image']['width'] = dimensions[0]
+                        data['image']['height'] = dimensions[1]
+                        break
+                    else:
+                        raise UnrecoverableError(message)
+            if dimensions is not None:
+                break
 
         # validate objects
 
@@ -640,6 +973,16 @@ class VlmGistBase(ClientBase):
                                 valid_obj[target_key] = val
                                 is_valid = True
 
+                        elif expected_type == "likert5":
+                            if isinstance(val, int) and not isinstance(val, bool) and val in [1, 2, 3, 4, 5]:
+                                valid_obj[target_key] = val
+                                is_valid = True
+
+                        elif expected_type == "likert7":
+                            if isinstance(val, int) and not isinstance(val, bool) and val in [1, 2, 3, 4, 5, 6, 7]:
+                                valid_obj[target_key] = val
+                                is_valid = True
+
                         elif expected_type == "float":
                             if isinstance(val, float):
                                 valid_obj[target_key] = val
@@ -655,15 +998,48 @@ class VlmGistBase(ClientBase):
                                 valid_obj[target_key] = val
                                 is_valid = True
 
-                        elif expected_type == "bbox[int]":
-                            if (isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in val) and val[2] > val[0] and val[3] > val[1]):
+                        elif expected_type in ["point_xy[int]", "point_yx[int]"]:
+                            if isinstance(val, list) and len(val) == 2 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in val):
                                 valid_obj[target_key] = val
                                 is_valid = True
 
-                        elif expected_type == "bbox[float]":
-                            if (isinstance(val, list) and len(val) == 4 and all(isinstance(x, float) and x >= 0 for x in val) and val[2] > val[0] and val[3] > val[1]):
+                        elif expected_type in ["point_xy[int1000]", "point_yx[int1000]"]:
+                            if isinstance(val, list) and len(val) == 2 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 and x <= 1000 for x in val):
+                                if expected_type == "point_xy[int1000]":
+                                    x = min(max(int(round(val[0] / 1000 * data['image']['width'])), 0), data['image']['width'])
+                                    y = min(max(int(round(val[1] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                    valid_obj[target_key] = [x, y]
+                                else:
+                                    x = min(max(int(round(val[1] / 1000 * data['image']['width'])), 0), data['image']['width'])
+                                    y = min(max(int(round(val[0] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                    valid_obj[target_key] = [y, x]
+                                self._logger.debug(f"Unnormalized point {val} of object '{i}' to '{valid_obj[target_key]}' according to image width '{data['image']['width']}' and height '{data['image']['height']}'.")
+                                is_valid = True
+
+                        elif expected_type in ["box_xyxy[int]", "box_yxyx[int]"]:
+                            if isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in val) and val[2] > val[0] and val[3] > val[1]:
                                 valid_obj[target_key] = val
                                 is_valid = True
+
+                        elif expected_type in ["box_xyxy[int1000]", "box_yxyx[int1000]"]:
+                            if isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 and x <= 1000 for x in val) and val[2] > val[0] and val[3] > val[1]:
+                                if expected_type == "box_xyxy[int1000]":
+                                    x_min = min(max(int(round(val[0] / 1000 * data['image']['width'])), 0), data['image']['width'])
+                                    y_min = min(max(int(round(val[1] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                    x_max = min(max(int(round(val[2] / 1000 * data['image']['width'])), 0), data['image']['width'])
+                                    y_max = min(max(int(round(val[3] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                else:
+                                    x_min = min(max(int(round(val[1] / 1000 * data['image']['width'])), 0), data['image']['width'])
+                                    y_min = min(max(int(round(val[0] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                    x_max = min(max(int(round(val[3] / 1000 * data['image']['width'])), 0), data['image']['width'])
+                                    y_max = min(max(int(round(val[2] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                if x_min < x_max and y_min < y_max:
+                                    if expected_type == "box_xyxy[int1000]":
+                                        valid_obj[target_key] = [x_min, y_min, x_max, y_max]
+                                    else:
+                                        valid_obj[target_key] = [y_min, x_min, y_max, x_max]
+                                    self._logger.debug(f"Unnormalized bounding box {val} of object '{i}' to '{valid_obj[target_key]}' according to image width '{data['image']['width']}' and height '{data['image']['height']}'.")
+                                    is_valid = True
 
                         else:
                             raise NotImplementedError(f"Unknown key type '{expected_type}'.")
@@ -671,7 +1047,7 @@ class VlmGistBase(ClientBase):
                         if not is_valid:
                             is_required = j < len(settings['structured_description']['keys_required'])
                             req_opt_str = "required" if is_required else "optional"
-                            err_msg = f"Expected valid format for {req_opt_str} key '{target_key}' in object '{i}' of structured description matching type '{expected_type}' but got invalid value '{val}' of type '{type(val).__name__}'."
+                            err_msg = f"Expected format of {req_opt_str} key '{target_key}' in object '{i}' of structured description to match type '{expected_type}' but got invalid value '{val}' of type '{type(val).__name__}'."
 
                             if is_required:
                                 return False, err_msg, data
@@ -695,7 +1071,7 @@ class VlmGistBase(ClientBase):
 
         if data['structured_description']['raw'] == valid_description:
             del data['structured_description']['raw']
-            data['structured_description']['logs'].append("Removed raw data identical to validated data.")
+            data['structured_description']['logs'].append("Removed raw data identical to validated data (structured description).")
             self._logger.debug(data['structured_description']['logs'][-1])
         data['structured_description']['data'] = valid_description
         data['structured_description']['logs'].append("Validated structured description.")
@@ -705,29 +1081,46 @@ class VlmGistBase(ClientBase):
         return True, data['structured_description']['logs'][-1], data
 
     def generate_detection(self, data, settings, is_worker, stamp_global):
-        if self._settings['detection']['skip'] or len(data['structured_description']['data']) == 0:
+        if self._settings['detection']['skip']:
             return True, "Skipping detection.", data
+
+        # log
+        num_described = len(data['structured_description']['data'])
+        if settings['detection']['extract_from_description']:
+            self._logger.debug(f"Extracting '{num_described}' detection{'' if num_described == 1 else 's'} from structured description.")
+        elif settings['detection']['message_process']:
+            self._logger.info(f"Detecting '{num_described}' described object{'' if num_described == 1 else 's'}.")
+        else:
+            self._logger.debug(f"Detecting '{num_described}' described object{'' if num_described == 1 else 's'}.")
 
         stamp_local = time.perf_counter()
         data['detection'] = {'stamp': datetime.datetime.now().isoformat()}
         if not is_worker:
             data['detection']['settings'] = copy.deepcopy(settings['detection'])
-        if settings['detection']['extract_from_description']:
+
+        if len(data['structured_description']['data']) == 0:
+            data['detection']['success'] = True
+            data['detection']['logs'] = ["Structured description was empty."]
+            prompts = []
+            detection = []
+        elif settings['detection']['extract_from_description']:
             for i, item in enumerate(settings['structured_description']['keys_required_types']):
-                if "bbox" in item:
+                if "box" in item:
                     bbox_key = settings['structured_description']['keys_required'][i]
+                    bbox_type = item
                     break
             data['detection']['success'] = True
             data['detection']['logs'] = ["Extracted from structured description."]
-            detection = []
             prompts = []
+            detection = []
             for item in data['structured_description']['data']:
                 prompts.append(item[settings['detection']['prompt_key']])
                 detection.append({
-                    # this will not work for unit coordinates, but fixing this would require knowing the image dimensions differentiating bbox[float] and bbox[unit]
                     'box_xyxy': [int(value) for value in item[bbox_key]],
                     'prompt': prompts[-1]
                 })
+                if "yxyx" in bbox_type:
+                    detection[-1]['box_xyxy'] = [detection[-1]['box_xyxy'][1], detection[-1]['box_xyxy'][0], detection[-1]['box_xyxy'][3], detection[-1]['box_xyxy'][2]]
         else:
             detector = MmGroundingDino(settings=settings['detection']['mmgroundingdino'])
             prompts = [item[settings['detection']['prompt_key']] for item in data['structured_description']['data']]
@@ -737,6 +1130,17 @@ class VlmGistBase(ClientBase):
             data['detection']['raw'] = detection
             success, message, data = self.parse_detection(data=data, prompts=prompts, stamp_local=stamp_local)
             if success:
+                # log
+                num_detected = len(data['detection']['data'])
+                if settings['detection']['extract_from_description']:
+                    self._logger.debug(f"Extracted '{num_detected}' detection{'' if num_detected == 1 else 's'} from '{num_described}' described object{'' if num_described == 1 else 's'} in '{data['detection']['duration']:.3f}s'.")
+                elif settings['detection']['message_process']:
+                    if settings['detection']['message_results'] and num_detected > 0:
+                        self._logger.info(f"Obtained '{num_detected}' detection{'' if num_detected == 1 else 's'} from '{num_described}' described object{'' if num_described == 1 else 's'} in '{data['detection']['duration']:.3f}s': '\n{json.dumps(data['detection']['data'], indent=4)}'")
+                    else:
+                        self._logger.info(f"Obtained '{num_detected}' detection{'' if num_detected == 1 else 's'} from '{num_described}' described object{'' if num_described == 1 else 's'} in '{data['detection']['duration']:.3f}s'.")
+                else:
+                    self._logger.debug(f"Obtained '{num_detected}' detection{'' if num_detected == 1 else 's'} from '{num_described}' described object{'' if num_described == 1 else 's'} in '{data['detection']['duration']:.3f}s'.")
                 return True, message, data
             return self.consolidate_error(key='detection', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
@@ -788,7 +1192,7 @@ class VlmGistBase(ClientBase):
 
         if data['detection']['raw'] == detection:
             del data['detection']['raw']
-            data['detection']['logs'].append("Removed raw data identical to validated data.")
+            data['detection']['logs'].append("Removed raw data identical to validated data (detection).")
             self._logger.debug(data['detection']['logs'][-1])
         data['detection']['data'] = detection
         data['detection']['logs'].append("Validated detection.")
@@ -798,27 +1202,47 @@ class VlmGistBase(ClientBase):
         return True, data['detection']['logs'][-1], data
 
     def generate_segmentation(self, data, settings, is_worker, stamp_global):
-        if self._settings['segmentation']['skip'] or len(data['detection']['data']) == 0:
+        if self._settings['segmentation']['skip']:
             return True, "Skipping segmentation.", data
+
+        # log
+        num_detected = len(data['detection']['data'])
+        if settings['segmentation']['message_process']:
+            self._logger.info(f"Segmenting '{num_detected}' detected object{'' if num_detected == 1 else 's'}.")
+        else:
+            self._logger.debug(f"Segmenting '{num_detected}' detected object{'' if num_detected == 1 else 's'}.")
 
         stamp_local = time.perf_counter()
         data['segmentation'] = {'stamp': datetime.datetime.now().isoformat()}
         if not is_worker:
             data['segmentation']['settings'] = copy.deepcopy(settings['segmentation'])
-        prompts = [{'object_id': i, 'bbox': item['box_xyxy']} for i, item in enumerate(data['detection']['data'])]
-        segmenter = Sam2Realtime(settings=settings['segmentation']['sam2_realtime'])
-        data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'], prompts=prompts)
-        data['segmentation']['logs'] = [message]
+        if len(data['detection']['data']) == 0:
+            data['segmentation']['success'] = True
+            data['segmentation']['logs'] = ["There were no detections."]
+            segmentation = []
+        else:
+            prompts = [{'object_id': i, 'bbox': item['box_xyxy']} for i, item in enumerate(data['detection']['data'])]
+            segmenter = Sam2Realtime(settings=settings['segmentation']['sam2_realtime'])
+            data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'], prompts=prompts)
+            data['segmentation']['logs'] = [message]
         if data['segmentation']['success']:
             if settings['segmentation']['track']:
                 data['segmentation']['duration_init'] = time.perf_counter() - stamp_local
                 data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'])
                 data['segmentation']['logs'].append(message)
-                if not data['segmentation']['success']:
-                    return self.consolidate_error(key='segmentation', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+        if data['segmentation']['success']:
             data['segmentation']['raw'] = segmentation
             success, message, data = self.parse_segmentation(data=data, stamp_local=stamp_local)
             if success:
+                # log
+                num_segmented = len(data['segmentation']['data'])
+                if settings['segmentation']['message_process']:
+                    if settings['segmentation']['message_results'] and num_segmented > 0:
+                        self._logger.info(f"Segmented '{num_segmented}' detected object{'' if num_segmented == 1 else 's'} in '{data['segmentation']['duration']:.3f}s': '\n{json.dumps(data['detection']['data'], indent=4)}'")
+                    else:
+                        self._logger.info(f"Segmented '{num_segmented}' detected object{'' if num_segmented == 1 else 's'} in '{data['segmentation']['duration']:.3f}s'.")
+                else:
+                    self._logger.debug(f"Segmented '{num_segmented}' detected object{'' if num_segmented == 1 else 's'} in '{data['segmentation']['duration']:.3f}s'.")
                 return True, message, data
             return self.consolidate_error(key='segmentation', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
@@ -864,11 +1288,11 @@ class VlmGistBase(ClientBase):
                 self._logger.warn(data['segmentation']['logs'][-1])
             segmentation_filtered.append(items[0])
 
-        if data['segmentation']['raw'] == segmentation:
+        if data['segmentation']['raw'] == segmentation_filtered:
             del data['segmentation']['raw']
-            data['segmentation']['logs'].append("Removed raw data identical to validated data.")
+            data['segmentation']['logs'].append("Removed raw data identical to validated data (segmentation).")
             self._logger.debug(data['segmentation']['logs'][-1])
-        data['segmentation']['data'] = segmentation
+        data['segmentation']['data'] = segmentation_filtered
         data['segmentation']['logs'].append("Validated segmentation.")
         data['segmentation']['duration'] = time.perf_counter() - stamp_local
 
@@ -906,12 +1330,12 @@ class VlmGistBase(ClientBase):
             num_grounded = len(data['detection']['data'])
             data['run']['message'] = f"Generated '{num_grounded}' object grounding{'' if num_grounded == 1 else 's'}{suffix} in '{duration:.3f}s'."
             if settings['message_results'] and num_grounded > 0:
-                data['run']['message'] = f"{data['run']['message'][:-1]}: {[item[settings['detection']['prompt_key']] for item in data['structured_description']['data']]}"
+                data['run']['message'] = f"{data['run']['message'][:-1]}: '\n{json.dumps(data['structured_description']['data'], indent=4)}'"
         elif 'structured_description' in data:
             num_grounded = len(data['structured_description']['data'])
             data['run']['message'] = f"Generated '{num_grounded}' object description{'' if num_grounded == 1 else 's'}{suffix} in '{duration:.3f}s'."
             if settings['message_results'] and num_grounded > 0:
-                data['run']['message'] = f"{data['run']['message'][:-1]}: {[item[settings['detection']['prompt_key']] for item in data['structured_description']['data']]}"
+                data['run']['message'] = f"{data['run']['message'][:-1]}: '\n{json.dumps(data['structured_description']['data'], indent=4)}'"
         else:
             data['run']['message'] = f"Generated image description{suffix} in '{duration:.3f}s'."
             if settings['message_results']:

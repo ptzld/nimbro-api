@@ -4,70 +4,96 @@ from ..base.vlm_gist_base import VlmGistBase
 default_settings = {
     'logger_severity': None,
     'logger_name': "VLM-GIST",
+    'message_process': True,
     'message_results': True,
     'include_image': False,
     'scene_description': {
         'skip': True,
+        'message_process': True,
+        'message_results': True,
         'chat_completions': {
-            'logger_severity': "warn"
+            'logger_severity': "warn",
+            'endpoint': "OpenRouter",
+            'model': "~google/gemini-pro-latest",
+            'reasoning_effort': "none"
         },
         'system_prompt_role': "system",
-        'system_prompt': "You are a robot's visual perception system that identifies and analyzes objects in an image. Be concise and factual.",
+        'system_prompt': "You are a visual perception system that identifies and analyzes objects and other visible features in an image.",
         'image_prompt_role': "user",
         'image_prompt_detail': "high",
         'description_prompt_role': "user",
         'description_prompt':
-            "Please describe the content of the image above. "
-            "Focus your your description on all visible objects. "
-            "Be concise and answer with at most 10 sentences. "
-            "If you are unsure about identifying an object, make one single guess rather than calling it an unknown object or discussing eventualities."
+            "Please provide a complete and detailed description of the image above. Your description must explicitly address all visible objects or features, "
+            "even if they are small or in the background. Do not leave out or ignore anything. Your answer should consist of at least fifteen and no more than twenty-five sentences. "
+            "If you are unsure about identifying an object, make a single educated guess instead of describing it as an unknown object or discussing different possibilities."
     },
     'structured_description': {
         'skip': False,
+        'message_process': True,
+        'message_results': False,
         'chat_completions': {
-            'logger_severity': "warn"
+            'logger_severity': "warn",
+            'endpoint': "OpenRouter",
+            'model': "~google/gemini-pro-latest",
+            'reasoning_effort': "none"
         },
         'use_scene_description': False,
         'system_prompt_role': "system",
-        'system_prompt': "You are a robot's visual perception system that identifies and analyzes objects in an image. Be concise and factual.",
+        'system_prompt': "You are a visual perception system that identifies and analyzes objects and other visible features in an image.",
         'image_prompt_role': "user",
         'image_prompt_detail': "high",
         'description_prompt_role': "user",
         'description_prompt':
             "Provide a list in JSON format that contains each object (including furniture, persons, and animals) visible in the image above. "
-            "Explicitly include each object instance as an individual list element, and never group multiple instances that are clearly distinct from one another. "
-            "Each list element must be a dictionary with the fields object_name and description. "
-            "The object_name of all humans must be person."
+            "Explicitly include each object instance without exception as an individual list element. "
+            "Never group multiple instances that are clearly distinct from one another. "
+            "Each list element must be a dictionary with the fields label, description, box_2d, point_2d, distance, weight, moving, and safety. "
+            "The label of all humans must be person. "
             "The description must be a single short sentence (max. 10 words, starting with 'A' or 'An'), "
             "that differs from the other descriptions and summarizes the most important information about the type, color, and appearance of the object, "
-            "allowing for a visual identification of the object without knowing any of the descriptions generated for the other objects.",
+            "allowing for a visual identification of the object without knowing any of the descriptions generated for the other objects. "
+            "The key box_2d must contain a bounding box of the object in [y_min, y_min, x_max, y_max] format normalized to pixel coordinates from 0 to 1000. "
+            "The key point_2d must contain a point on the object in [y, x] format normalized to pixel coordinates from 0 to 1000. "
+            "The key distance must indicate the estimated distance of the object from the camera in centimeters as an integer. "
+            "The key weight must indicate the estimated weight of the object in grams as an integer. "
+            "The key moving must indicate how likely it is that the object is is going to move or be moved within the next three seconds, "
+            "on a Likert scale from 1 to 5, where 1 is very unlikely, 2 is likely, 3 is ambiguous or unknown, 4 is likely, and 5 is very likely. "
+            "The key safety must indicate how safe the object is for a ten year old child to interact with it without supervision on a Likert scale scale from 1 to 5, "
+            "where 1 is very unsafe, 2 is unsafe, 3 is ambiguous or unknown, 4 is safe, and 5 is very safe. Make sure to not ignore any object do not forget any of the required keys.",
         'response_type': "json",
-        'keys_required': ['object_name', 'description'],
-        'keys_required_types': ['str', 'str'],
+        'keys_required': ['label', 'description', 'box_2d', 'point_2d', 'distance', 'weight', 'moving', 'safety'],
+        'keys_required_types': ['str', 'str', 'box_yxyx[int1000]', 'point_yx[int1000]', 'int', 'int', 'likert5', 'likert5'],
         'keys_optional': [],
         'keys_optional_types': []
     },
     'detection': {
         'skip': False,
-        'extract_from_description': False,
+        'message_process': True,
+        'message_results': False,
+        'extract_from_description': True,
+        'prompt_key': "label",
         'mmgroundingdino': {
             'logger_severity': "warn",
             'message_results': False,
             'nms_iou': None
-        },
-        'prompt_key': "description"
+        }
     },
     'segmentation': {
         'skip': False,
+        'message_process': True,
+        'message_results': False,
         'track': False,
         'sam2_realtime': {
             'logger_severity': "warn"
         }
     },
-    'batch_size': 0,
-    'batch_style': "multiprocessing",
-    'batch_logger_severity': "warn",
-    'retry': 1
+    'batch': {
+        'logger_severity': "warn",
+        'size': 0,
+        'style': "multiprocessing",
+        'retry': 2
+    },
+    'retry': 2
 }
 
 class VlmGist(Client):
@@ -98,13 +124,17 @@ class VlmGist(Client):
                 Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
+            message_process (bool):
+                Emit an info log when starting to process an image.
             message_results (bool):
-                Include results in successful response messages when using `get_descriptions()`.
+                Include results in successful response messages when using `run()`.
             include_image (bool):
                 Include the Base64-encoded image data in the result dictionary returned by `run()`.
             scene_description (dict):
                 Settings for the scene description step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
+                - message_process (bool): Emit an info log before and after a scene description step.
+                - message_results (bool): Include results in the logs emitted after a scene description step.
                 - chat_completions (dict): Settings forwarded to `ChatCompletions`. See its `get_settings()`.
                 - system_prompt_role (str): Role of the system prompt message. One of ["system", "user"].
                 - system_prompt (str): Content of the system prompt message.
@@ -115,6 +145,8 @@ class VlmGist(Client):
             structured_description (dict):
                 Settings for the structured description step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
+                - message_process (bool): Emit an info log before and after a structured description step.
+                - message_results (bool): Include results in the logs emitted after a structured description step.
                 - chat_completions (dict): Settings forwarded to `ChatCompletions`. See its `get_settings()`.
                 - use_scene_description (bool): Prepend the scene description to the structured description prompt as context.
                 - system_prompt_role (str): Role of the system prompt message. One of ["system", "user"].
@@ -125,25 +157,33 @@ class VlmGist(Client):
                 - description_prompt (str): Content of the description prompt message.
                 - response_type (str): Expected response format. One of ["json", "text"].
                 - keys_required (list[str]): Non-empty list of required keys expected in each object of the structured description.
-                - keys_required_types (list[str]): Types for each required key, parallel to 'keys_required'. Each element must be one of ["str", "bool"].
+                - keys_required_types (list[str]): Types for each required key, parallel to 'keys_required'.
+                  Each element must be one of ["str", "bool", "int", "likert5", "likert7", "float", "unit", "list", "point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"].
                 - keys_optional (list[str]): List of optional keys that may appear in each object of the structured description.
-                - keys_optional_types (list[str]): Types for each optional key, parallel to 'keys_optional'. Each element must be one of ["str", "bool"].
+                - keys_optional_types (list[str]): Types for each optional key, parallel to 'keys_optional'.
+                  Each element must be one of ["str", "bool", "int", "likert5", "likert7", "float", "unit", "list", "point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"].
             detection (dict):
                 Settings for the object detection step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
-                - mmgroundingdino (dict): Settings forwarded to `MmGroundingDino`. See its `get_settings()`.
+                - message_process (bool): Emit an info log before and after a detection step.
+                - message_results (bool): Include results in the logs emitted after a detection step.
+                - extract_from_description (bool): Extract bounding boxes from structured description instead of using the detector.
+                  This required setting 'keys_required_types' to contain exactly one box type, while 'keys_optional_types' must not contain any box types.
                 - prompt_key (str): Key from 'keys_required' in 'structured_description' whose value is used as the detection prompt for each object.
+                - mmgroundingdino (dict): Settings forwarded to `MmGroundingDino`. See its `get_settings()`.
             segmentation (dict):
                 Settings for the instance segmentation step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
+                - message_process (bool): Emit an info log before and after a segmentation step.
+                - message_re sults (bool): Include results in the logs emitted after a segmentation step.
                 - track (bool): After initializing SAM2 with detections, run a second inference pass on the same image to obtain tracked masks. Must be `False` when 'skip' is `True`.
                 - sam2_realtime (dict): Settings forwarded to `Sam2Realtime`. See its `get_settings()`.
-            batch_size (int):
-                Number of parallel workers when processing a list of images (>= 0). Use `0` to spawn one worker per image.
-            batch_style (str):
-                Parallelization backend used for batch processing. One of ["threading", "multiprocessing"].
-            batch_logger_severity (str | None):
-                Logger severity applied to each worker in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
+            batch (dict):
+                Settings for processing multiple images passed to `run()`. Ignored when not passing a list of images to `run()`.
+                - logger_severity (str | None): Logger severity applied to each worker in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
+                - size (int): Number of parallel workers when processing a list of images (>= 0). Use `0` to spawn one worker per image.
+                - style (str): Parallelization backend used for batch processing. One of ["threading", "multiprocessing"].
+                - retry (bool | int): Retry behavior for a single worker. The global 'retry' setting is applied to the entire batch, triggering retry when at least one worker failed (after using up all their retry attempts).
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
                 - If `True`, retries indefinitely. If `False`, failure is returned immediately.
@@ -179,6 +219,40 @@ class VlmGist(Client):
                 - str: A descriptive message about the operation result.
         """
         return self._base.wrap(0, self._base.set_settings, settings, **kwargs)
+
+    def visualize(self, result, *, image=None, output_dir=None, **kwargs):
+        """
+        Visualize the detection and segmentation results produced by `run()` on the corresponding image(s).
+
+        Args:
+            result (str | dict):
+                A result returned by `run()` (for either a single image or a batch), either as the dictionary (`dict`) itself or as a path (`str`) to a JSON file containing it.
+            image (str | bytes | list[str] | list[bytes] | None):
+                The image(s) corresponding to the result as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
+                For a batch result, a `list` of length matching the batch size is required. If `None`, the image must be provided
+                within 'result', which requires the setting 'include_image' to have been enabled during the originating call to `run()`. Defaults to `None`.
+            output_dir (str | None):
+                If provided, the directory in which to save the rendered visualization(s) as PNG file(s).
+                The directory is created if it does not exist. Filenames are prefixed with the item index and a timestamp.
+                If `None`, visualizations are only returned and not written to disk. Defaults to `None`.
+
+        Raises:
+            UnrecoverableError: If the visual dependencies (`cv2`, `numpy`) are not available.
+
+        Returns:
+            tuple[bool, str, list[numpy.ndarray] | None, list[str] | None]: A tuple containing:
+                - bool: `True` if all items were visualized successfully, `False` otherwise.
+                - str: A descriptive message about the operation result.
+                - list[numpy.ndarray] | None: A `list` of rendered visualizations (one per result item, `None` for items that failed), or `None` if none succeeded.
+                - list[str] | None: A `list` of output file paths (one per result item, `None` for items that were not saved), or `None` if nothing was saved to disk.
+
+        Notes:
+            - Results without a successful detection step are discarded.
+            - When a valid segmentation is present, both boxes and masks are drawn.
+            - Labels are taken from the 'prompt' key of each detection item.
+            - The first point attribute of each item in the structured description is visualized as well.
+        """
+        return self._base.wrap(2, self._base.visualize, result, image, output_dir, **kwargs)
 
     def run(self, image, *, scene_description=None, structured_description=None, detection=None, **kwargs):
         """

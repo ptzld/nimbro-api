@@ -111,16 +111,20 @@ def assert_result(success, message, result, settings):
                                 ok = isinstance(val, bool)
                             elif t == "int":
                                 ok = isinstance(val, int) and not isinstance(val, bool)
+                            elif t == "likert5":
+                                ok = isinstance(val, int) and not isinstance(val, bool) and val in [1, 2, 3, 4, 5]
+                            elif t == "likert6":
+                                ok = isinstance(val, int) and not isinstance(val, bool) and val in [1, 2, 3, 4, 5, 6, 7]
                             elif t == "float":
                                 ok = isinstance(val, float)
                             elif t == "unit":
                                 ok = isinstance(val, float) and 0.0 <= val <= 1.0
                             elif t == "list":
                                 ok = isinstance(val, list)
-                            elif t == "bbox[int]":
+                            elif t in ["point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]"]:
+                                ok = isinstance(val, list) and len(val) == 2 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in val)
+                            elif t in ["box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"]:
                                 ok = isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in val) and val[2] > val[0] and val[3] > val[1]
-                            elif t == "bbox[float]":
-                                ok = isinstance(val, list) and len(val) == 4 and all(isinstance(x, float) and x >= 0 for x in val) and val[2] > val[0] and val[3] > val[1]
                             else:
                                 raise NotImplementedError(t)
                             if j < len(settings[key]['keys_required']):
@@ -299,7 +303,13 @@ def test_06_structured_description_raw():
         'scene_description.skip': True,
         'structured_description.skip': True,
         'structured_description.use_scene_description': True,
+        'structured_description.keys_required': ['object_name', 'description'],
+        'structured_description.keys_required_types': ['str', 'str'],
+        'structured_description.keys_optional': [],
+        'structured_description.keys_optional_types': [],
         'detection.skip': False,
+        'detection.extract_from_description': False,
+        'detection.prompt_key': 'description',
         'segmentation.skip': True,
         'segmentation.track': False
     })
@@ -318,7 +328,13 @@ def test_07_structured_description_dict():
         'scene_description.skip': True,
         'structured_description.skip': True,
         'structured_description.use_scene_description': True,
+        'structured_description.keys_required': ['object_name', 'description'],
+        'structured_description.keys_required_types': ['str', 'str'],
+        'structured_description.keys_optional': [],
+        'structured_description.keys_optional_types': [],
         'detection.skip': False,
+        'detection.extract_from_description': False,
+        'detection.prompt_key': 'description',
         'segmentation.skip': False,
         'segmentation.track': False
     })
@@ -341,7 +357,16 @@ def test_07_structured_description_dict():
 def test_08_scene_and_structured_description():
     client = VlmGist(settings={
         'scene_description.skip': True,
-        'structured_description.skip': True
+        'structured_description.skip': True,
+        'structured_description.keys_required': ['object_name', 'description'],
+        'structured_description.keys_required_types': ['str', 'str'],
+        'structured_description.keys_optional': [],
+        'structured_description.keys_optional_types': [],
+        'detection.skip': False,
+        'detection.extract_from_description': False,
+        'detection.prompt_key': 'description',
+        'segmentation.skip': False,
+        'segmentation.track': False,
     })
     scene = {
         'success': True,
@@ -372,7 +397,13 @@ def test_09_detection_raw():
     client = VlmGist(settings={
         'scene_description.skip': True,
         'structured_description.skip': True,
+        'structured_description.keys_required': ['object_name', 'description'],
+        'structured_description.keys_required_types': ['str', 'str'],
+        'structured_description.keys_optional': [],
+        'structured_description.keys_optional_types': [],
         'detection.skip': True,
+        'detection.extract_from_description': False,
+        'detection.prompt_key': "description",
         'segmentation.skip': False
     })
     description = {
@@ -398,7 +429,13 @@ def test_10_detection_dict():
     client = VlmGist(settings={
         'scene_description.skip': True,
         'structured_description.skip': True,
+        'structured_description.keys_required': ['object_name', 'description'],
+        'structured_description.keys_required_types': ['str', 'str'],
+        'structured_description.keys_optional': [],
+        'structured_description.keys_optional_types': [],
         'detection.skip': True,
+        'detection.extract_from_description': False,
+        'detection.prompt_key': "description",
         'segmentation.skip': False
     })
     description = {
@@ -430,7 +467,13 @@ def test_11_tracking():
     client = VlmGist(settings={
         'scene_description.skip': True,
         'structured_description.skip': True,
+        'structured_description.keys_required': ['object_name', 'description'],
+        'structured_description.keys_required_types': ['str', 'str'],
+        'structured_description.keys_optional': [],
+        'structured_description.keys_optional_types': [],
         'detection.skip': True,
+        'detection.extract_from_description': False,
+        'detection.prompt_key': "description",
         'segmentation.skip': False,
         'segmentation.track': False
     })
@@ -464,6 +507,8 @@ def test_12_structured_description_bbox():
         'scene_description.skip': True,
         'structured_description.skip': False,
         'structured_description.use_scene_description': False,
+        'structured_description.chat_completions.endpoint': "OpenRouter",
+        'structured_description.chat_completions.model': "~google/gemini-flash-latest",
         # 'structured_description.chat_completions.logger_severity': "info",
         'structured_description.description_prompt':
             "Provide a list in JSON format that contains each object (including furniture, persons, and animals) visible in the image above. "
@@ -473,13 +518,14 @@ def test_12_structured_description_bbox():
             "The description must be a single short sentence (max. 10 words, starting with 'A' or 'An'), "
             "that differs from the other descriptions and summarizes the most important information about the type, color, and appearance of the object, "
             "allowing for a visual identification of the object without knowing any of the descriptions generated for the other objects. "
-            "In addition, also provided the key box_2d containing a bounding box if the object in [x1, y1, x2, y2] format.",
-        'structured_description.keys_required': ['label', 'description'],
-        'structured_description.keys_required_types': ['str', 'str'],
-        'structured_description.keys_optional': ['box_2d'],
-        'structured_description.keys_optional_types': ['bbox[int]'],
+            "In addition, also provided the key box_2d containing a bounding box if the object in [y_min, x_min, y_max, x_max] format.",
+        'structured_description.keys_required': ['label', 'description', 'box_2d'],
+        'structured_description.keys_required_types': ['str', 'str', 'box_yxyx[int1000]'],
+        'structured_description.keys_optional': [],
+        'structured_description.keys_optional_types': [],
         'detection.skip': False,
-        'detection.extract_from_description': False,
+        'detection.extract_from_description': True,
+        'detection.prompt_key': 'label',
         'segmentation.skip': False,
         'segmentation.track': False,
         'include_image': False
@@ -494,6 +540,8 @@ def test_13_structured_description_bbox_as_detection():
         'scene_description.skip': True,
         'structured_description.skip': False,
         'structured_description.use_scene_description': False,
+        'structured_description.chat_completions.endpoint': "OpenRouter",
+        'structured_description.chat_completions.model': "~google/gemini-flash-latest",
         # 'structured_description.chat_completions.logger_severity': "info",
         'structured_description.description_prompt':
             "Provide a list in JSON format that contains each object (including furniture, persons, and animals) visible in the image above. "
@@ -503,13 +551,14 @@ def test_13_structured_description_bbox_as_detection():
             "The description must be a single short sentence (max. 10 words, starting with 'A' or 'An'), "
             "that differs from the other descriptions and summarizes the most important information about the type, color, and appearance of the object, "
             "allowing for a visual identification of the object without knowing any of the descriptions generated for the other objects. "
-            "In addition, also provided the key box_2d containing a bounding box if the object in [x1, y1, x2, y2] format.",
+            "In addition, also provided the key box_2d containing a bounding box if the object in [y_min, x_min, y_max, x_max] format.",
         'structured_description.keys_required': ['label', 'description', 'box_2d'],
-        'structured_description.keys_required_types': ['str', 'str', 'bbox[int]'],
+        'structured_description.keys_required_types': ['str', 'str', 'box_yxyx[int1000]'],
         'structured_description.keys_optional': [],
         'structured_description.keys_optional_types': [],
         'detection.skip': False,
         'detection.extract_from_description': True,
+        'detection.prompt_key': 'label',
         'segmentation.skip': False,
         'segmentation.track': False,
         'include_image': False
@@ -521,14 +570,8 @@ def test_13_structured_description_bbox_as_detection():
 
 def test_13_parallel_threads(n=10):
     client = VlmGist(settings={
-        'scene_description.skip': True,
-        'structured_description.skip': False,
-        'structured_description.use_scene_description': False,
-        'detection.skip': False,
-        'segmentation.skip': False,
-        'segmentation.track': False,
-        'batch_size': n,
-        'batch_style': "threading",
+        'batch.size': n,
+        'batch.style': "threading",
         'include_image': True
     })
     images = [os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png")] * n
@@ -541,14 +584,8 @@ def test_13_parallel_threads(n=10):
 
 def test_14_parallel_multiprocessing(n=10):
     client = VlmGist(settings={
-        'scene_description.skip': True,
-        'structured_description.skip': False,
-        'structured_description.use_scene_description': False,
-        'detection.skip': False,
-        'segmentation.skip': False,
-        'segmentation.track': False,
-        'batch_size': n,
-        'batch_style': "multiprocessing",
+        'batch.size': n,
+        'batch.style': "multiprocessing",
         'include_image': False
     })
     images = [os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png")] * n
