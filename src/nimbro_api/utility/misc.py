@@ -1,7 +1,9 @@
 import re
 import json
 import copy
+import time
 import shutil
+import struct
 
 # Assertions
 
@@ -400,6 +402,112 @@ def count_duplicates(iterable, *, include_unique=False):
     if include_unique:
         return count_dict
     return {key: value for key, value in count_dict.items() if value > 1}
+
+def get_image_dimensions(image, *, logger=None):
+    """
+    Extract the width and height of a PNG or JPEG image from its byte representation.
+
+    Args:
+        image (bytes, str):
+            The raw `bytes` or Base64 encoding (`str`) of the image to parse.
+        logger (nimbro_api.utility.logger.Logger | None, optional):
+            If provided, logs intermediate status messages. Defaults to `None`.
+
+    Raises:
+        UnrecoverableError: If input arguments are invalid.
+
+    Returns:
+        tuple[bool, str, tuple[int, int] | None]: A tuple containing:
+            - bool: `True` if the operation succeeded, `False` otherwise.
+            - str: A descriptive message about the operation result.
+            - tuple[int, int] | None: Image dimensions as 2-tuple (width, height), or `None` if not successful.
+    """
+    # parse arguments
+    from nimbro_api.utility.logger import Logger
+    assert_type_value(obj=logger, type_or_value=[Logger, None], name="argument 'logger'")
+    assert_type_value(obj=image, type_or_value=[bytes, str], name="argument 'image'", logger=logger)
+    if isinstance(image, str):
+        from nimbro_api.utility.io import decode_b64
+        success, message, image = decode_b64(string=image, name="image", logger=logger)
+        if not success:
+            return success, message, None
+
+    # obtain dimensions
+
+    success = False
+    message = ""
+    dimensions = None
+    size = len(image)
+    tic = time.perf_counter()
+
+    try:
+        if size >= 24 and image.startswith(b'\x89PNG\r\n\x1a\n'):
+            if logger is not None:
+                logger.debug("Extracting dimentions from PNG image.")
+
+            width, height = struct.unpack_from('>LL', image, 16)
+
+            success = True
+            message = f"Extracted PNG dimensions (width: '{width}', height: '{height}') in '{time.perf_counter() - tic:.3f}s'."
+            dimensions = (width, height)
+
+        elif size >= 2 and image.startswith(b'\xff\xd8'):
+            if logger is not None:
+                logger.debug("Extracting dimentions from JPEG image.")
+
+            offset = 2
+            while offset < size:
+                while offset < size and image[offset] != 0xFF:
+                    offset += 1
+                while offset < size and image[offset] == 0xFF:
+                    offset += 1
+
+                if offset >= size:
+                    break
+
+                marker = image[offset]
+                offset += 1
+
+                # stop if we hit Start of Scan (DA) or End of Image (D9)
+                if marker in (0xDA, 0xD9):
+                    break
+
+                if marker in (0x01, 0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7):
+                    continue
+
+                if offset + 2 > size:
+                    break
+
+                length, = struct.unpack_from('>H', image, offset)
+
+                if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                    if offset + 7 > size:
+                        break
+
+                    height, width = struct.unpack_from('>HH', image, offset + 3)
+
+                    success = True
+                    message = f"Extracted JPEG dimensions (width: '{width}', height: '{height}') in '{time.perf_counter() - tic:.3f}s'."
+                    dimensions = (width, height)
+                    break
+
+                offset += length
+
+            if not success:
+                message = "Failed to extract dimensions from JPEG image without SOF marker."
+
+        else:
+            success = False
+            message = "Failed to extract dimensions from image without PNG or JPEG signatures."
+
+    except struct.error as e:
+        success = False
+        message = f"Failed to extract dimensions from structurally malformed image block: {e}"
+    except Exception as e:
+        success = False
+        message = f"Failed to extract image dimensions: {e}"
+
+    return success, message, dimensions
 
 # Printing
 

@@ -11,8 +11,8 @@ from .io import (
 from .logger import Logger
 
 from .misc import (
-    UnrecoverableError, assert_type_value, assert_keys, assert_log,
-    update_dict, count_duplicates, escape, visible_len, print_lines, format_obj
+    UnrecoverableError, assert_type_value, assert_keys, assert_log,update_dict, count_duplicates,
+    get_image_dimensions, escape, visible_len, print_lines, format_obj
 )
 
 from .string import is_url, is_base64, extract_json
