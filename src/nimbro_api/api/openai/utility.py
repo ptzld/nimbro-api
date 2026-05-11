@@ -36,9 +36,7 @@ def validate_connection(self, api_key):
 
         if success:
             # evaluate
-            if self._settings['model'] in models or self._settings['model'].split(":", 1)[0] in models:
-                message = f"Model '{self._settings['model']}' is served under Models API '{self._endpoint['models_url']}'."
-            elif self._settings['model'] in models:
+            if self._settings['model'] in models or self._settings['model'].split(':', 1)[0] in models:
                 message = f"Model '{self._settings['model']}' is served under Models API '{self._endpoint['models_url']}'."
             else:
                 raise UnrecoverableError(f"Model '{self._settings['model']}' is not served under Models API '{self._endpoint['models_url']}': {models}")

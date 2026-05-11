@@ -273,9 +273,10 @@ def read_as_b64(file_path, *, name="file", logger=None):
         UnrecoverableError: If input arguments are invalid (excluding invalid file path or error while loading file).
 
     Returns:
-        tuple[bool, str]: A tuple containing:
+        tuple[bool, str, str | None]: A tuple containing:
             - bool: `True` if the operation succeeded, `False` otherwise.
             - str: A descriptive message about the operation result.
+            - str | None: Image encoded as Base64 string, or `None` if not successful.
     """
     # parse arguments
     from nimbro_api.utility.logger import Logger
@@ -447,6 +448,7 @@ def parse_image_b64(image, *, logger=None):
     assert_type_value(obj=image, type_or_value=[str, bytes], name="argument 'image'", logger=logger)
 
     # parse image
+    tic = time.perf_counter()
     image_path = None
     if isinstance(image, bytes):
         success, message, image_file = encode_b64(obj=image, name="image", logger=logger)
@@ -480,6 +482,9 @@ def parse_image_b64(image, *, logger=None):
         success = False
         message = f"Provided image '{image}' is neither Base64-encoded, a valid local path, or a web URL."
         image_file = image
+
+    if success:
+        message = f"Parsed image as Base64 in '{time.perf_counter() - tic:.3f}s'."
 
     return success, message, image_file, image_path
 

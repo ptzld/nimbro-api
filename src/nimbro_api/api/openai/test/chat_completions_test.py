@@ -203,10 +203,10 @@ def _text_completions(**kwargs):
     assert_log(expression=context[1] == target, message=f"Expected message '1' in context to be {target} but got {context[1]}.")
 
 def test_03_openrouter_text_completions():
-    return _text_completions(stream=False, endpoint="OpenRouter", model="google/gemini-3-flash-preview")
+    return _text_completions(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_04_openrouter_text_completions_stream():
-    return _text_completions(stream=True, endpoint="OpenRouter", model="google/gemini-3-flash-preview")
+    return _text_completions(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_05_openai_text_completions():
     return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5-chat-latest")
@@ -215,23 +215,33 @@ def test_06_openai_text_completions_stream():
     return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5-chat-latest")
 
 def test_07_mistral_text_completions():
-    return _text_completions(stream=False, endpoint="Mistral", model="mistral-large-2512")
+    return _text_completions(stream=False, endpoint="Mistral", model="mistral-large-latest")
 
 def test_08_mistral_text_completions_stream():
-    return _text_completions(stream=True, endpoint="Mistral", model="mistral-large-2512")
+    return _text_completions(stream=True, endpoint="Mistral", model="mistral-large-latest")
 
 def test_09_vllm_text_completions():
-    return _text_completions(stream=False, endpoint="AIS", model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    model = models[-1]
+    return _text_completions(stream=False, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
 
 def test_10_vllm_text_completions_stream():
-    return _text_completions(stream=True, endpoint="AIS", model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    model = models[-1]
+    return _text_completions(stream=True, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
 
 # reasoning
 
 def _reasoning_completion(**kwargs):
     client = ChatCompletions(kwargs)
 
-    text = "Respond with 'test'. Your answer must not contain anything else."
+    text = "Tell me a joke about computer scientists. Briefly reason which one you should use first."
     success, message, completion = client.prompt(text=text, reasoning_effort="low")
 
     assert_type_value(obj=success, type_or_value=bool, name="success")
@@ -262,16 +272,26 @@ def test_14_openai_reasoning_stream():
     return "NOT SUPPORTED."
 
 def test_15_mistral_reasoning():
-    return _reasoning_completion(stream=False, endpoint="Mistral", model="magistral-small-latest")
+    return _reasoning_completion(stream=False, endpoint="Mistral", model="magistral-medium-latest")
 
 def test_16_mistral_reasoning_stream():
-    return _reasoning_completion(stream=True, endpoint="Mistral", model="magistral-small-latest")
+    return _reasoning_completion(stream=True, endpoint="Mistral", model="magistral-medium-latest")
 
 def test_17_vllm_reasoning():
-    return _reasoning_completion(stream=False, endpoint="AIS", model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    model = models[-1]
+    return _reasoning_completion(stream=False, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
 
 def test_18_vllm_reasoning_stream():
-    return _reasoning_completion(stream=True, endpoint="AIS", model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    model = models[-1]
+    return _reasoning_completion(stream=True, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
 
 # interrupt
 
@@ -311,7 +331,6 @@ def _interrupt(**kwargs):
     return interrupt_message
 
 def test_19_interrupt():
-    # return _interrupt(stream=False)
     return "NOT SUPPORTED."
 
 def test_20_interrupt_stream():
@@ -341,14 +360,12 @@ def _web_search(**kwargs):
     return completion['text']
 
 def test_21_openrouter_web_search():
-    return _web_search(endpoint="OpenRouter", model="google/gemini-2.5-flash:online")
+    return _web_search(endpoint="OpenRouter", model="~google/gemini-flash-latest:online")
 
 def test_22_openai_web_search():
-    # return _web_search(endpoint="OpenAI", model="")
     return "NOT SUPPORTED."
 
 def test_23_mistral_web_search():
-    # return _web_search(endpoint="Mistral", model="")
     return "NOT SUPPORTED."
 
 def test_24_vllm_web_search():
@@ -381,16 +398,21 @@ def _image_file_input(**kwargs):
     return completion['text']
 
 def test_25_openrouter_image_file_input():
-    return _image_file_input(endpoint="OpenRouter", model="google/gemini-2.5-flash")
+    return _image_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_26_openai_image_file_input():
     return _image_file_input(endpoint="OpenAI", model="gpt-5-chat-latest")
 
 def test_27_mistral_image_file_input():
-    return _image_file_input(endpoint="Mistral", model="mistral-large-2512")
+    return _image_file_input(endpoint="Mistral", model="mistral-large-latest")
 
 def test_28_vllm_image_file_input():
-    return _image_file_input(endpoint="AIS", model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    model = models[-1]
+    return _image_file_input(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
 
 def _image_url_input(**kwargs):
     kwargs['download_image'] = False
@@ -418,16 +440,21 @@ def _image_url_input(**kwargs):
     return completion['text']
 
 def test_29_openrouter_image_url_input():
-    return _image_url_input(endpoint="OpenRouter", model="google/gemini-2.5-flash")
+    return _image_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_30_openai_image_url_input():
     return _image_url_input(endpoint="OpenAI", model="gpt-5-chat-latest")
 
 def test_31_mistral_image_url_input():
-    return _image_url_input(endpoint="Mistral", model="mistral-large-2512")
+    return _image_url_input(endpoint="Mistral", model="mistral-large-latest")
 
 def test_32_vllm_image_url_input():
-    return _image_url_input(endpoint="AIS", model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    model = models[-1]
+    return _image_url_input(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
 
 # audio input
 
@@ -456,7 +483,7 @@ def _audio_file_input(**kwargs):
     return completion['text']
 
 def test_33_openrouter_audio_file_input():
-    return _audio_file_input(endpoint="OpenRouter", model="google/gemini-2.5-flash")
+    return _audio_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_34_openai_audio_file_input():
     return _audio_file_input(endpoint="OpenAI", model="gpt-audio-2025-08-28")
@@ -493,11 +520,9 @@ def _audio_url_input(**kwargs):
     return completion['text']
 
 def test_37_openrouter_audio_url_input():
-    # return _audio_url_input(endpoint="OpenRouter", model="")
     return "NOT SUPPORTED."
 
 def test_38_openai_audio_url_input():
-    # return _audio_url_input(endpoint="OpenAI", model="gpt-audio-2025-08-28")
     return "NOT SUPPORTED."
 
 def test_39_mistral_audio_url_input():
@@ -533,25 +558,22 @@ def _video_file_input(**kwargs):
     return completion['text']
 
 def test_41_openrouter_video_file_input():
-    return _video_file_input(endpoint="OpenRouter", model="google/gemini-2.5-flash")
+    return _video_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_42_openai_video_file_input():
-    # return _video_file_input(endpoint="OpenAI", model="")
     return "NOT SUPPORTED."
 
 def test_43_mistral_video_file_input():
-    # return _video_file_input(endpoint="Mistral", model="")
     return "NOT SUPPORTED."
 
 def test_44_vllm_video_file_input():
-    endpoint = {
-        'name': "spark",
-        'api_flavor': "vllm",
-        'api_url': "http://asus-gx10-0.ais.uni-bonn.de:8000/v1/chat/completions",
-        'key_type': "plain",
-        'key_value': "xnxcScUkYIsXZ7" # This key is not secret
-    }
-    return _video_file_input(endpoint=endpoint, model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
+    # success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    # assert_log(expression=success, message=message)
+    # assert_type_value(obj=models, type_or_value=list, name="models")
+    # assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    # model = models[-1]
+    # return _video_file_input(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+    return "NOT SUPPORTED."
 
 def _video_url_input(**kwargs):
     kwargs['download_video'] = False
@@ -579,14 +601,12 @@ def _video_url_input(**kwargs):
     return completion['text']
 
 def test_45_openrouter_video_url_input():
-    return _video_url_input(endpoint="OpenRouter", model="google/gemini-2.5-flash")
+    return _video_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_46_openai_video_url_input():
-    # return _video_url_input(endpoint="OpenAI", model="")
     return "NOT SUPPORTED."
 
 def test_47_mistral_video_url_input():
-    # return _video_url_input(endpoint="Mistral", model="")
     return "NOT SUPPORTED."
 
 def test_48_vllm_video_url_input():
@@ -619,13 +639,12 @@ def _file_local_input(**kwargs):
     return completion['text']
 
 def test_49_openrouter_file_local_input():
-    return _file_local_input(endpoint="OpenRouter", model="google/gemini-2.5-flash")
+    return _file_local_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_50_openai_file_local_input():
     return _file_local_input(endpoint="OpenAI", model="gpt-5-chat-latest")
 
 def test_51_mistral_file_local_input():
-    # return _file_local_input(endpoint="Mistral", model="")
     return "NOT SUPPORTED."
 
 def test_52_vllm_file_local_input():
@@ -657,14 +676,12 @@ def _file_url_input(**kwargs):
     return completion['text']
 
 def test_53_openrouter_file_url_input():
-    return _file_url_input(endpoint="OpenRouter", model="google/gemini-2.5-flash")
+    return _file_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_54_openai_file_url_input():
-    # return _file_url_input(endpoint="OpenAI", model="")
     return "NOT SUPPORTED."
 
 def test_55_mistral_file_url_input():
-    # return _file_url_input(endpoint="Mistral", model="")
     return "NOT SUPPORTED."
 
 def test_56_vllm_file_url_input():
@@ -1296,10 +1313,10 @@ def _tool_use(**kwargs):
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
 
 def test_61_openrouter_tool_use():
-    return _tool_use(stream=False, endpoint="OpenRouter", model="google/gemini-3-flash-preview")
+    return _tool_use(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_62_openrouter_tool_use_stream():
-    return _tool_use(stream=True, endpoint="OpenRouter", model="google/gemini-3-flash-preview")
+    return _tool_use(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_63_openai_tool_use():
     return _tool_use(stream=False, endpoint="OpenAI", model="gpt-5.2-2025-12-11")
@@ -1308,13 +1325,23 @@ def test_64_openai_tool_use_stream():
     return _tool_use(stream=True, endpoint="OpenAI", model="gpt-5.2-2025-12-11")
 
 def test_65_mistral_tool_use():
-    return _tool_use(stream=False, endpoint="Mistral", model="mistral-large-2512")
+    return _tool_use(stream=False, endpoint="Mistral", model="mistral-large-latest")
 
 def test_66_mistral_tool_use_stream():
-    return _tool_use(stream=True, endpoint="Mistral", model="mistral-large-2512")
+    return _tool_use(stream=True, endpoint="Mistral", model="mistral-large-latest")
 
 def test_67_vllm_tool_use():
-    return _tool_use(endpoint="AIS", model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    model = models[-1]
+    return _tool_use(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
 
 def test_68_vllm_tool_use_stream():
-    return _tool_use(endpoint="AIS", model="ais/qwen3.5-27b", timeout_read=60, timeout_completion=60)
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    model = models[-1]
+    return _tool_use(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)

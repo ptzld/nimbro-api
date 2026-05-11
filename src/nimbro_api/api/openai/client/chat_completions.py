@@ -48,7 +48,7 @@ default_settings = {
         }
     },
     'endpoint': "OpenRouter",
-    'model': "google/gemini-3-flash-preview",
+    'model': "~google/gemini-flash-latest",
     'validate_model': 3600,
     'temperature': 1.0,
     'top_p': 1.0,
@@ -68,7 +68,7 @@ default_settings = {
     'timeout_chunk_first': 10.0,
     'timeout_chunk_next': 5.0,
     'timeout_completion': 30.0,
-    'request_safeguard': True,
+    'request_safeguard': False,
     'parser': ["string_strip.py"],
     'retry': 2
 }

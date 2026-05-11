@@ -776,7 +776,8 @@ class ClientBase:
                 self._logger.debug(f"Initializing '{prefix}' to {format_obj(new_val)}.")
             else:
                 if old_exists and old_val != new_val:
-                    self._logger.info(f"Initialized '{prefix}' to {format_obj(new_val)}.")
+                    # self._logger.info(f"Initialized '{prefix}' to {format_obj(new_val)}.")
+                    self._logger.debug(f"Initialized '{prefix}' to {format_obj(new_val)}.")
                 else:
                     self._logger.debug(f"Initialized '{prefix}' to {format_obj(new_val)}.")
             return
