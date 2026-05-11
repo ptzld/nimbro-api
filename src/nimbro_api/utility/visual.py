@@ -170,7 +170,7 @@ class ColorPalette:
             return f"{self.name}([\n\t{colors_str}\n])"
 
         colors_str = ",\n\t\t".join(repr(c) for c in self._colors)
-        group_items = (f'{name}{repr(value).replace("'", "")}' for name, value in self.groups.items())
+        group_items = (f"{name}" + repr(value).replace("'", "") for name, value in self.groups.items())
         groups_str = ",\n\t\t".join(group_items)
 
         return f"{self.name}(\n\tcolors: [\n\t\t{colors_str}\n\t],\n\tgroups: [\n\t\t{groups_str}\n\t]\n)"
