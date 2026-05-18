@@ -21,9 +21,9 @@
 | [nimbro_api.openai.ChatCompletions](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/chat_completions.py) | [Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) |
 | [nimbro_api.openai.Embeddings](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/embeddings.py) | [Embeddings](https://developers.openai.com/api/reference/resources/embeddings/methods/create) |
 | [nimbro_api.openai.Images](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/images.py) | [Images](https://developers.openai.com/api/reference/resources/images/methods/generate) |
-| [nimbro_api.openai.Speech](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/speech.py) | [Speech](https://platform.openai.com/docs/api-reference/audio/createSpeech) |
-| [nimbro_api.openai.Transcriptions](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/transcriptions.py) | [Transcriptions](https://platform.openai.com/docs/api-reference/audio/createTranscription) |
-| [nimbro_api.openai.Translations](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/translations.py) | [Translations](https://platform.openai.com/docs/api-reference/audio/createTranslation) |
+| [nimbro_api.openai.Speech](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/speech.py) | [Speech](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create) |
+| [nimbro_api.openai.Transcriptions](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/transcriptions.py) | [Transcriptions](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create) |
+| [nimbro_api.openai.Translations](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/translations.py) | [Translations](https://developers.openai.com/api/reference/resources/audio/subresources/translations/methods/create) |
 
 ##### NimbRo Vision Servers
 

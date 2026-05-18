@@ -38,14 +38,14 @@ default_settings = {
 
 class Transcriptions(Client):
     """
-    This is an implementation of OpenAI's v1 Transcriptions API (https://platform.openai.com/docs/api-reference/audio/createTranscription),
+    This is an implementation of OpenAI's v1 Transcriptions API (https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create),
     with sensible default settings and behaviors throughout, extensive capabilities for configuring endpoints and models,
     managing connections, converting audio encodings, caching responses, and logging.
     """
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing OpenAI's v1 Transcriptions API (https://platform.openai.com/docs/api-reference/audio/createTranscription).
+        Create an Client implementing OpenAI's v1 Transcriptions API (https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).
         """
         super().__init__(client_base=TranscriptionsBase, settings=settings, default_settings=default_settings, **kwargs)
 

@@ -37,14 +37,14 @@ default_settings = {
 
 class Translations(Client):
     """
-    This is an implementation of OpenAI's v1 Translations API (https://platform.openai.com/docs/api-reference/audio/createTranslation),
+    This is an implementation of OpenAI's v1 Translations API (https://developers.openai.com/api/reference/resources/audio/subresources/translations/methods/create),
     with sensible default settings and behaviors throughout, extensive capabilities for configuring endpoints and models,
     managing connections, converting audio encodings, caching responses, and logging.
     """
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing OpenAI's v1 Translations API (https://platform.openai.com/docs/api-reference/audio/createTranslation).
+        Create an Client implementing OpenAI's v1 Translations API (https://developers.openai.com/api/reference/resources/audio/subresources/translations/methods/create).
         """
         super().__init__(client_base=TranslationsBase, settings=settings, default_settings=default_settings, **kwargs)
 

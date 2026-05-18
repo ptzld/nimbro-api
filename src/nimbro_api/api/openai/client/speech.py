@@ -47,14 +47,14 @@ default_settings = {
 
 class Speech(Client):
     """
-    This is an implementation of OpenAI's v1 Speech API (https://platform.openai.com/docs/api-reference/audio/createSpeech),
+    This is an implementation of OpenAI's v1 Speech API (https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create),
     with sensible default settings and behaviors throughout, extensive capabilities for configuring endpoints and models,
     managing connections, converting audio encodings, caching responses, and logging.
     """
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing OpenAI's v1 Speech API (https://platform.openai.com/docs/api-reference/audio/createSpeech).
+        Create an Client implementing OpenAI's v1 Speech API (https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create).
         """
         super().__init__(client_base=SpeechBase, settings=settings, default_settings=default_settings, **kwargs)
 
