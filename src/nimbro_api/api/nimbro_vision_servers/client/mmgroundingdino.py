@@ -85,11 +85,10 @@ class MmGroundingDino(Client):
             overdetect_factor (float | None):
                 Filters or augments detections:
                 - Use `None` to deactivate.
-                - Use a value greater than zero to first select matched detections and then augment with the highest-confidence
-                  remaining detections (independent of prompt) until ceil(total-target-count times over-detect-factor) detections are collected.
-                  Undetected prompts are substituted by these augmentations.
-                  Values between zero and one act as a minimum count guarantee without discarding matched detections.
-                - Use zero or a negative value to forward only the matched detections without augmenting.
+                - Use a value greater than zero to first select the highest-confidence detection per prompt and then augment with the
+                  remaining detections by highest-confidence (independent of prompt) until ceil(total-target-count x overdetect_factor)
+                  detections are collected. Undetected prompts are substituted by these augmentations.
+                - Use zero or a negative value to forward only the highest-confidence detection per prompt without augmenting.
             timeout_connect (float | int | None):
                 Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
             timeout_read (float | int | None):

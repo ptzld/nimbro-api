@@ -92,7 +92,7 @@ def test_3_inference():
 
     success, message, result = client.get_response(
         image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
-        prompts=[{'object_id': 0, 'bbox': [50, 50, 100, 100]}, {'object_id': 1, 'bbox': [1000, 1000, 1200, 1200]}],
+        prompts=[{'object_id': 0, 'bbox': [50, 50, 100, 100]}, {'object_id': 1, 'bbox': [212, 245, 465, 485]}],
     )
     assert_type_value(obj=success, type_or_value=bool, name="success")
     assert_type_value(obj=message, type_or_value=str, name="message")

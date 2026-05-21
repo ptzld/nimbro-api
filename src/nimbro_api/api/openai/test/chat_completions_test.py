@@ -49,6 +49,7 @@ def test_02_endpoint():
 # text completions
 
 def _text_completions(**kwargs):
+    kwargs['reasoning_effort'] = "none"
     client = ChatCompletions(kwargs)
 
     # text completion
@@ -203,10 +204,10 @@ def _text_completions(**kwargs):
     assert_log(expression=context[1] == target, message=f"Expected message '1' in context to be {target} but got {context[1]}.")
 
 def test_03_openrouter_text_completions():
-    return _text_completions(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest")
+    return _text_completions(stream=False, endpoint="OpenRouter", model="google/gemini-3.1-flash-lite")
 
 def test_04_openrouter_text_completions_stream():
-    return _text_completions(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest")
+    return _text_completions(stream=True, endpoint="OpenRouter", model="google/gemini-3.1-flash-lite")
 
 def test_05_openai_text_completions():
     return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5-chat-latest")
@@ -260,10 +261,10 @@ def _reasoning_completion(**kwargs):
         assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
 
 def test_11_openrouter_reasoning():
-    return _reasoning_completion(stream=False, endpoint="OpenRouter", model="qwen/qwen3.5-397b-a17b")
+    return _reasoning_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_12_openrouter_reasoning_stream():
-    return _reasoning_completion(stream=True, endpoint="OpenRouter", model="qwen/qwen3.5-397b-a17b")
+    return _reasoning_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest")
 
 def test_13_openai_reasoning():
     return "NOT SUPPORTED."
@@ -348,7 +349,8 @@ def _web_search(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -386,7 +388,8 @@ def _image_file_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -428,7 +431,8 @@ def _image_url_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -471,7 +475,8 @@ def _audio_file_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -508,7 +513,8 @@ def _audio_url_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -546,7 +552,8 @@ def _video_file_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -589,7 +596,8 @@ def _video_url_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -627,7 +635,8 @@ def _file_local_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -664,7 +673,8 @@ def _file_url_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -714,7 +724,8 @@ def test_57_parallel_threads(n=100):
         assert_type_value(obj=message, type_or_value=str, name="message")
         assert_log(expression=success, message=message)
         assert_type_value(obj=completion, type_or_value=dict, name="completion")
-        assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+        assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+        assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
         assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
         assert_keys(obj=completion['usage'], keys=['duration'], mode="required", name="usage in completion")
         assert_type_value(obj=completion['usage']['duration'], type_or_value=float, name="duration of usage in completion")
@@ -777,7 +788,8 @@ def _process_worker(shared_stamps):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_keys(obj=completion['usage'], keys=['duration'], mode="required", name="usage in completion")
     assert_type_value(obj=completion['usage']['duration'], type_or_value=float, name="duration of usage in completion")
@@ -1191,7 +1203,8 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
 
@@ -1308,7 +1321,8 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
 

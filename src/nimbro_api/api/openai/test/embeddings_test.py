@@ -43,7 +43,7 @@ def test_2_endpoint():
     assert_type_value(obj=models, type_or_value=list, name="result of get_models()")
 
 def test_3_inference():
-    client = Embeddings(settings={'cache_read': False})
+    client = Embeddings(cache_read=False)
 
     # generate
     texts = ["mouse", "cat", "helicopter"] + [uuid.uuid4().hex for _ in range(3)]

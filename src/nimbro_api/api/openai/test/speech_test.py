@@ -42,7 +42,7 @@ def test_2_endpoint():
     assert_type_value(obj=models, type_or_value=list, name="result of get_models()")
 
 def test_3_inference():
-    client = Speech(settings={'cache_read': False})
+    client = Speech(cache_read=False)
 
     success, message, audio = client.get_speech(text="Hallo! Ich bin ein autonomer Haushaltsroboter der Arbeitsgruppe für Autonome Intelligente Systeme an der Universität Bonn.")
     assert_type_value(obj=success, type_or_value=bool, name="success")

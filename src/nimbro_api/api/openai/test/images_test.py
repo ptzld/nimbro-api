@@ -42,9 +42,9 @@ def test_2_endpoint():
     assert_type_value(obj=models, type_or_value=list, name="result of get_models()")
 
 def test_3_inference():
-    client = Images(settings={'cache_read': True})
+    client = Images(cache_read=False)
 
-    success, message, image = client.get_image("A cat named 'The evil power in Mirkwood'.", model="dall-e-2", quality="", style="", size="512x512")
+    success, message, image = client.get_image(prompt="A cat named 'The evil power in Mirkwood'.")
     assert_type_value(obj=success, type_or_value=bool, name="success")
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)

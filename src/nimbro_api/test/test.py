@@ -194,7 +194,7 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
 
     Args:
         api (str | None, optional):
-            The name of a specific API area to test. If `None`, all discovered APIs are processed. Defaults to `None`.
+            The name of a specific API group to test. If `None`, all discovered APIs are processed. Defaults to `None`.
         module (str | None, optional):
             A sub-string filter used to select specific test modules (files) within an API's test directory. Defaults to `None`.
         function (str | None, optional):
