@@ -968,13 +968,12 @@ class VlmGistBase(ClientBase):
                 if key in settings['structured_description'][setting]:
                     if 'width' in data['image'] and 'height' in data['image']:
                         break
-                    else:
-                        success, message, dimensions = get_image_dimensions(image=data['image']['data'], logger=self._logger)
-                        if success:
-                            data['image']['width'] = dimensions[0]
-                            data['image']['height'] = dimensions[1]
-                            break
-                        raise UnrecoverableError(message)
+                    success, message, dimensions = get_image_dimensions(image=data['image']['data'], logger=self._logger)
+                    if success:
+                        data['image']['width'] = dimensions[0]
+                        data['image']['height'] = dimensions[1]
+                        break
+                    raise UnrecoverableError(message)
             if dimensions is not None:
                 break
 
