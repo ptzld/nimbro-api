@@ -46,8 +46,6 @@ class CoreBase(ClientBase):
         # validate settings
         assert_type_value(obj=settings['logger_mute'], type_or_value=bool, name="setting 'logger_mute'")
         assert_type_value(obj=settings['logger_line_length'], type_or_value=[int, None], name="setting 'logger_mute'")
-        if isinstance(settings['logger_line_length'], int):
-            assert_log(expression=settings['logger_line_length'] > 0, message=f"Expected setting 'logger_line_length' provided as 'int' to be greater zero but got '{settings['logger_line_length']}'.")
         assert_type_value(obj=settings['logger_multi_line_prefix'], type_or_value=bool, name="setting 'logger_multi_line_prefix'")
         assert_type_value(obj=settings['keys_hide'], type_or_value=bool, name="setting 'keys_hide'")
         assert_type_value(obj=settings['keys_cache'], type_or_value=bool, name="setting 'keys_cache'")

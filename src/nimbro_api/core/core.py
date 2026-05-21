@@ -48,8 +48,10 @@ class Core(Client):
                 Logger name shown in each log identifying this object.
             logger_mute (bool):
                 Mute all logs emitted within this process regardless of any individual 'logger_severity' setting.
-            logger_line_length (int):
+            logger_line_length (int, None):
                 Total number of characters before line-wrapping for all logs emitted within this process.
+                Use `None` to obtain line length automatically based on the terminal size.
+                Use zero or below to deactivate line-wrapping.
             logger_multi_line_prefix (bool):
                 Fully prefix multi-line logs instead of indenting with whitespace only.
             keys_hide (bool):

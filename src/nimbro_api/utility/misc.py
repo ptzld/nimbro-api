@@ -682,6 +682,7 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
             The string prepended to all subsequent lines followed by a pipe character.
         line_length (int | None):
             The maximum number of characters allowed per line. If `None`, it defaults to the terminal width via `shutil.get_terminal_size()`.
+            If zero or below, there is no limit imposed.
         style (str):
             The ANSI escape sequence used to style the prefixes and line formatting.
 
@@ -708,8 +709,12 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
 
     if line_length is None:
         line_length = shutil.get_terminal_size(fallback=(float("inf"), 0)).columns
-    first_line_length = max(line_length - len(prefix_first_line) - 2, 1)
-    next_line_length = max(line_length - len(prefix_next_lines) - 2, 1)
+    if line_length <= 0:
+        first_line_length = len(string) + len(prefix_first_line)
+        next_line_length = len(string) + len(prefix_first_line)
+    else:
+        first_line_length = max(line_length - len(prefix_first_line) - 2, 1)
+        next_line_length = max(line_length - len(prefix_next_lines) - 2, 1)
 
     final_lines = []
 
