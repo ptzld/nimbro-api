@@ -5,12 +5,12 @@ default_settings = {
     'logger_severity': None,
     'logger_name': "VLM-GIST",
     'message_process': True,
-    'message_results': True,
+    'message_results': False,
     'include_image': False,
     'scene_description': {
         'skip': True,
         'message_process': True,
-        'message_results': True,
+        'message_results': False,
         'chat_completions': {
             'logger_severity': "warn",
             'endpoint': "OpenRouter",
@@ -75,22 +75,27 @@ default_settings = {
         'mmgroundingdino': {
             'logger_severity': "warn",
             'message_results': False,
-            'nms_iou': None
-        }
+            'nms_iou': None,
+            'overdetect_factor': 0.0
+        },
+        'allow_incomplete': False,
+        'allow_excessive': False
     },
     'segmentation': {
-        'skip': False,
+        'skip': True,
         'message_process': True,
         'message_results': False,
         'track': False,
         'sam2_realtime': {
             'logger_severity': "warn"
-        }
+        },
+        'allow_incomplete': False,
+        'allow_excessive': False
     },
     'batch': {
-        'logger_severity': "warn",
-        'size': 0,
-        'style': "multiprocessing",
+        'logger_severity': "info",
+        'size': 8,
+        'style': "threading",
         'retry': 2
     },
     'retry': 2
@@ -159,9 +164,11 @@ class VlmGist(Client):
                 - keys_required (list[str]): Non-empty list of required keys expected in each object of the structured description.
                 - keys_required_types (list[str]): Types for each required key, parallel to 'keys_required'.
                   Each element must be one of ["str", "bool", "int", "likert5", "likert7", "float", "unit", "list", "point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"].
+                  Note that all 'int1000' types are unnormalized to the absolute image dimensions automatically, which is reflected in the settings returned with the result, stating the regular 'int' version of the type instead of the set 'int1000' type.
                 - keys_optional (list[str]): List of optional keys that may appear in each object of the structured description.
                 - keys_optional_types (list[str]): Types for each optional key, parallel to 'keys_optional'.
                   Each element must be one of ["str", "bool", "int", "likert5", "likert7", "float", "unit", "list", "point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"].
+                  Note that all 'int1000' types are unnormalized to the absolute image dimensions automatically, which is reflected in the settings returned with the result, stating the regular 'int' version of the type instead of the set 'int1000' type.
             detection (dict):
                 Settings for the object detection step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
@@ -171,6 +178,8 @@ class VlmGist(Client):
                   This required setting 'keys_required_types' to contain exactly one box type, while 'keys_optional_types' must not contain any box types.
                 - prompt_key (str): Key from 'keys_required' in 'structured_description' whose value is used as the detection prompt for each object.
                 - mmgroundingdino (dict): Settings forwarded to `MmGroundingDino`. See its `get_settings()`.
+                - allow_incomplete (bool): If `False`, returns an error or triggers a retry unless every item in the structured description is detected.
+                - allow_excessive (bool): If `False`, returns an error or triggers a retry when an item in the structured description is detected more than once.
             segmentation (dict):
                 Settings for the instance segmentation step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
@@ -178,6 +187,8 @@ class VlmGist(Client):
                 - message_re sults (bool): Include results in the logs emitted after a segmentation step.
                 - track (bool): After initializing SAM2 with detections, run a second inference pass on the same image to obtain tracked masks. Must be `False` when 'skip' is `True`.
                 - sam2_realtime (dict): Settings forwarded to `Sam2Realtime`. See its `get_settings()`.
+                - allow_incomplete (bool): If `False`, returns an error or triggers a retry unless every detection is segmented.
+                - allow_excessive (bool): If `False`, returns an error or triggers a retry when a detection is segmented more than once.
             batch (dict):
                 Settings for processing multiple images passed to `run()`. Ignored when not passing a list of images to `run()`.
                 - logger_severity (str | None): Logger severity applied to each worker in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
@@ -220,7 +231,7 @@ class VlmGist(Client):
         """
         return self._base.wrap(0, self._base.set_settings, settings, **kwargs)
 
-    def visualize(self, result, *, image=None, output_dir=None, **kwargs):
+    def visualize(self, result, *, image=None, output_dir=None, vis_args=None, **kwargs):
         """
         Visualize the detection and segmentation results produced by `run()` on the corresponding image(s).
 
@@ -235,6 +246,8 @@ class VlmGist(Client):
                 If provided, the directory in which to save the rendered visualization(s) as PNG file(s).
                 The directory is created if it does not exist. Filenames are prefixed with the item index and a timestamp.
                 If `None`, visualizations are only returned and not written to disk. Defaults to `None`.
+            vis_args (dict | None):
+                If provided, a dictionary with keyword arguments forwarded to `nimbro_api.utility.visual.visualize_detections`. Defaults to `None`.
 
         Raises:
             UnrecoverableError: If the visual dependencies (`cv2`, `numpy`) are not available.
@@ -252,7 +265,7 @@ class VlmGist(Client):
             - Labels are taken from the 'prompt' key of each detection item.
             - The first point attribute of each item in the structured description is visualized as well.
         """
-        return self._base.wrap(2, self._base.visualize, result, image, output_dir, **kwargs)
+        return self._base.wrap(2, self._base.visualize, result, image, output_dir, vis_args, **kwargs)
 
     def run(self, image, *, scene_description=None, structured_description=None, detection=None, **kwargs):
         """

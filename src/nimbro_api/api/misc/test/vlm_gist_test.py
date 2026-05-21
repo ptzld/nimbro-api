@@ -196,6 +196,12 @@ def log_result(result):
         print_lines(string=string if len(string) < threshold else f"{string[:threshold]}...", prefix_first_line=key, prefix_next_lines=" " * len(key), line_length=200, style="")
     print(f"\nKeys: {result.keys()}")
 
+def get_target_settings(client):
+    target_settings = client.get_settings()
+    target_settings['structured_description']['keys_required_types'] = [setting.replace("int1000", "int") for setting in target_settings['structured_description']['keys_required_types']]
+    target_settings['structured_description']['keys_optional_types'] = [setting.replace("int1000", "int") for setting in target_settings['structured_description']['keys_optional_types']]
+    return target_settings
+
 def test_01_image_path():
     client = VlmGist(settings={
         'scene_description.skip': False,
@@ -208,7 +214,7 @@ def test_01_image_path():
     })
     success, message, result = client.run(image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"))
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     # log_result(result=result)
 
 def test_02_image_bytes():
@@ -229,7 +235,7 @@ def test_02_image_bytes():
     assert_type_value(obj=image_data, type_or_value=bytes, name="decoded image")
     success, message, result = client.run(image=image_data)
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     # log_result(result=result)
 
 def test_03_image_dict():
@@ -249,7 +255,7 @@ def test_03_image_dict():
     }
     success, message, result = client.run(image=image)
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(result['image'].get('metadata', None) == image['metadata'], f"Expected key 'image' in result to contain metadata but got {format_obj(result['image'])}")
     # log_result(result=result)
 
@@ -269,7 +275,7 @@ def test_04_scene_description_raw():
         scene_description=description
     )
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=result['scene_description']['data'] == description, message=f"Expected key 'data' in key 'scene_description' to match input '{description}' but got '{result['scene_description']['data']}'.")
     # log_result(result=result)
 
@@ -294,7 +300,7 @@ def test_05_scene_description_dict():
         scene_description=description
     )
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=result['scene_description'] == description, message=f"Expected key 'data' in key 'scene_description' to match input '{description}' but got '{result['scene_description']}'.")
     # log_result(result=result)
 
@@ -319,7 +325,7 @@ def test_06_structured_description_raw():
         structured_description=description
     )
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=result['structured_description']['data'] == description, message=f"Expected key 'data' in key 'structured_description' to match input '{description}' but got '{result['structured_description']['data']}'.")
     # log_result(result=result)
 
@@ -350,7 +356,7 @@ def test_07_structured_description_dict():
         structured_description=description
     )
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=result['structured_description'] == description, message=f"Expected key 'data' in key 'structured_description' to match input '{description}' but got '{result['structured_description']}'.")
     # log_result(result=result)
 
@@ -388,7 +394,7 @@ def test_08_scene_and_structured_description():
         structured_description=description
     )
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=result['scene_description'] == scene, message=f"Expected key 'data' in key 'scene_description' to match input '{scene}' but got '{result['scene_description']}'.")
     assert_log(expression=result['structured_description'] == description, message=f"Expected key 'data' in key 'structured_description' to match input '{description}' but got '{result['structured_description']}'.")
     # log_result(result=result)
@@ -420,7 +426,7 @@ def test_09_detection_raw():
         detection=detection
     )
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=result['structured_description'] == description, message=f"Expected key 'data' in key 'structured_description' to match input '{description}' but got '{result['structured_description']}'.")
     assert_log(expression=result['detection']['data'] == detection, message=f"Expected key 'data' in key 'detection' to match input '{detection}' but got '{result['detection']['data']}'.")
     # log_result(result=result)
@@ -458,7 +464,7 @@ def test_10_detection_dict():
         detection=detection
     )
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=result['structured_description'] == description, message=f"Expected key 'data' in key 'structured_description' to match input '{description}' but got '{result['structured_description']}'.")
     assert_log(expression=result['detection'] == detection, message=f"Expected key 'data' in key 'detection' to match input '{detection}' but got '{result['detection']}'.")
     # log_result(result=result)
@@ -497,7 +503,7 @@ def test_11_tracking():
         detection=detection
     )
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=result['structured_description'] == description, message=f"Expected key 'data' in key 'structured_description' to match input '{description}' but got '{result['structured_description']}'.")
     assert_log(expression=result['detection'] == detection, message=f"Expected key 'data' in key 'detection' to match input '{detection}' but got '{result['detection']}'.")
     # log_result(result=result)
@@ -532,7 +538,7 @@ def test_12_structured_description_bbox():
     })
     success, message, result = client.run(image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"))
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     # log_result(result=result)
 
 def test_13_structured_description_bbox_as_detection():
@@ -565,7 +571,7 @@ def test_13_structured_description_bbox_as_detection():
     })
     success, message, result = client.run(image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"))
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     # log_result(result=result)
 
 def test_13_parallel_threads(n=10):
@@ -577,7 +583,7 @@ def test_13_parallel_threads(n=10):
     images = [os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png")] * n
     success, message, result = client.run(image=images)
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=len(result['batch']) == len(images), message=f"Expected key 'batch' in result to contain '{len(images)}' elements but got '{len(result['batch'])}'.")
     # log_result(result=result)
     return message
@@ -591,7 +597,7 @@ def test_14_parallel_multiprocessing(n=10):
     images = [os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png")] * n
     success, message, result = client.run(image=images)
     assert_log(expression=success, message=message)
-    assert_result(success=success, message=message, result=result, settings=client.get_settings())
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     assert_log(expression=len(result['batch']) == len(images), message=f"Expected key 'batch' in result to contain '{len(images)}' elements but got '{len(result['batch'])}'.")
     # log_result(result=result)
     return message

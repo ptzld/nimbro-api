@@ -144,7 +144,7 @@ class VlmGistBase(ClientBase):
 
         # detection
         assert_type_value(obj=settings['detection'], type_or_value=dict, name="setting 'detection'")
-        assert_keys(obj=settings['detection'], keys=['skip', 'message_process', 'message_results', 'extract_from_description', 'prompt_key', 'mmgroundingdino'], mode="match", name="setting 'detection'")
+        assert_keys(obj=settings['detection'], keys=['skip', 'message_process', 'message_results', 'extract_from_description', 'prompt_key', 'mmgroundingdino', 'allow_incomplete', 'allow_excessive'], mode="match", name="setting 'detection'")
 
         # detection.skip
         assert_type_value(obj=settings['detection']['skip'], type_or_value=bool, name="setting 'detection.skip'")
@@ -172,9 +172,15 @@ class VlmGistBase(ClientBase):
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['detection']['mmgroundingdino'] = client.get_settings()
 
+        # detection.allow_incomplete
+        assert_type_value(obj=settings['detection']['allow_incomplete'], type_or_value=bool, name="setting 'detection.allow_incomplete'")
+
+        # detection.allow_excessive
+        assert_type_value(obj=settings['detection']['allow_excessive'], type_or_value=bool, name="setting 'detection.allow_excessive'")
+
         # segmentation
         assert_type_value(obj=settings['segmentation'], type_or_value=dict, name="setting 'segmentation'")
-        assert_keys(obj=settings['segmentation'], keys=['skip', 'message_process', 'message_results', 'track', 'sam2_realtime'], mode="match", name="setting 'segmentation'")
+        assert_keys(obj=settings['segmentation'], keys=['skip', 'message_process', 'message_results', 'track', 'sam2_realtime', 'allow_incomplete', 'allow_excessive'], mode="match", name="setting 'segmentation'")
 
         # segmentation.skip
         assert_type_value(obj=settings['segmentation']['skip'], type_or_value=bool, name="setting 'segmentation.skip'")
@@ -196,6 +202,12 @@ class VlmGistBase(ClientBase):
         success, message = client.set_settings(settings=settings['segmentation']['sam2_realtime'], mute=True)
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['segmentation']['sam2_realtime'] = client.get_settings()
+
+        # segmentation.allow_incomplete
+        assert_type_value(obj=settings['segmentation']['allow_incomplete'], type_or_value=bool, name="setting 'segmentation.allow_incomplete'")
+
+        # segmentation.allow_excessive
+        assert_type_value(obj=settings['segmentation']['allow_excessive'], type_or_value=bool, name="setting 'segmentation.allow_excessive'")
 
         # batch
         assert_type_value(obj=settings['batch'], type_or_value=dict, name="setting 'batch'")
@@ -227,7 +239,7 @@ class VlmGistBase(ClientBase):
         # apply settings
         return self._apply_settings(settings, mode)
 
-    def visualize(self, result, image, output_dir):
+    def visualize(self, result, image, output_dir, vis_args):
         # parse arguments
         assert_type_value(obj=output_dir, type_or_value=[None, str], name="argument 'output_dir'")
         if isinstance(output_dir, str):
@@ -247,6 +259,7 @@ class VlmGistBase(ClientBase):
             assert_type_value(obj=result['run']['settings'], type_or_value=dict, name="value of key 'run.settings' in argument 'result'")
             assert_keys(obj=result['run']['settings'], keys=['structured_description'], mode="required", name="value of key 'run.settings.structured_description' in argument 'result'")
             structured_description_settings = result['run']['settings']['structured_description']
+            detection_settings = result['run']['settings']['detection']
             assert_keys(obj=result, keys=['batch'], mode="required", name="argument 'result' of type 'batch'")
             assert_type_value(obj=result['batch'], type_or_value=list, name="value of key 'batch' in argument 'result'")
             batch = result['batch']
@@ -255,10 +268,12 @@ class VlmGistBase(ClientBase):
             assert_type_value(obj=result['structured_description'], type_or_value=dict, name="value of key 'structured_description' in argument 'result'")
             assert_keys(obj=result['structured_description'], keys=['settings'], mode="required", name="value of key 'structured_description' in argument 'result'")
             structured_description_settings = result['structured_description']['settings']
+            detection_settings = result['detection']['settings']
             batch = [result]
-        assert_type_value(obj=structured_description_settings, type_or_value=dict, name="settings of structured description")
+
+        assert_type_value(obj=structured_description_settings, type_or_value=dict, name="structured description settings")
         attribute_settings = ['keys_required', 'keys_required_types', 'keys_optional', 'keys_optional_types']
-        assert_keys(obj=structured_description_settings, keys=attribute_settings, mode="required", name="settings of structured description")
+        assert_keys(obj=structured_description_settings, keys=attribute_settings, mode="required", name="structured description settings")
         for key in attribute_settings:
             assert_type_value(obj=structured_description_settings[key], type_or_value=list, name=f"structured description setting '{key}'")
         assert_log(
@@ -273,6 +288,10 @@ class VlmGistBase(ClientBase):
             assert_type_value(obj=attribute_type, type_or_value=str, name="attribute type")
             if 'point' in attribute_type:
                 point_attributes.append((attribute_name, attribute_type))
+
+        assert_type_value(obj=detection_settings, type_or_value=dict, name="detection settings")
+        assert_keys(obj=detection_settings, keys=['prompt_key'], mode="required", name="detection settings")
+        prompt_key = detection_settings['prompt_key']
 
         # import
         try:
@@ -364,36 +383,58 @@ class VlmGistBase(ClientBase):
                 continue
 
             # collect data
-            labels = [item['prompt'] for item in batch_item['detection']['data']]
-            points = []
+            detection_data = batch_item['detection']['data']
+            detection_labels = [item['prompt'] for item in detection_data]
+            detection_points = [None] * len(detection_labels)
+
+            detection_indices_by_label = {}
+            for detection_index, detection_label in enumerate(detection_labels):
+                if detection_label not in detection_indices_by_label:
+                    detection_indices_by_label[detection_label] = []
+                detection_indices_by_label[detection_label].append(detection_index)
+
+            detection_cursor_by_label = {}
+
             if len(point_attributes) > 0:
-                for item in batch_item['structured_description']['data']:
-                    found = False
+                for item_index, item in enumerate(batch_item['structured_description']['data']):
+                    if prompt_key not in item:
+                        self._logger.warn(f"Item '{item_index}' in structured description of result '{i + 1}' of '{num_images}' misses prompt key '{prompt_key}'.")
+                        continue
+
+                    label = item[prompt_key]
+                    if label not in detection_indices_by_label:
+                        self._logger.warn(f"Result '{i + 1}' of '{num_images}' misses detection for item '{item_index}' in structured description due to missing prompt key '{label}'.")
+                        continue
+
+                    detection_indices = detection_indices_by_label[label]
+                    detection_cursor = detection_cursor_by_label.get(label, 0)
+                    detection_index = detection_indices[detection_cursor]
+                    detection_cursor_by_label[label] = (detection_cursor + 1) % len(detection_indices)
+
                     for key in item:
                         for attribute in point_attributes:
                             if key == attribute[0]:
                                 if "xy" in attribute[1]:
-                                    points.append((item[key][0], item[key][1]))
+                                    detection_points[detection_index] = (item[key][0], item[key][1])
                                 else:
-                                    points.append((item[key][1], item[key][0]))
-                                found = True
+                                    detection_points[detection_index] = (item[key][1], item[key][0])
                                 break
-                        if found:
+                        if detection_points[detection_index] is not None:
                             break
-                    if not found:
-                        points.append(None)
-            if sum(item is None for item in points):
-                points = None
-            if 'segmentation' not in batch_item:
-                boxes = [item['box_xyxy'] for item in batch_item['detection']['data']]
-                masks = None
-            elif not batch_item['segmentation']['success']:
-                self._logger.warn(f"There is no valid segmentation for image '{i + 1}' of '{num_images}': {batch_item['segmentation']['logs'][-1]}")
-                boxes = [item['box_xyxy'] for item in batch_item['detection']['data']]
+
+            if 'segmentation' not in batch_item or not batch_item['segmentation']['success']:
+                if 'segmentation' in batch_item and not batch_item['segmentation']['success']:
+                    self._logger.warn(f"There is no valid segmentation for result '{i + 1}' of '{num_images}': {batch_item['segmentation']['logs'][-1]}")
+                labels = detection_labels
+                points = detection_points
+                boxes = [item['box_xyxy'] for item in detection_data]
                 masks = None
             else:
-                boxes = [item['box_xyxy'] for item in batch_item['segmentation']['data']]
-                masks = [item['mask'] for item in batch_item['segmentation']['data']]
+                segmentation_data = batch_item['segmentation']['data']
+                labels = [detection_data[item['track_id']]['prompt'] for item in segmentation_data]
+                points = [detection_points[item['track_id']] for item in segmentation_data]
+                boxes = [item['box_xyxy'] for item in segmentation_data]
+                masks = [item['mask'] for item in segmentation_data]
                 for j, mask in enumerate(masks):
                     success, message, masks[j] = decode_b64(string=mask, logger=self._logger)
                     if success:
@@ -408,19 +449,25 @@ class VlmGistBase(ClientBase):
                         masks[j] = None
                         self._logger.warn(f"Failed to visualize mask of result '{i + 1}' of '{num_images}': {message}")
 
+            if sum(item is None for item in points) == len(points):
+                points = None
+
             # visualize
             self._logger.debug(f"Visualizing result '{i + 1}' of '{num_images}'.")
             tic = time.perf_counter()
+            if vis_args is None:
+                vis_args = {}
             try:
                 visual = visualize_detections(
                     image=images[i],
                     boxes=boxes,
                     masks=masks,
-                    labels=labels,
                     points=points,
+                    labels=labels,
                     box_format="xyxy_absolute",
                     mask_format="box_local",
                     point_format="xy_absolute",
+                    **vis_args
                 )
             except Exception:
                 self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}':\n{traceback.format_exc()}")
@@ -491,7 +538,7 @@ class VlmGistBase(ClientBase):
         if not success:
             return False, message, data
 
-        return self.finalize_result(data=data, settings=settings, stamp_global=stamp_global)
+        return self.finalize_result(data=data, settings=settings, is_worker=is_worker, stamp_global=stamp_global)
 
     def parse_arguments(self, image, scene_description, structured_description, detection, data, stamp_global):
         if isinstance(image, list):
@@ -580,7 +627,7 @@ class VlmGistBase(ClientBase):
                 success, message, data = self.read_image(image=image, settings=settings, data=data, stamp_global=stamp_global)
                 if not success:
                     return False, message, data
-
+                dummy_data['image'] = data['image']
                 success, message, dummy_data = self.parse_structured_description(settings=settings, data=dummy_data, stamp_local=None)
                 if success:
                     if not self._settings['detection']['skip'] and settings['detection']['extract_from_description'] and (not isinstance(arg, dict) or 'settings' not in arg):
@@ -599,7 +646,7 @@ class VlmGistBase(ClientBase):
             elif name == "detection":
                 prompts = [item[settings['detection']['prompt_key']] for item in data['structured_description']['data']]
                 dummy_data['structured_description'] = {'data': data['structured_description']['data']}
-                success, message, dummy_data = self.parse_detection(data=dummy_data, prompts=prompts, stamp_local=None)
+                success, message, dummy_data = self.parse_detection(data=dummy_data, settings=settings, prompts=prompts, stamp_local=None)
                 if success:
                     if isinstance(arg, dict):
                         if dummy_data[name]['data'] != data[name]['data']:
@@ -627,6 +674,9 @@ class VlmGistBase(ClientBase):
         # full settings here instead of individual results
         data['run']['type'] = "batch"
         data['run']['settings'] = copy.deepcopy(settings)
+        for key in ['keys_required_types', 'keys_optional_types']:
+            for i, _type in enumerate(settings['structured_description'][key]):
+                data['run']['settings']['structured_description'][key][i] = _type.replace("[int1000]", "[int]")
 
         # forward parsed arguments
         scene_description = data.get('scene_description')
@@ -687,6 +737,12 @@ class VlmGistBase(ClientBase):
         if isinstance(image, dict):
             assert_keys(obj=image, keys=['stamp', 'success', 'logs', 'path', 'duration'], mode="blacklist", name="image provided as 'dict'")
             assert_keys(obj=image, keys=['data'], mode="required", name="image provided as 'dict'")
+            width = image.get('width', 1)
+            assert_type_value(obj=width, type_or_value=int, name="key 'width' in image provided as 'dict'")
+            assert_log(expression=width > 0, message=f"Expected value of key 'width' in image provided as 'dict' to greater zero but got '{width}'.")
+            height = image.get('height', 1)
+            assert_type_value(obj=height, type_or_value=int, name="key 'height' in image provided as 'dict'")
+            assert_log(expression=height > 0, message=f"Expected value of key 'height' in image provided as 'dict' to greater zero but got '{height}'.")
             metadata = copy.deepcopy(image)
             image = metadata.pop('data')
         else:
@@ -910,12 +966,15 @@ class VlmGistBase(ClientBase):
         for key in ["point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int1000]", "box_yxyx[int1000]"]:
             for setting in ['keys_required_types', 'keys_optional_types']:
                 if key in settings['structured_description'][setting]:
-                    success, message, dimensions = get_image_dimensions(image=data['image']['data'], logger=self._logger)
-                    if success:
-                        data['image']['width'] = dimensions[0]
-                        data['image']['height'] = dimensions[1]
+                    if 'width' in data['image'] and 'height' in data['image']:
                         break
-                    raise UnrecoverableError(message)
+                    else:
+                        success, message, dimensions = get_image_dimensions(image=data['image']['data'], logger=self._logger)
+                        if success:
+                            data['image']['width'] = dimensions[0]
+                            data['image']['height'] = dimensions[1]
+                            break
+                        raise UnrecoverableError(message)
             if dimensions is not None:
                 break
 
@@ -1127,7 +1186,7 @@ class VlmGistBase(ClientBase):
             data['detection']['logs'] = [message]
         if data['detection']['success']:
             data['detection']['raw'] = detection
-            success, message, data = self.parse_detection(data=data, prompts=prompts, stamp_local=stamp_local)
+            success, message, data = self.parse_detection(data=data, settings=settings, prompts=prompts, stamp_local=stamp_local)
             if success:
                 # log
                 num_detected = len(data['detection']['data'])
@@ -1145,14 +1204,13 @@ class VlmGistBase(ClientBase):
 
         return self.consolidate_error(key='detection', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
-    def parse_detection(self, data, prompts, stamp_local):
+    def parse_detection(self, data, settings, prompts, stamp_local):
         detection = copy.deepcopy(data['detection']['raw'])
 
         if not isinstance(detection, list):
             return False, f"Expected detection to be of type 'list' but got '{type(detection).__name__}'.", data
         required_format = {'box_xyxy': list, 'confidence': float, 'prompt': str}
         required_keys = {'box_xyxy', 'prompt'}
-        detection_prompts = []
         for i, item in enumerate(detection):
             if not isinstance(item, dict):
                 return False, f"Expected detection '{i}' to be of type 'dict' but got '{type(item).__name__}'.", data
@@ -1171,30 +1229,70 @@ class VlmGistBase(ClientBase):
                     return False, f"Expected element '{j}' in value of key 'box_xyxy' in detection '{i}' to be a non-negative integer but got '{sub_item}'.", data
             if item['box_xyxy'][2] <= item['box_xyxy'][0] or item['box_xyxy'][3] <= item['box_xyxy'][1]:
                 return False, f"Expected value of key 'box_xyxy' in detection '{i}' to be a valid bounding box (x0, y0, x1, y1) but got '{item['box_xyxy']}'.", data
-            detection_prompts.append(item['prompt'])
 
         prompt_counts_initial = count_duplicates(iterable=prompts, include_unique=True)
+
+        if settings['detection']['allow_excessive']:
+            detection_filtered = []
+            for item in detection:
+                prompt = item['prompt']
+                if prompt in prompt_counts_initial:
+                    detection_filtered.append(item)
+                else:
+                    prompt_str = prompt.replace("\n", "\\n")
+                    data['detection']['logs'].append(f"Discarded detection with unexpected prompt '{prompt_str}'.")
+                    self._logger.warn(data['detection']['logs'][-1])
+        else:
+            items_by_prompt = {prompt: [] for prompt in prompt_counts_initial}
+            for i, item in enumerate(detection):
+                prompt = item['prompt']
+                if prompt in prompt_counts_initial:
+                    items_by_prompt[prompt].append((i, item))
+                else:
+                    prompt_str = prompt.replace("\n", "\\n")
+                    data['detection']['logs'].append(f"Discarded detection with unexpected prompt '{prompt_str}'.")
+                    self._logger.warn(data['detection']['logs'][-1])
+            keep_indices = set()
+            for prompt, items in items_by_prompt.items():
+                requested_count = prompt_counts_initial[prompt]
+                selected = sorted(items, key=lambda pair: pair[1].get('confidence', float('-inf')), reverse=True)[:requested_count]
+                selected_indices = {i for i, _ in selected}
+                keep_indices.update(selected_indices)
+                if len(items) > requested_count:
+                    prompt_str = prompt.replace("\n", "\\n")
+                    for i, item in items:
+                        if i not in selected_indices:
+                            data['detection']['logs'].append(f"Discarded excessive detection with prompt '{prompt_str}'.")
+                            self._logger.warn(data['detection']['logs'][-1])
+            detection_filtered = [item for i, item in enumerate(detection) if i in keep_indices]
+
+        detection = detection_filtered
+        detection_prompts = [item['prompt'] for item in detection]
         prompt_counts = copy.deepcopy(prompt_counts_initial)
         detection_counts = count_duplicates(iterable=detection_prompts, include_unique=True)
-        for prompt in detection_counts:
-            if prompt not in prompt_counts_initial:
-                prompt_str = prompt.replace("\n", "\\n")
-                return False, f"Detected unexpected prompt '{prompt_str}' which was not requested.", data
+
         for prompt in prompt_counts_initial:
-            prompt_str = prompt.replace("\n", "\\n")
             prompt_counts[prompt] -= detection_counts.get(prompt, 0)
             if prompt_counts[prompt] > 0:
-                return False, f"Failed to detect '{prompt_counts[prompt]}' instance{'' if prompt_counts[prompt] == 1 else 's'} of prompt '{prompt_str}' requested '{prompt_counts_initial[prompt]}' time{'' if prompt_counts_initial[prompt] == 1 else 's'}.", data
+                prompt_str = prompt.replace("\n", "\\n")
+                message = f"Failed to detect '{prompt_counts[prompt]}' instance{'' if prompt_counts[prompt] == 1 else 's'} of prompt '{prompt_str}' requested '{prompt_counts_initial[prompt]}' time{'' if prompt_counts_initial[prompt] == 1 else 's'}."
+                if not settings['detection']['allow_incomplete']:
+                    return False, message, data
+                data['detection']['logs'].append(message)
+                self._logger.warn(data['detection']['logs'][-1])
             if prompt_counts[prompt] < 0:
+                prompt_str = prompt.replace("\n", "\\n")
                 data['detection']['logs'].append(f"Over-detected '{-prompt_counts[prompt]}' instance{'' if prompt_counts[prompt] == -1 else 's'} of prompt '{prompt_str}' requested '{prompt_counts_initial[prompt]}' time{'' if prompt_counts_initial[prompt] == 1 else 's'}.")
-                self._logger.debug(data['detection']['logs'])
+                self._logger.debug(data['detection']['logs'][-1])
 
         if data['detection']['raw'] == detection:
             del data['detection']['raw']
             data['detection']['logs'].append("Removed raw data identical to validated data (detection).")
             self._logger.debug(data['detection']['logs'][-1])
+
         data['detection']['data'] = detection
         data['detection']['logs'].append("Validated detection.")
+
         if stamp_local is not None:
             data['detection']['duration'] = time.perf_counter() - stamp_local
 
@@ -1231,7 +1329,7 @@ class VlmGistBase(ClientBase):
                 data['segmentation']['logs'].append(message)
         if data['segmentation']['success']:
             data['segmentation']['raw'] = segmentation
-            success, message, data = self.parse_segmentation(data=data, stamp_local=stamp_local)
+            success, message, data = self.parse_segmentation(data=data, settings=settings, stamp_local=stamp_local)
             if success:
                 # log
                 num_segmented = len(data['segmentation']['data'])
@@ -1247,7 +1345,7 @@ class VlmGistBase(ClientBase):
 
         return self.consolidate_error(key='segmentation', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
-    def parse_segmentation(self, data, stamp_local):
+    def parse_segmentation(self, data, settings, stamp_local):
         segmentation = copy.deepcopy(data['segmentation']['raw'])
 
         if not isinstance(segmentation, list):
@@ -1276,16 +1374,41 @@ class VlmGistBase(ClientBase):
             track_ids_grouped.setdefault(item['track_id'], []).append(item)
 
         segmentation_filtered = []
-        for i in range(len(data['detection']['data'])):
+        num_detections = len(data['detection']['data'])
+
+        for track_id, items in track_ids_grouped.items():
+            if track_id < 0 or track_id >= num_detections:
+                for item in items:
+                    data['segmentation']['logs'].append(f"Discarded segmentation with unexpected track ID '{track_id}'.")
+                    self._logger.warn(data['segmentation']['logs'][-1])
+
+        for i in range(num_detections):
             if i not in track_ids_grouped:
-                return False, f"Failed to segment detection '{i}' for prompt '{data['detection']['data'][i]['prompt']}'.", data
+                prompt_str = data['detection']['data'][i]['prompt'].replace("\n", "\\n")
+                message = f"Failed to segment detection '{i}' for prompt '{prompt_str}'."
+                if not settings['segmentation']['allow_incomplete']:
+                    return False, message, data
+                data['segmentation']['logs'].append(message)
+                self._logger.warn(data['segmentation']['logs'][-1])
+                continue
             items = track_ids_grouped[i]
             if len(items) > 1:
-                excess = len(items) - 1
-                items[0] = max(items, key=lambda x: (x['box_xyxy'][2] - x['box_xyxy'][0]) * (x['box_xyxy'][3] - x['box_xyxy'][1]))
-                data['segmentation']['logs'].append(f"Discarded '{excess}' excessive segmentation{'' if excess == 1 else 's'} of detection '{i}' for prompt '{data['detection']['data'][i]['prompt']}' and kept the largest one.")
-                self._logger.warn(data['segmentation']['logs'][-1])
-            segmentation_filtered.append(items[0])
+                if settings['segmentation']['allow_excessive']:
+                    segmentation_filtered.extend(items)
+                    excess = len(items) - 1
+                    prompt_str = data['detection']['data'][i]['prompt'].replace("\n", "\\n")
+                    data['segmentation']['logs'].append(f"Over-segmented '{excess}' instance{'' if excess == 1 else 's'} of detection '{i}' for prompt '{prompt_str}'.")
+                    self._logger.debug(data['segmentation']['logs'][-1])
+                else:
+                    selected = max(items, key=lambda item: (item['box_xyxy'][2] - item['box_xyxy'][0]) * (item['box_xyxy'][3] - item['box_xyxy'][1]))
+                    for item in items:
+                        if item is not selected:
+                            prompt_str = data['detection']['data'][i]['prompt'].replace("\n", "\\n")
+                            data['segmentation']['logs'].append(f"Discarded excessive segmentation of detection '{i}' for prompt '{prompt_str}'.")
+                            self._logger.warn(data['segmentation']['logs'][-1])
+                    segmentation_filtered.append(selected)
+            else:
+                segmentation_filtered.append(items[0])
 
         if data['segmentation']['raw'] == segmentation_filtered:
             del data['segmentation']['raw']
@@ -1293,7 +1416,8 @@ class VlmGistBase(ClientBase):
             self._logger.debug(data['segmentation']['logs'][-1])
         data['segmentation']['data'] = segmentation_filtered
         data['segmentation']['logs'].append("Validated segmentation.")
-        data['segmentation']['duration'] = time.perf_counter() - stamp_local
+        if stamp_local is not None:
+            data['segmentation']['duration'] = time.perf_counter() - stamp_local
 
         return True, data['segmentation']['logs'][-1], data
 
@@ -1317,9 +1441,14 @@ class VlmGistBase(ClientBase):
 
         return False, data['run']['message'], data
 
-    def finalize_result(self, data, settings, stamp_global):
+    def finalize_result(self, data, settings, is_worker, stamp_global):
         if not settings['include_image']:
             del data['image']['data']
+
+        if not is_worker and 'structured_description' in data and 'settings' in data['structured_description']:
+            for key in ['keys_required_types', 'keys_optional_types']:
+                for i, _type in enumerate(settings['structured_description'][key]):
+                    data['structured_description']['settings'][key][i] = _type.replace("[int1000]", "[int]")
 
         data['run']['success'] = True
         duration = time.perf_counter() - stamp_global
