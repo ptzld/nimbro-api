@@ -16,11 +16,11 @@ default_settings = {
         }
     },
     'endpoint': "OpenAI",
-    'model': "dall-e-3",
+    'model': "gpt-image-2",
     'validate_model': 3600,
-    'quality': "hd",
-    'style': "vivid",
-    'size': "1792x1024",
+    'quality': "high",
+    'style': "",
+    'size': "1024x1024",
     'timeout_connect': 2.0,
     'timeout_read': 60.0,
     'return_path': True,
@@ -34,14 +34,14 @@ default_settings = {
 
 class Images(Client):
     """
-    This is an implementation of OpenAI's v1 Images API (https://platform.openai.com/docs/api-reference/images),
+    This is an implementation of OpenAI's v1 Images API (https://developers.openai.com/api/reference/resources/images/methods/generate),
     with sensible default settings and behaviors throughout, extensive capabilities for configuring endpoints
     and models, managing connections, converting image encodings, caching responses, and logging.
     """
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing OpenAI's v1 Images API (https://platform.openai.com/docs/api-reference/images).
+        Create an Client implementing OpenAI's v1 Images API (https://developers.openai.com/api/reference/resources/images/methods/generate).
         """
         super().__init__(client_base=ImagesBase, settings=settings, default_settings=default_settings, **kwargs)
 

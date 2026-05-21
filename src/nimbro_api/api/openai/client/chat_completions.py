@@ -55,7 +55,7 @@ default_settings = {
     'max_tokens': 5000,
     'presence_penalty': 0.0,
     'frequency_penalty': 0.0,
-    'reasoning_effort': "none",
+    'reasoning_effort': "minimal",
     'download_image': False,
     'download_audio': True,
     'download_video': False,

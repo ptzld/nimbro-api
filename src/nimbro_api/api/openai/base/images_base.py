@@ -42,7 +42,7 @@ class ImagesBase(ClientBase):
             assert_type_value(obj=settings['endpoint'], type_or_value=list(settings['endpoints'].keys()), name="setting 'endpoint'")
 
         # model
-        assert_type_value(obj=settings['model'], type_or_value=["gpt-image-1", "dall-e-3", "dall-e-2"], name="setting 'model'")
+        assert_type_value(obj=settings['model'], type_or_value=str, name="setting 'model'")
 
         # validate_model
         assert_type_value(obj=settings['validate_model'], type_or_value=[float, int, bool], name="setting 'validate_model'")
@@ -53,7 +53,7 @@ class ImagesBase(ClientBase):
             )
 
         # quality, style, size
-        if settings['model'] == "gpt-image-1":
+        if "gpt-image" in settings['model']:
             assert_type_value(obj=settings['quality'], type_or_value=["auto", "high", "medium", "low"], name=f"setting 'quality' for model '{settings['model']}'")
             assert_type_value(obj=settings['style'], type_or_value="", name=f"setting 'style' for model '{settings['model']}'")
             assert_type_value(obj=settings['size'], type_or_value=["auto", "1024x1024", "1536x1024", "1024x1536"], name=f"setting 'size' for model '{settings['model']}'")
@@ -65,8 +65,6 @@ class ImagesBase(ClientBase):
             assert_type_value(obj=settings['quality'], type_or_value="", name=f"setting 'quality' for model '{settings['model']}'")
             assert_type_value(obj=settings['style'], type_or_value="", name=f"setting 'style' for model '{settings['model']}'")
             assert_type_value(obj=settings['size'], type_or_value=["256x256", "512x512", "1024x1024"], name=f"setting 'size' for model '{settings['model']}'")
-        else:
-            raise NotImplementedError(f"Unknown model name '{self._settings['model']}'.")
 
         # timeout_connect
         assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
@@ -411,7 +409,7 @@ class ImagesBase(ClientBase):
             'size': self._settings['size'],
             'n': 1
         }
-        if self._settings['model'] == "gpt-image-1":
+        if "gpt-image" in self._settings['model']:
             data['quality'] = self._settings['quality']
             data['background'] = "auto"
             data['moderation'] = "low"
@@ -421,10 +419,8 @@ class ImagesBase(ClientBase):
             data['quality'] = self._settings['quality']
             data['style'] = self._settings['style']
             data['response_format'] = "b64_json"
-        elif self._settings['model'] == "dall-e-2":
-            data['response_format'] = "b64_json"
         else:
-            raise NotImplementedError(f"Unknown model name '{self._settings['model']}'.")
+            data['response_format'] = "b64_json"
 
         # use API
         success, message, response = post_request(
