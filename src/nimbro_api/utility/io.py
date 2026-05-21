@@ -103,13 +103,17 @@ def download_file(url, *, retry=1, name="file", logger=None):
                 logger.warn(_message)
             return True, message, data
 
-def read_json(file_path, *, name="file", logger=None):
+def read_json(file_path, *, bypass_orjson=False, name="file", logger=None):
     """
     Read and decode a JSON file.
 
     Args:
         file_path (str):
             Path to the JSON file.
+        bypass_orjson (bool):
+            Uses the standard 'json' module for decoding, regardless of 'orjson' availability,
+            to enable decoding integers above 64bit without loss of precision or conversion to float.
+            Defaults to `False`.
         name (str, optional):
             Descriptive name for logging. Defaults to "file".
         logger (nimbro_api.utility.logger.Logger | None, optional):
@@ -154,11 +158,11 @@ def read_json(file_path, *, name="file", logger=None):
             logger.debug(f"Reading {name} '{file_path}'.")
 
         try:
-            if ORJSON_AVAILABLE:
+            if ORJSON_AVAILABLE and not bypass_orjson:
                 with open(file_path, "rb") as f:
                     json_object = orjson.loads(f.read())
             else:
-                if logger is not None:
+                if logger is not None and not bypass_orjson:
                     logger.debug(f"Using slow 'json' module to read {name}. Install 'orjson' (pip install orjson) to speed this up!", once=True)
                 with open(file_path, 'r', encoding='utf-8') as f:
                     json_object = json.load(f)
