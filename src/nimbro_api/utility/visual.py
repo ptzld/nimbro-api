@@ -236,7 +236,7 @@ kelly_colors = ColorPalette(
     groups={'accent': ['yellow', 'purple', 'orange', 'aqua', 'red', 'buff', 'green', 'pink', 'blue', 'papaya', 'violet', 'manilla', 'plum', 'lemon', 'brown', 'lime', 'dirt', 'crimson', 'olive']}
 )
 
-def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=None, box_format="xyxy_normalized", point_format="xy_normalized", is_rgb=False, **kwargs):
+def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=None, is_rgb=False, **kwargs):
     """
     Draws bounding boxes, masks, labels, and points on an image with customizable options.
 
@@ -251,27 +251,20 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=N
             A list of boolean masks corresponding to detections.
             Each mask must be of type `list`, `tuple`, `np.ndarray`, or `None`.
             Use `None` or a list containing `None` to not show masks. Defaults to `None`.
-        labels (list | None, optional):
-            List of string labels for each detection. Use `None` to deactivate all or a single label.
-            Providing a label for a detection requires that the detection also has a box. Defaults to `None`.
         points (list | tuple | numpy.ndarray | None, optional):
             A list of points (one per detection) pointing to the object. Each point must be a
             2-element sequence (x, y) according to 'point_format', or `None` to indicate that a
             detection has no point. Defaults to `None`.
-        box_format (str, optional):
-            Format of the input boxes. See `convert_boxes()`.
-            One of ["xyxy_normalized", "xyxy_absolute", "xywh_normalized", "xywh_absolute"].
-            Defaults to 'xyxy_normalized'.
-        point_format (str, optional):
-            Format of the input points. One of ["xy_normalized", "xy_absolute"].
-            For 'xy_normalized', coordinates are floats in [0.0, 1.0].
-            For 'xy_absolute', coordinates are non-negative integer pixel coordinates.
-            Defaults to 'xy_normalized'.
+        labels (list | None, optional):
+            List of string labels for each detection. Use `None` to deactivate all or a single label.
+            Providing a label for a detection requires that the detection also has a box. Defaults to `None`.
         is_rgb (bool, optional):
             For 3-channel NumPy inputs, indicates if the data is in RGB (`True`) or BGR (`False`) order.
             Defaults to `False`.
 
         **kwargs:
+            alpha (float):
+                Global opacity of the visualization in (0.0, 1.0]. Defaults to 0.9.
             colors (str | list | tuple | dict):
                 Defines the main colors of the visualization.
                     - Use 'auto' to automatically set a color per detection.
@@ -279,15 +272,80 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=N
                     - Pass a list of 3-tuples (tuple | list) defining an 8-bit BGR color per detection.
                     - Pass a dict mapping detection labels (str | None) to colors as 3-tuples (tuple | list) of 8-bit BGR integers.
                 Defaults to 'auto_class'.
-            alpha (float):
-                Global opacity of the visualization in (0.0, 1.0]. Defaults to 0.9.
+            auto_color_palette (ColorPalette):
+                Color palette used for automatic color selection. Defaults to `nimbro_colors`.
+            auto_color_shuffle (bool):
+                Shuffle automatic color selection. Defaults to `False`.
+            draw_order (str):
+                Order in which detections are drawn in ['size', 'input'],
+                where 'size' uses the bounding box area in descending order
+                and 'input' iterates detections as is. Defaults to 'size'.
+
+            box_alpha (float):
+                Opacity of the box borders in [0.0, 1.0]. Defaults to 1.0.
             box_thickness (float):
                 Thickness of the boxes relative to the smaller image dimension in (0.0, 1.0].
                 Defaults to 0.004.
+            box_format (str, optional):
+                Format of the input boxes. See `convert_boxes()`.
+                One of ["xyxy_normalized", "xyxy_absolute", "xywh_normalized", "xywh_absolute"].
+                Defaults to 'xyxy_normalized'.
             fill_alpha (float):
                 Opacity of the filled box area in [0.0, 1.0]. Defaults to 0.0.
-            box_alpha (float):
-                Opacity of the box borders in [0.0, 1.0]. Defaults to 1.0.
+
+            mask_color (str | list | tuple | None):
+                Defines the colors of the masks.
+                    - Use 'auto' to adopt the color of the detection.
+                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all masks.
+                    - Use `None` to adopt the color of the detection.
+                Defaults to 'auto'.
+            mask_alpha (float):
+                Opacity of the masks in [0.0, 1.0]. Defaults to 0.25.
+            mask_format (str):
+                Format of the input masks in ['box_local', 'full_image'].
+                Use 'box_local' for masks in the spatial extent of the corresponding box.
+                Use 'full_image' for masks in the spatial extent of the full image.
+                Defaults to 'box_local'.
+            contour_thickness (float):
+                Thickness of mask contours relative to the smaller image dimension in [0.0, 1.0].
+                Defaults to 0.0005.
+            contour_color (str | list | tuple | None):
+                Defines the colors of the mask contours.
+                    - Use 'auto' to adopt the color of the detection.
+                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all mask contours.
+                    - Use `None` to adopt the color of the detection.
+                Defaults to 'auto'.
+            contour_alpha (float):
+                Opacity of the contours around masks in [0.0, 1.0]. Defaults to 0.6.
+
+            point_radius (float):
+                Radius of the point marker relative to the smaller image dimension in [0.0, 1.0].
+                Defaults to 0.007.
+            point_color (str | list | tuple | None):
+                Defines the fill colors of the points.
+                    - Use 'auto' to adopt the color of the detection.
+                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all points.
+                    - Use `None` to adopt the color of the detection.
+                Defaults to 'auto'.
+            point_alpha (float):
+                Opacity of the point fill in [0.0, 1.0]. Defaults to 0.9.
+            point_outline_thickness (float):
+                Thickness of the point outline relative to the smaller image dimension in [0.0, 1.0].
+                Use 0.0 to disable the outline. Defaults to 0.0005.
+            point_outline_color (str | list | tuple | None):
+                Defines the colors of the point outlines.
+                    - Use 'auto' to automatically select black or white per point based on contrast towards the point fill color.
+                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all point outlines.
+                    - Use `None` to adopt the color of the detection.
+                Defaults to 'auto'.
+            point_outline_alpha (float):
+                Opacity of the point outline in [0.0, 1.0]. Defaults to 0.9.
+            point_format (str, optional):
+                Format of the input points. One of ["xy_normalized", "xy_absolute"].
+                For 'xy_normalized', coordinates are floats in [0.0, 1.0].
+                For 'xy_absolute', coordinates are non-negative integer pixel coordinates.
+                Defaults to 'xy_normalized'.
+
             label_font_size (float):
                 Font size relative to the smaller image dimension in (0.0, 1.0].
                 Defaults to 0.022.
@@ -313,60 +371,6 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=N
                 Opacity of the label texts in (0.0, 1.0]. Defaults to 1.0.
             label_background_alpha (float):
                 Opacity of the label background in [0.0, 1.0]. Defaults to 1.0.
-            mask_color (str | list | tuple | None):
-                Defines the colors of the masks.
-                    - Use 'auto' to adopt the color of the detection.
-                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all masks.
-                    - Use `None` to adopt the color of the detection.
-                Defaults to 'auto'.
-            mask_alpha (float):
-                Opacity of the masks in [0.0, 1.0]. Defaults to 0.25.
-            contour_thickness (float):
-                Thickness of mask contours relative to the smaller image dimension in [0.0, 1.0].
-                Defaults to 0.0005.
-            contour_color (str | list | tuple | None):
-                Defines the colors of the mask contours.
-                    - Use 'auto' to adopt the color of the detection.
-                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all mask contours.
-                    - Use `None` to adopt the color of the detection.
-                Defaults to 'auto'.
-            contour_alpha (float):
-                Opacity of the contours around masks in [0.0, 1.0]. Defaults to 0.6.
-            point_radius (float):
-                Radius of the point marker relative to the smaller image dimension in [0.0, 1.0].
-                Defaults to 0.007.
-            point_color (str | list | tuple | None):
-                Defines the fill colors of the points.
-                    - Use 'auto' to adopt the color of the detection.
-                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all points.
-                    - Use `None` to adopt the color of the detection.
-                Defaults to 'auto'.
-            point_alpha (float):
-                Opacity of the point fill in [0.0, 1.0]. Defaults to 0.9.
-            point_outline_thickness (float):
-                Thickness of the point outline relative to the smaller image dimension in [0.0, 1.0].
-                Use 0.0 to disable the outline. Defaults to 0.0005.
-            point_outline_color (str | list | tuple | None):
-                Defines the colors of the point outlines.
-                    - Use 'auto' to automatically select black or white per point based on contrast towards the point fill color.
-                    - Pass a 3-tuple (tuple | list) defining an 8-bit BGR color for all point outlines.
-                    - Use `None` to adopt the color of the detection.
-                Defaults to 'auto'.
-            point_outline_alpha (float):
-                Opacity of the point outline in [0.0, 1.0]. Defaults to 0.9.
-            auto_color_palette (ColorPalette):
-                Color palette used for automatic color selection. Defaults to `nimbro_colors`.
-            auto_color_shuffle (bool):
-                Shuffle automatic color selection. Defaults to `False`.
-            draw_order (str):
-                Order in which detections are drawn in ['size', 'input'],
-                where 'size' uses the bounding box area in descending order
-                and 'input' iterates detections as is. Defaults to 'size'.
-            mask_format (str):
-                Format of the input masks in ['box_local', 'full_image'].
-                Use 'box_local' for masks in the spatial extent of the corresponding box.
-                Use 'full_image' for masks in the spatial extent of the full image.
-                Defaults to 'box_local'.
 
     Raises:
         UnrecoverableError: If input arguments are invalid.
@@ -389,8 +393,6 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=N
         image = cv2.imdecode(image, cv2.IMREAD_COLOR)
         is_rgb = False # cv2 explicitly decodes as BGR
 
-    assert_type_value(obj=box_format, type_or_value=["xyxy_normalized", "xyxy_absolute", "xywh_normalized", "xywh_absolute"], name="argument 'box_format'")
-    assert_type_value(obj=point_format, type_or_value=["xy_normalized", "xy_absolute"], name="argument 'point_format'")
     assert_type_value(obj=boxes, type_or_value=[list, tuple, np.ndarray, None], name="argument 'boxes'")
     assert_type_value(obj=masks, type_or_value=[list, tuple, None], name="argument 'masks'")
     assert_type_value(obj=labels, type_or_value=[list, tuple, None], name="argument 'labels'")
@@ -404,8 +406,8 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=N
 
     num_boxes = 0 if boxes is None else len(boxes)
     num_masks = 0 if masks is None else len(masks)
-    num_labels = 0 if labels is None else len(labels)
     num_points = 0 if points is None else len(points)
+    num_labels = 0 if labels is None else len(labels)
     num_detections = max(num_boxes, num_masks, num_labels, num_points)
 
     if boxes is None:
@@ -418,16 +420,93 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=N
     else:
         assert_log(expression=len(masks) == num_detections, message=f"Expected number of values in argument 'masks' to match the number of detections '{num_detections}' but got '{len(masks)}'.")
 
-    if labels is None:
-        labels = [None] * num_detections
-    else:
-        assert_log(expression=len(labels) == num_detections, message=f"Expected number of values in argument 'labels' to match the number of detections '{num_detections}' but got '{len(labels)}'.")
-
     if points is None:
         points = [None] * num_detections
     else:
         assert_log(expression=len(points) == num_detections, message=f"Expected number of values in argument 'points' to match the number of detections '{num_detections}' but got '{len(points)}'.")
 
+    if labels is None:
+        labels = [None] * num_detections
+    else:
+        assert_log(expression=len(labels) == num_detections, message=f"Expected number of values in argument 'labels' to match the number of detections '{num_detections}' but got '{len(labels)}'.")
+
+    for i, label in enumerate(labels):
+        assert_type_value(obj=label, type_or_value=[str, None], name=f"item '{i}' in argument 'labels'")
+
+    for i in range(num_detections):
+        if labels[i] is not None:
+            assert_log(expression=boxes[i] is not None, message=f"Expected a box for detection '{i}' because a label was provided.")
+
+    alpha = kwargs.pop('alpha', 0.9)
+    colors = kwargs.pop('colors', "auto_class")
+    auto_color_palette = kwargs.pop('auto_color_palette', nimbro_colors if num_detections > 10 else nimbro_colors.ten)
+    auto_color_shuffle = kwargs.pop('auto_color_shuffle', False)
+    draw_order = kwargs.pop('draw_order', "size")
+
+    box_alpha = kwargs.pop('box_alpha', 1.0)
+    box_thickness = kwargs.pop('box_thickness', 0.004)
+    box_format = kwargs.pop('box_format', "xyxy_normalized")
+    fill_alpha = kwargs.pop('fill_alpha', 0.0)
+
+    mask_color = kwargs.pop('mask_color', "auto")
+    mask_alpha = kwargs.pop('mask_alpha', 0.25)
+    mask_format = kwargs.pop('mask_format', "box_local")
+    contour_thickness = kwargs.pop('contour_thickness', 0.0005)
+    contour_color = kwargs.pop('contour_color', "auto")
+    contour_alpha = kwargs.pop('contour_alpha', 0.6)
+
+    point_radius = kwargs.pop('point_radius', 0.007)
+    point_color = kwargs.pop('point_color', "auto")
+    point_alpha = kwargs.pop('point_alpha', 0.9)
+    point_outline_thickness = kwargs.pop('point_outline_thickness', 0.0005)
+    point_outline_color = kwargs.pop('point_outline_color', "auto")
+    point_outline_alpha = kwargs.pop('point_outline_alpha', 0.9)
+    point_format = kwargs.pop('point_format', "xy_normalized")
+
+    label_font_size = kwargs.pop('label_font_size', 0.022)
+    label_font_path = kwargs.pop("label_font_path", str(files("nimbro_api").joinpath("fonts", "DejaVuSans.ttf")))
+    label_padding = kwargs.pop('label_padding', 0.006)
+    label_text_color = kwargs.pop('label_text_color', "auto")
+    label_background_color = kwargs.pop('label_background_color', "auto")
+    label_text_alpha = kwargs.pop('label_text_alpha', 1.0)
+    label_background_alpha = kwargs.pop('label_background_alpha', 1.0)
+
+    assert_log(expression=len(kwargs) == 0, message=f"Unexpected keyword argument{'' if len(kwargs) == 1 else 's'} '{list(kwargs.keys())[0] if len(kwargs) == 1 else list(kwargs.keys())}'.")
+
+    assert_type_value(obj=alpha, type_or_value=float, name="argument 'alpha'")
+    assert_log(expression=alpha > 0, message=f"Expected value of argument 'alpha' to be greater zero but got '{alpha}'.")
+    assert_log(expression=alpha <= 1, message=f"Expected value of argument 'alpha' to be one or less but got '{alpha}'.")
+    assert_type_value(obj=colors, type_or_value=["auto", "auto_class", list, tuple, dict, None], name="argument 'colors'")
+    if isinstance(colors, (list, tuple)):
+        assert_log(expression=len(colors) == num_detections, message=f"Expected number of values in arguments 'boxes' and 'colors' to match but got '{num_detections}' and '{len(colors)}'.")
+        for i, color in enumerate(colors):
+            assert_type_value(obj=color, type_or_value=[list, tuple], name=f"item '{i}' in argument 'colors'")
+            assert_log(expression=len(color) == 3, message=f"Expected all colors in argument 'colors' to contain '3' values but got '{len(color)}'.")
+            for j, value in enumerate(color):
+                assert_type_value(obj=value, type_or_value=int, name=f"item '{j}' in color '{i}' in argument 'colors'")
+                assert_log(expression=0 <= value <= 255, message=f"Expected item '{j}' in color '{i}' in argument 'colors' to be 8-bit values but got '{value}'.")
+    elif isinstance(colors, dict):
+        if None not in colors:
+            colors[None] = (0, 0, 0)
+        for key in colors:
+            assert_type_value(obj=key, type_or_value=[str, None], name="all keys in argument 'colors'")
+            assert_type_value(obj=colors[key], type_or_value=[list, tuple], name=f"value of key '{key}' in argument 'colors'")
+            assert_log(expression=len(colors[key]) == 3, message=f"Expected all colors in argument 'colors' to contain '3' values but got '{len(colors[key])}'.")
+            for i, value in enumerate(colors[key]):
+                assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in value of key '{key}' in argument 'colors'")
+                assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'colors' to be 8-bit values but got '{value}'.")
+
+    assert_type_value(obj=auto_color_palette, type_or_value=ColorPalette, name="argument 'auto_color_palette'")
+    assert_type_value(obj=auto_color_shuffle, type_or_value=bool, name="argument 'auto_color_shuffle'")
+    assert_type_value(obj=draw_order, type_or_value=["size", "input"], name="argument 'draw_order'")
+
+    assert_type_value(obj=box_alpha, type_or_value=float, name="argument 'box_alpha'")
+    assert_log(expression=box_alpha >= 0, message=f"Expected value of argument 'box_alpha' to be zero or greater but got '{box_alpha}'.")
+    assert_log(expression=box_alpha <= 1, message=f"Expected value of argument 'box_alpha' to be one or less but got '{box_alpha}'.")
+    assert_type_value(obj=box_thickness, type_or_value=float, name="argument 'box_thickness'")
+    assert_log(expression=box_thickness > 0, message=f"Expected value of argument 'box_thickness' to be greater zero but got '{box_thickness}'.")
+    assert_log(expression=box_thickness <= 1, message=f"Expected value of argument 'box_thickness' to be one or less but got '{box_thickness}'.")
+    assert_type_value(obj=box_format, type_or_value=["xyxy_normalized", "xyxy_absolute", "xywh_normalized", "xywh_absolute"], name="argument 'box_format'")
     if box_format in ["xyxy_normalized", "xywh_normalized"]:
         for i, box in enumerate(boxes):
             if box is None:
@@ -458,7 +537,60 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=N
             else:
                 assert_log(expression=box[0] + box[2] <= image.shape[1], message=f"Expected value in argument 'boxes' for x0 '{box[0]}' + width '{box[2]}' <= image width '{image.shape[1]}'.")
                 assert_log(expression=box[1] + box[3] <= image.shape[0], message=f"Expected value in argument 'boxes' for y0 '{box[1]}' + height '{box[3]}' <= image height '{image.shape[0]}'.")
+    assert_type_value(obj=fill_alpha, type_or_value=float, name="argument 'fill_alpha'")
+    assert_log(expression=fill_alpha >= 0, message=f"Expected value of argument 'fill_alpha' to be zero or greater but got '{fill_alpha}'.")
+    assert_log(expression=fill_alpha <= 1, message=f"Expected value of argument 'fill_alpha' to be one or less but got '{fill_alpha}'.")
 
+    assert_type_value(obj=mask_color, type_or_value=["auto", list, tuple, None], name="argument 'mask_color'")
+    if isinstance(mask_color, (list, tuple)):
+        assert_type_value(obj=mask_color, type_or_value=[list, tuple], name="argument 'mask_color'")
+        assert_log(expression=len(mask_color) == 3, message=f"Expected argument 'mask_color' to contain '3' values but got '{len(mask_color)}'.")
+        for i, value in enumerate(mask_color):
+            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'mask_color'")
+            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'mask_color' to be 8-bit values but got '{value}'.")
+    assert_type_value(obj=mask_alpha, type_or_value=float, name="argument 'mask_alpha'")
+    assert_log(expression=mask_alpha >= 0, message=f"Expected value of argument 'mask_alpha' to be zero or greater but got '{mask_alpha}'.")
+    assert_log(expression=mask_alpha <= 1, message=f"Expected value of argument 'mask_alpha' to be one or less but got '{mask_alpha}'.")
+    assert_type_value(obj=mask_format, type_or_value=["box_local", "full_image"], name="argument 'mask_format'")
+    assert_type_value(obj=contour_thickness, type_or_value=float, name="argument 'contour_thickness'")
+    assert_log(expression=contour_thickness >= 0, message=f"Expected value of argument 'contour_thickness' to be zero or greater but got '{contour_thickness}'.")
+    assert_log(expression=contour_thickness <= 1, message=f"Expected value of argument 'contour_thickness' to be one or less but got '{contour_thickness}'.")
+    assert_type_value(obj=contour_color, type_or_value=["auto", list, tuple, None], name="argument 'contour_color'")
+    if isinstance(contour_color, (list, tuple)):
+        assert_type_value(obj=contour_color, type_or_value=[list, tuple], name="argument 'contour_color'")
+        assert_log(expression=len(contour_color) == 3, message=f"Expected argument 'contour_color' to contain '3' values but got '{len(contour_color)}'.")
+        for i, value in enumerate(contour_color):
+            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'contour_color'")
+            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'contour_color' to be 8-bit values but got '{value}'.")
+    assert_type_value(obj=contour_alpha, type_or_value=float, name="argument 'contour_alpha'")
+    assert_log(expression=contour_alpha >= 0, message=f"Expected value of argument 'contour_alpha' to be zero or greater but got '{contour_alpha}'.")
+    assert_log(expression=contour_alpha <= 1, message=f"Expected value of argument 'contour_alpha' to be one or less but got '{contour_alpha}'.")
+
+    assert_type_value(obj=point_radius, type_or_value=float, name="argument 'point_radius'")
+    assert_log(expression=point_radius > 0, message=f"Expected value of argument 'point_radius' to be greater zero but got '{point_radius}'.")
+    assert_log(expression=point_radius <= 1, message=f"Expected value of argument 'point_radius' to be one or less but got '{point_radius}'.")
+    assert_type_value(obj=point_color, type_or_value=["auto", list, tuple, None], name="argument 'point_color'")
+    if isinstance(point_color, (list, tuple)):
+        assert_log(expression=len(point_color) == 3, message=f"Expected argument 'point_color' to contain '3' values but got '{len(point_color)}'.")
+        for i, value in enumerate(point_color):
+            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'point_color'")
+            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'point_color' to be 8-bit values but got '{value}'.")
+    assert_type_value(obj=point_alpha, type_or_value=float, name="argument 'point_alpha'")
+    assert_log(expression=point_alpha >= 0, message=f"Expected value of argument 'point_alpha' to be zero or greater but got '{point_alpha}'.")
+    assert_log(expression=point_alpha <= 1, message=f"Expected value of argument 'point_alpha' to be one or less but got '{point_alpha}'.")
+    assert_type_value(obj=point_outline_thickness, type_or_value=float, name="argument 'point_outline_thickness'")
+    assert_log(expression=point_outline_thickness >= 0, message=f"Expected value of argument 'point_outline_thickness' to be zero or greater but got '{point_outline_thickness}'.")
+    assert_log(expression=point_outline_thickness <= 1, message=f"Expected value of argument 'point_outline_thickness' to be one or less but got '{point_outline_thickness}'.")
+    assert_type_value(obj=point_outline_color, type_or_value=["auto", list, tuple, None], name="argument 'point_outline_color'")
+    if isinstance(point_outline_color, (list, tuple)):
+        assert_log(expression=len(point_outline_color) == 3, message=f"Expected argument 'point_outline_color' to contain '3' values but got '{len(point_outline_color)}'.")
+        for i, value in enumerate(point_outline_color):
+            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'point_outline_color'")
+            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'point_outline_color' to be 8-bit values but got '{value}'.")
+    assert_type_value(obj=point_outline_alpha, type_or_value=float, name="argument 'point_outline_alpha'")
+    assert_log(expression=point_outline_alpha >= 0, message=f"Expected value of argument 'point_outline_alpha' to be zero or greater but got '{point_outline_alpha}'.")
+    assert_log(expression=point_outline_alpha <= 1, message=f"Expected value of argument 'point_outline_alpha' to be one or less but got '{point_outline_alpha}'.")
+    assert_type_value(obj=point_format, type_or_value=["xy_normalized", "xy_absolute"], name="argument 'point_format'")
     if point_format == "xy_normalized":
         for i, point in enumerate(points):
             if point is None:
@@ -480,73 +612,6 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=N
             assert_log(expression=point[0] < image.shape[1], message=f"Expected value in argument 'points' for x '{point[0]}' < image width '{image.shape[1]}'.")
             assert_log(expression=point[1] < image.shape[0], message=f"Expected value in argument 'points' for y '{point[1]}' < image height '{image.shape[0]}'.")
 
-    for i, label in enumerate(labels):
-        assert_type_value(obj=label, type_or_value=[str, None], name=f"item '{i}' in argument 'labels'")
-
-    for i in range(num_detections):
-        if labels[i] is not None:
-            assert_log(expression=boxes[i] is not None, message=f"Expected a box for detection '{i}' because a label was provided.")
-
-    colors = kwargs.pop('colors', "auto_class")
-    alpha = kwargs.pop('alpha', 0.9)
-    box_thickness = kwargs.pop('box_thickness', 0.004)
-    fill_alpha = kwargs.pop('fill_alpha', 0.0)
-    box_alpha = kwargs.pop('box_alpha', 1.0)
-    label_font_size = kwargs.pop('label_font_size', 0.022)
-    label_font_path = kwargs.pop("label_font_path", str(files("nimbro_api").joinpath("fonts", "DejaVuSans.ttf")))
-    label_padding = kwargs.pop('label_padding', 0.006)
-    label_text_color = kwargs.pop('label_text_color', "auto")
-    label_background_color = kwargs.pop('label_background_color', "auto")
-    label_text_alpha = kwargs.pop('label_text_alpha', 1.0)
-    label_background_alpha = kwargs.pop('label_background_alpha', 1.0)
-    mask_color = kwargs.pop('mask_color', "auto")
-    mask_alpha = kwargs.pop('mask_alpha', 0.25)
-    contour_thickness = kwargs.pop('contour_thickness', 0.0005)
-    contour_color = kwargs.pop('contour_color', "auto")
-    contour_alpha = kwargs.pop('contour_alpha', 0.6)
-    point_radius = kwargs.pop('point_radius', 0.007)
-    point_color = kwargs.pop('point_color', "auto")
-    point_alpha = kwargs.pop('point_alpha', 0.9)
-    point_outline_thickness = kwargs.pop('point_outline_thickness', 0.0005)
-    point_outline_color = kwargs.pop('point_outline_color', "auto")
-    point_outline_alpha = kwargs.pop('point_outline_alpha', 0.9)
-    auto_color_palette = kwargs.pop('auto_color_palette', nimbro_colors if num_detections > 10 else nimbro_colors.ten)
-    auto_color_shuffle = kwargs.pop('auto_color_shuffle', False)
-    draw_order = kwargs.pop('draw_order', "size")
-    mask_format = kwargs.pop('mask_format', "box_local")
-    assert_log(expression=len(kwargs) == 0, message=f"Unexpected keyword argument{'' if len(kwargs) == 1 else 's'} '{list(kwargs.keys())[0] if len(kwargs) == 1 else list(kwargs.keys())}'.")
-
-    assert_type_value(obj=colors, type_or_value=["auto", "auto_class", list, tuple, dict, None], name="argument 'colors'")
-    if isinstance(colors, (list, tuple)):
-        assert_log(expression=len(colors) == num_detections, message=f"Expected number of values in arguments 'boxes' and 'colors' to match but got '{num_detections}' and '{len(colors)}'.")
-        for i, color in enumerate(colors):
-            assert_type_value(obj=color, type_or_value=[list, tuple], name=f"item '{i}' in argument 'colors'")
-            assert_log(expression=len(color) == 3, message=f"Expected all colors in argument 'colors' to contain '3' values but got '{len(color)}'.")
-            for j, value in enumerate(color):
-                assert_type_value(obj=value, type_or_value=int, name=f"item '{j}' in color '{i}' in argument 'colors'")
-                assert_log(expression=0 <= value <= 255, message=f"Expected item '{j}' in color '{i}' in argument 'colors' to be 8-bit values but got '{value}'.")
-    elif isinstance(colors, dict):
-        if None not in colors:
-            colors[None] = (0, 0, 0)
-        for key in colors:
-            assert_type_value(obj=key, type_or_value=[str, None], name="all keys in argument 'colors'")
-            assert_type_value(obj=colors[key], type_or_value=[list, tuple], name=f"value of key '{key}' in argument 'colors'")
-            assert_log(expression=len(colors[key]) == 3, message=f"Expected all colors in argument 'colors' to contain '3' values but got '{len(colors[key])}'.")
-            for i, value in enumerate(colors[key]):
-                assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in value of key '{key}' in argument 'colors'")
-                assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'colors' to be 8-bit values but got '{value}'.")
-    assert_type_value(obj=alpha, type_or_value=float, name="argument 'alpha'")
-    assert_log(expression=alpha > 0, message=f"Expected value of argument 'alpha' to be greater zero but got '{alpha}'.")
-    assert_log(expression=alpha <= 1, message=f"Expected value of argument 'alpha' to be one or less but got '{alpha}'.")
-    assert_type_value(obj=box_thickness, type_or_value=float, name="argument 'box_thickness'")
-    assert_log(expression=box_thickness > 0, message=f"Expected value of argument 'box_thickness' to be greater zero but got '{box_thickness}'.")
-    assert_log(expression=box_thickness <= 1, message=f"Expected value of argument 'box_thickness' to be one or less but got '{box_thickness}'.")
-    assert_type_value(obj=fill_alpha, type_or_value=float, name="argument 'fill_alpha'")
-    assert_log(expression=fill_alpha >= 0, message=f"Expected value of argument 'fill_alpha' to be zero or greater but got '{fill_alpha}'.")
-    assert_log(expression=fill_alpha <= 1, message=f"Expected value of argument 'fill_alpha' to be one or less but got '{fill_alpha}'.")
-    assert_type_value(obj=box_alpha, type_or_value=float, name="argument 'box_alpha'")
-    assert_log(expression=box_alpha >= 0, message=f"Expected value of argument 'box_alpha' to be zero or greater but got '{box_alpha}'.")
-    assert_log(expression=box_alpha <= 1, message=f"Expected value of argument 'box_alpha' to be one or less but got '{box_alpha}'.")
     assert_type_value(obj=label_font_size, type_or_value=float, name="argument 'label_font_size'")
     assert_log(expression=label_font_size > 0, message=f"Expected value of argument 'label_font_size' to be greater zero but got '{label_font_size}'.")
     assert_log(expression=label_font_size <= 1, message=f"Expected value of argument 'label_font_size' to be one or less but got '{label_font_size}'.")
@@ -574,57 +639,6 @@ def visualize_detections(image, *, boxes=None, masks=None, labels=None, points=N
     assert_type_value(obj=label_background_alpha, type_or_value=float, name="argument 'label_background_alpha'")
     assert_log(expression=label_background_alpha >= 0, message=f"Expected value of argument 'label_background_alpha' to be zero or greater but got '{label_background_alpha}'.")
     assert_log(expression=label_background_alpha <= 1, message=f"Expected value of argument 'label_background_alpha' to be one or less but got '{label_background_alpha}'.")
-    assert_type_value(obj=mask_color, type_or_value=["auto", list, tuple, None], name="argument 'mask_color'")
-    if isinstance(mask_color, (list, tuple)):
-        assert_type_value(obj=mask_color, type_or_value=[list, tuple], name="argument 'mask_color'")
-        assert_log(expression=len(mask_color) == 3, message=f"Expected argument 'mask_color' to contain '3' values but got '{len(mask_color)}'.")
-        for i, value in enumerate(mask_color):
-            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'mask_color'")
-            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'mask_color' to be 8-bit values but got '{value}'.")
-    assert_type_value(obj=mask_alpha, type_or_value=float, name="argument 'mask_alpha'")
-    assert_log(expression=mask_alpha >= 0, message=f"Expected value of argument 'mask_alpha' to be zero or greater but got '{mask_alpha}'.")
-    assert_log(expression=mask_alpha <= 1, message=f"Expected value of argument 'mask_alpha' to be one or less but got '{mask_alpha}'.")
-    assert_type_value(obj=contour_thickness, type_or_value=float, name="argument 'contour_thickness'")
-    assert_log(expression=contour_thickness >= 0, message=f"Expected value of argument 'contour_thickness' to be zero or greater but got '{contour_thickness}'.")
-    assert_log(expression=contour_thickness <= 1, message=f"Expected value of argument 'contour_thickness' to be one or less but got '{contour_thickness}'.")
-    assert_type_value(obj=contour_color, type_or_value=["auto", list, tuple, None], name="argument 'contour_color'")
-    if isinstance(contour_color, (list, tuple)):
-        assert_type_value(obj=contour_color, type_or_value=[list, tuple], name="argument 'contour_color'")
-        assert_log(expression=len(contour_color) == 3, message=f"Expected argument 'contour_color' to contain '3' values but got '{len(contour_color)}'.")
-        for i, value in enumerate(contour_color):
-            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'contour_color'")
-            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'contour_color' to be 8-bit values but got '{value}'.")
-    assert_type_value(obj=contour_alpha, type_or_value=float, name="argument 'contour_alpha'")
-    assert_log(expression=contour_alpha >= 0, message=f"Expected value of argument 'contour_alpha' to be zero or greater but got '{contour_alpha}'.")
-    assert_log(expression=contour_alpha <= 1, message=f"Expected value of argument 'contour_alpha' to be one or less but got '{contour_alpha}'.")
-    assert_type_value(obj=point_radius, type_or_value=float, name="argument 'point_radius'")
-    assert_log(expression=point_radius > 0, message=f"Expected value of argument 'point_radius' to be greater zero but got '{point_radius}'.")
-    assert_log(expression=point_radius <= 1, message=f"Expected value of argument 'point_radius' to be one or less but got '{point_radius}'.")
-    assert_type_value(obj=point_color, type_or_value=["auto", list, tuple, None], name="argument 'point_color'")
-    if isinstance(point_color, (list, tuple)):
-        assert_log(expression=len(point_color) == 3, message=f"Expected argument 'point_color' to contain '3' values but got '{len(point_color)}'.")
-        for i, value in enumerate(point_color):
-            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'point_color'")
-            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'point_color' to be 8-bit values but got '{value}'.")
-    assert_type_value(obj=point_alpha, type_or_value=float, name="argument 'point_alpha'")
-    assert_log(expression=point_alpha >= 0, message=f"Expected value of argument 'point_alpha' to be zero or greater but got '{point_alpha}'.")
-    assert_log(expression=point_alpha <= 1, message=f"Expected value of argument 'point_alpha' to be one or less but got '{point_alpha}'.")
-    assert_type_value(obj=point_outline_thickness, type_or_value=float, name="argument 'point_outline_thickness'")
-    assert_log(expression=point_outline_thickness >= 0, message=f"Expected value of argument 'point_outline_thickness' to be zero or greater but got '{point_outline_thickness}'.")
-    assert_log(expression=point_outline_thickness <= 1, message=f"Expected value of argument 'point_outline_thickness' to be one or less but got '{point_outline_thickness}'.")
-    assert_type_value(obj=point_outline_color, type_or_value=["auto", list, tuple, None], name="argument 'point_outline_color'")
-    if isinstance(point_outline_color, (list, tuple)):
-        assert_log(expression=len(point_outline_color) == 3, message=f"Expected argument 'point_outline_color' to contain '3' values but got '{len(point_outline_color)}'.")
-        for i, value in enumerate(point_outline_color):
-            assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'point_outline_color'")
-            assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'point_outline_color' to be 8-bit values but got '{value}'.")
-    assert_type_value(obj=point_outline_alpha, type_or_value=float, name="argument 'point_outline_alpha'")
-    assert_log(expression=point_outline_alpha >= 0, message=f"Expected value of argument 'point_outline_alpha' to be zero or greater but got '{point_outline_alpha}'.")
-    assert_log(expression=point_outline_alpha <= 1, message=f"Expected value of argument 'point_outline_alpha' to be one or less but got '{point_outline_alpha}'.")
-    assert_type_value(obj=auto_color_palette, type_or_value=ColorPalette, name="argument 'auto_color_palette'")
-    assert_type_value(obj=auto_color_shuffle, type_or_value=bool, name="argument 'auto_color_shuffle'")
-    assert_type_value(obj=draw_order, type_or_value=["size", "input"], name="argument 'draw_order'")
-    assert_type_value(obj=mask_format, type_or_value=["box_local", "full_image"], name="argument 'mask_format'")
 
     # convert to BGR
     if is_rgb:
