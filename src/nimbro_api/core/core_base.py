@@ -10,6 +10,11 @@ from queue import SimpleQueue
 from ..client import ClientBase
 from ..utility.misc import UnrecoverableError, assert_type_value, assert_log
 
+_SIGNAL_NAMES = {
+    v: k for k, v in signal.__dict__.items()
+    if k.startswith("SIG") and not k.startswith("SIG_") and isinstance(v, int)
+}
+
 class CoreBase(ClientBase):
 
     def __init__(self, settings, default_settings):
@@ -23,14 +28,12 @@ class CoreBase(ClientBase):
         self._initialized = True
 
     def _signal_handler(self, signum, frame):
-        _signal_names = {v: k for k, v in signal.__dict__.items() if k.startswith("SIG") and not k.startswith("SIG_")}
-        name = _signal_names.get(signum, f"Unknown ({signum})")
-        filename = frame.f_code.co_filename
-        lineno = frame.f_lineno
-        self._logger.info(f"Terminating after receiving signal '{name}' at '{filename}:{lineno}'.")
+        name = _SIGNAL_NAMES.get(signum, f"Unknown ({signum})")
+        self._logger_settings['logger_line_length'] = 0
+        self._logger.info(f"Terminating after receiving signal '{name}' at '{frame.f_code.co_filename}:{frame.f_lineno}'.")
         self._logger.debug("Traceback:\n" + "".join(traceback.format_stack(frame)))
 
-        if self._defer_timer:
+        if self._defer_timer is not None:
             self._logger.debug("Cancelling deferred job.")
             self._defer_timer.cancel()
         self._deferred_thread()
@@ -323,7 +326,7 @@ class CoreBase(ClientBase):
         assert_type_value(obj=job[1], type_or_value=dict, name="second element in argument 'job'")
 
         self._defer_queue.put_nowait(job)
-        if self._defer_timer:
+        if self._defer_timer is not None:
             self._defer_timer.cancel()
         self._defer_timer = threading.Timer(self._settings['defer_delay'], self._deferred_thread)
         message = "Registered deferred job."
@@ -333,7 +336,7 @@ class CoreBase(ClientBase):
         return True, message
 
     def execute_deferred_jobs(self):
-        if self._defer_timer:
+        if self._defer_timer is not None:
             self._logger.debug("Cancelling deferred thread timer.")
             self._defer_timer.cancel()
         return self._deferred_thread()
