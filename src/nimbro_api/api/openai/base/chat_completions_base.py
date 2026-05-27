@@ -1118,6 +1118,10 @@ class ChatCompletionsBase(ClientBase):
                     'n': 1,
                     'stream': self._settings['stream']
                 }
+                if self._settings['reasoning_effort'] not in ["", "none"]:
+                    data['reasoning_effort'] = self._settings['reasoning_effort']
+                if len(self.tools) > 0:
+                    data['parallel_tool_calls'] = self._settings['max_tool_calls'] is None or self._settings['max_tool_calls'] > 1
 
             elif self._endpoint['api_flavor'] == "openrouter":
                 data = {
