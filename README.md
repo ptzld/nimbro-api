@@ -77,7 +77,7 @@ Create and use a [ChatCompletions](https://github.com/ptzld/nimbro-api/blob/main
 ```python
 import nimbro_api
 # nimbro_api.set_api_key(name="OPENROUTER_API_KEY", key="supersecretkey") # alternatively, set API key here
-client = nimbro_api.openai.ChatCompletions(endpoint="OpenRouter", model="google/gemini-3-flash-preview")
+client = nimbro_api.openai.ChatCompletions(endpoint="OpenRouter", model="~google/gemini-flash-latest")
 success, message, response = client.prompt(text="Tell me a joke!")
 ```
 
