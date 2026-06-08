@@ -142,7 +142,8 @@ class ChatCompletions(Client):
             frequency_penalty (float | int):
                 Model frequency_penalty parameter (from -2.0 to +2.0).
             reasoning_effort (str):
-                Model reasoning effort in ["", "none", "minimal", "low", "medium", "high"].
+                Model reasoning effort in ["", "none", "minimal", "low", "medium", "high", "xhigh"].
+                Use an empty string to not pass this parameter explicitly and let the API choose a default instead.
             download_image (bool):
                 Download all images in context messages provided as URLs when using `set_context()` or `prompt()`.
             download_audio (bool):

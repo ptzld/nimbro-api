@@ -131,7 +131,7 @@ class ChatCompletionsBase(ClientBase):
 
         # reasoning_effort
         assert_type_value(obj=settings['reasoning_effort'], type_or_value=str, name="setting 'reasoning_effort'")
-        valid_values = ["", "none", "minimal", "low", "medium", "high"]
+        valid_values = ["", "none", "minimal", "low", "medium", "high", "xhigh"]
         assert_log(
             expression=settings['reasoning_effort'] in valid_values,
             message=f"Expected setting 'reasoning_effort' to be in {valid_values} but got '{settings['reasoning_effort']}'."
@@ -1094,7 +1094,7 @@ class ChatCompletionsBase(ClientBase):
                     'n': 1,
                     'stream': self._settings['stream']
                 }
-                if self._settings['reasoning_effort'] not in ["", "none"]:
+                if self._settings['reasoning_effort'] != "":
                     data['reasoning_effort'] = self._settings['reasoning_effort']
                 if len(self.tools) == 0:
                     del data['tools']
@@ -1118,7 +1118,7 @@ class ChatCompletionsBase(ClientBase):
                     'n': 1,
                     'stream': self._settings['stream']
                 }
-                if self._settings['reasoning_effort'] not in ["", "none"]:
+                if self._settings['reasoning_effort'] != "":
                     data['reasoning_effort'] = self._settings['reasoning_effort']
                 if len(self.tools) > 0:
                     data['parallel_tool_calls'] = self._settings['max_tool_calls'] is None or self._settings['max_tool_calls'] > 1
@@ -1137,7 +1137,7 @@ class ChatCompletionsBase(ClientBase):
                     'n': 1,
                     'stream': self._settings['stream']
                 }
-                if self._settings['reasoning_effort'] not in ["", "none"]:
+                if self._settings['reasoning_effort'] != "":
                     data['reasoning'] = {
                         'effort': self._settings['reasoning_effort'],
                         'exclude': False
