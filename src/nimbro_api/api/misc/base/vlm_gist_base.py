@@ -244,6 +244,8 @@ class VlmGistBase(ClientBase):
         assert_type_value(obj=output_dir, type_or_value=[None, str], name="argument 'output_dir'")
         if isinstance(output_dir, str):
             output_dir = os.path.realpath(output_dir)
+            assert_log(expression=os.path.isfile(output_dir), message="Expected argument 'output_dir' to not exist or point to an existing folder but it points to an existing file.")
+            os.makedirs(output_dir, exist_ok=True)
         assert_log(expression=IMPORT_ERROR is None, message=f"Visual utilities are not available due to missing dependencies: {IMPORT_ERROR}")
         if isinstance(result, str):
             success, message, result = read_json(file_path=result, name="result", logger=self._logger)
@@ -305,20 +307,34 @@ class VlmGistBase(ClientBase):
         if image is None:
             images = [None] * num_images
         else:
-            if not isinstance(image, list):
+            if isinstance(image, list):
+                assert_log(expression=len(image) == num_images, message=f"Expected argument 'image' provided as list to contain '{num_images}' item{'' if num_images == 1 else 's'} but got '{len(image)}'.")
+            elif os.path.isdir(image):
+                self._logger.debug("Argument 'image' provide as local path.")
+                path = image
+                image = sorted([os.path.join(image, item) for item in os.listdir(path) if os.path.isfile(os.path.join(path, item))])
+                self._logger.debug(f"Files in '{path}': {image}")
+                assert_log(expression=len(image) == num_images, message=f"Expected argument 'image' provided as path to contain '{num_images}' item{'' if num_images == 1 else 's'} but got '{len(image)}'.")
+            else:
+                assert_log(expression=num_images == 1, message=f"Expected argument 'image' to be provided as list containing '{num_images}' item{'' if num_images == 1 else 's'} but got 'str'.")
                 image = [image]
-            assert_log(expression=len(image) == num_images, message=f"Expected argument 'image' provided as list to contain '{num_images}' item{'' if num_images == 1 else 's'} but got '{len(image)}'.")
             images = [None] * num_images
             for i, item in enumerate(image):
                 if item is not None:
                     success, message, images[i], _ = parse_image_b64(image=item, logger=self._logger)
                     if not success:
                         self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}': {message}")
+
         # visualize
+
+        self._logger.info(f"Visualizing '{num_images}' result{'' if num_images == 1 else 's'}.")
+
         visualizations = [None] * num_images
         paths = [None] * num_images
 
         for i, batch_item in enumerate(batch):
+            # TODO parallelize using batch.size and batch.threading
+
             # validate data
             if images[i] is None and image is not None:
                 continue
@@ -452,7 +468,7 @@ class VlmGistBase(ClientBase):
             if sum(item is None for item in points) == len(points):
                 points = None
 
-            # visualize
+            # draw
             self._logger.debug(f"Visualizing result '{i + 1}' of '{num_images}'.")
             tic = time.perf_counter()
             if vis_args is None:
@@ -481,7 +497,6 @@ class VlmGistBase(ClientBase):
                 success, visual = cv2.imencode('.png', visual)
                 if success:
                     visual = visual.tobytes()
-                    os.makedirs(output_dir, exist_ok=True)
                     out_path = os.path.join(output_dir, f"{i}_{datetime.datetime.now().isoformat()[:23].replace('-', '_').replace(':', '_').replace('.', '_')}.png")
                     with open(out_path, "wb") as file:
                         file.write(visual)

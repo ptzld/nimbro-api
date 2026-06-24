@@ -241,7 +241,7 @@ class VlmGist(Client):
             result (str | dict):
                 A result returned by `run()` (for either a single image or a batch), either as the dictionary (`dict`) itself or as a path (`str`) to a JSON file containing it.
             image (str | bytes | list[str] | list[bytes] | None):
-                The image(s) corresponding to the result as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
+                The image(s) corresponding to the result as a local path to a file or a folder containing files, URL, Base64 encoding (all `str`), or raw `bytes`.
                 For a batch result, a `list` of length matching the batch size is required. If `None`, the image must be provided
                 within 'result', which requires the setting 'include_image' to have been enabled during the originating call to `run()`. Defaults to `None`.
             output_dir (str | None):
