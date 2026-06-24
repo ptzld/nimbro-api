@@ -48,14 +48,14 @@ default_settings = {
         }
     },
     'endpoint': "OpenRouter",
-    'model': "~google/gemini-flash-latest",
+    'model': "~anthropic/claude-sonnet-latest",
     'validate_model': 3600,
     'temperature': 1.0,
     'top_p': 1.0,
     'max_tokens': 5000,
     'presence_penalty': 0.0,
     'frequency_penalty': 0.0,
-    'reasoning_effort': "minimal",
+    'reasoning_effort': "none",
     'download_image': False,
     'download_audio': True,
     'download_video': False,
@@ -142,7 +142,7 @@ class ChatCompletions(Client):
             frequency_penalty (float | int):
                 Model frequency_penalty parameter (from -2.0 to +2.0).
             reasoning_effort (str):
-                Model reasoning effort in ["", "none", "minimal", "low", "medium", "high", "xhigh"].
+                Model reasoning effort in ["", "none", "minimal", "low", "medium", "high", "xhigh", "max"].
                 Use an empty string to not pass this parameter explicitly and let the API choose a default instead.
             download_image (bool):
                 Download all images in context messages provided as URLs when using `set_context()` or `prompt()`.

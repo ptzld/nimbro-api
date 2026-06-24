@@ -578,7 +578,9 @@ def test_13_parallel_threads(n=10):
     client = VlmGist(settings={
         'batch.size': n,
         'batch.style': "threading",
-        'include_image': True
+        'batch.retry': 2,
+        'include_image': True,
+        'retry': False
     })
     images = [os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png")] * n
     success, message, result = client.run(image=images)
@@ -592,7 +594,9 @@ def test_14_parallel_multiprocessing(n=10):
     client = VlmGist(settings={
         'batch.size': n,
         'batch.style': "multiprocessing",
-        'include_image': False
+        'batch.retry': 2,
+        'include_image': False,
+        'retry': False
     })
     images = [os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png")] * n
     success, message, result = client.run(image=images)

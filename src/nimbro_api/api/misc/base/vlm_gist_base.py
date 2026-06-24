@@ -495,7 +495,8 @@ class VlmGistBase(ClientBase):
 
         # consolidate
         num_success = sum(item is not None for item in visualizations)
-        success = num_success == num_images
+        # success = num_success == num_images
+        success = True # to prevent any retry attempts
         if num_success == 0:
             visualizations = None
             paths = None
@@ -669,7 +670,10 @@ class VlmGistBase(ClientBase):
             f"{('thread' if settings['batch']['style'] == 'threading' else 'process')}"
             f"{'' if (settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)) == 1 else ('s' if settings['batch']['style'] == 'threading' else 'es')}."
         )
-        self._logger.info(message)
+        if settings['message_process']:
+            self._logger.info(message)
+        else:
+            self._logger.debug(message)
 
         # full settings here instead of individual results
         data['run']['type'] = "batch"
@@ -709,7 +713,7 @@ class VlmGistBase(ClientBase):
         # extract batch results
         successes = [res[0] for res in results]
         failures = len(image) - sum(successes)
-        data['run']['success'] = failures == 0 # TODO keep 0 but make retry in batch mode only be applied to workers while using different retry for batch (zero or other setting)
+        data['run']['success'] = failures == 0
         duration = time.perf_counter() - stamp_global
         data['run']['message'] = (
             f"Processed batch with '{len(image)}' image{'' if len(image) == 1 else 's'} using "
@@ -945,8 +949,8 @@ class VlmGistBase(ClientBase):
                         except json.JSONDecodeError:
                             pass
                         else:
-                            data['structured_description']['logs'].append("Extracted possible structured description from string.")
-                            self._logger.warn(data['structured_description']['logs'][-1])
+                            data['structured_description']['logs'].append("Parsed text response as JSON.")
+                            self._logger.debug(data['structured_description']['logs'][-1])
                             break
                     else:
                         return False, "Failed to extract JSON from structured description received as string.", data
@@ -959,7 +963,10 @@ class VlmGistBase(ClientBase):
 
         # structured description must be list
         if not isinstance(description, list):
-            return False, f"Expected structured description to be of type 'list' but got '{type(description).__name__}'.", data
+            try:
+                return False, f"Expected structured description to be of type 'list' but got '{type(description).__name__}': {description}", data
+            except Exception:
+                return False, f"Expected structured description to be of type 'list' but got '{type(description).__name__}'.", data
 
         # obtain image dimensions if required
         dimensions = None

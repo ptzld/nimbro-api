@@ -131,7 +131,7 @@ class ChatCompletionsBase(ClientBase):
 
         # reasoning_effort
         assert_type_value(obj=settings['reasoning_effort'], type_or_value=str, name="setting 'reasoning_effort'")
-        valid_values = ["", "none", "minimal", "low", "medium", "high", "xhigh"]
+        valid_values = ["", "none", "minimal", "low", "medium", "high", "xhigh", "max"]
         assert_log(
             expression=settings['reasoning_effort'] in valid_values,
             message=f"Expected setting 'reasoning_effort' to be in {valid_values} but got '{settings['reasoning_effort']}'."

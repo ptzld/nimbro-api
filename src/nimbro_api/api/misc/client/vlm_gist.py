@@ -15,7 +15,7 @@ default_settings = {
             'logger_severity': "warn",
             'endpoint': "OpenRouter",
             'model': "~google/gemini-pro-latest",
-            'reasoning_effort': "none"
+            'reasoning_effort': "minimal"
         },
         'system_prompt_role': "system",
         'system_prompt': "You are a visual perception system that identifies and analyzes objects and other visible features in an image.",
@@ -35,7 +35,7 @@ default_settings = {
             'logger_severity': "warn",
             'endpoint': "OpenRouter",
             'model': "~google/gemini-pro-latest",
-            'reasoning_effort': "none"
+            'reasoning_effort': "minimal"
         },
         'use_scene_description': False,
         'system_prompt_role': "system",
@@ -194,11 +194,13 @@ class VlmGist(Client):
                 - logger_severity (str | None): Logger severity applied to each worker in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
                 - size (int): Number of parallel workers when processing a list of images (>= 0). Use `0` to spawn one worker per image.
                 - style (str): Parallelization backend used for batch processing. One of ["threading", "multiprocessing"].
-                - retry (bool | int): Retry behavior for a single worker. The global 'retry' setting is applied to the entire batch, triggering retry when at least one worker failed (after using up all their retry attempts).
+                - retry (bool | int): Retry behavior for a single worker when passing multiple images.
+                  Then, the global 'retry' setting is applied to the entire batch, triggering retry when at least one worker failed (after using up all their retry attempts).
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
                 - If `True`, retries indefinitely. If `False`, failure is returned immediately.
                 - Use a positive integer (`int`) to permit a specific number of retry attempts.
+                - Scope depends on mode (see 'batch.retry').
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
