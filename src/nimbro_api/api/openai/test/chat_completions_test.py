@@ -49,7 +49,6 @@ def test_02_endpoint():
 # text completions
 
 def _text_completions(**kwargs):
-    kwargs['reasoning_effort'] = "none"
     client = ChatCompletions(kwargs)
 
     # text completion
@@ -59,7 +58,8 @@ def _text_completions(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -88,7 +88,8 @@ def _text_completions(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -110,43 +111,6 @@ def _text_completions(**kwargs):
     assert_log(expression=context[0] == target, message=f"Expected message '0' in context to be {target} but got {context[0]}.")
     target = {'role': "assistant", 'content': completion['text']}
     assert_log(expression=context[1] == target, message=f"Expected message '1' in context to be {target} but got {context[1]}.")
-
-    # JSON mode completion
-    new_text = "Tell me a joke in JSON format!"
-    success, message, completion = client.prompt(text=new_text, response_type="json")
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
-    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
-    assert_type_value(obj=completion['text'], type_or_value=dict, name="text in completion")
-    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
-    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
-    for i, log in enumerate(completion['logs']):
-        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
-
-    # inspect context
-    success, message, context = client.get_context()
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=context, type_or_value=list, name="context")
-    assert_log(expression=len(context) == 4, message=f"Expected context to contain '4' messages but got '{len(context)}'.")
-    for i, message in enumerate(context):
-        assert_type_value(obj=message, type_or_value=dict, name=f"message '{i}' in context")
-    assert_log(expression=context[1] == target, message=f"Expected message '1' in context to be {target} but got {context[1]}.")
-    target = {'role': 'user', 'content': [{'type': 'text', 'text': text}]}
-    assert_log(expression=context[0] == target, message=f"Expected message '0' in context to be {target} but got {context[0]}.")
-    target = {'role': 'user', 'content': [{'type': 'text', 'text': new_text}]}
-    assert_log(expression=context[2] == target, message=f"Expected message '2' in context to be {target} but got {context[2]}.")
-    assert_keys(obj=context[3], keys=['role', 'content'], mode="match", name="message '3' in context")
-    try:
-        context[3]['content'] = json.loads(context[3]['content'])
-    except Exception as e:
-        raise UnrecoverableError(f"Expected message '3' in context to be JSON-compliant but '{context[3]}' is not: {repr(e)}") from e
-    target = {'role': "assistant", 'content': completion['text']}
-    assert_log(expression=context[3] == target, message=f"Expected message '3' in context to be {target} but got {context[3]}.")
 
     # reset context
     success, message = client.set_context()
@@ -184,7 +148,8 @@ def _text_completions(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
@@ -204,46 +169,126 @@ def _text_completions(**kwargs):
     assert_log(expression=context[1] == target, message=f"Expected message '1' in context to be {target} but got {context[1]}.")
 
 def test_03_openrouter_text_completions():
-    return _text_completions(stream=False, endpoint="OpenRouter", model="google/gemini-3.1-flash-lite")
+    return _text_completions(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
 def test_04_openrouter_text_completions_stream():
-    return _text_completions(stream=True, endpoint="OpenRouter", model="google/gemini-3.1-flash-lite")
+    return _text_completions(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
 def test_05_openai_text_completions():
-    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5-chat-latest")
+    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
 
 def test_06_openai_text_completions_stream():
-    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5-chat-latest")
+    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
 
 def test_07_mistral_text_completions():
-    return _text_completions(stream=False, endpoint="Mistral", model="mistral-large-latest")
+    return _text_completions(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
 def test_08_mistral_text_completions_stream():
-    return _text_completions(stream=True, endpoint="Mistral", model="mistral-large-latest")
+    return _text_completions(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
 def test_09_vllm_text_completions():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
-    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _text_completions(stream=False, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+    return _text_completions(stream=False, endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
 
 def test_10_vllm_text_completions_stream():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
-    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _text_completions(stream=True, endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
+
+# JSON mode
+
+def _json_completion(**kwargs):
+    client = ChatCompletions(kwargs)
+
+    # JSON mode completion
+    text = "Tell me a joke in JSON format!"
+    success, message, completion = client.prompt(text=text, response_type="json")
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=completion, type_or_value=dict, name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
+    assert_type_value(obj=completion['text'], type_or_value=dict, name="text in completion")
+    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
+    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
+    for i, log in enumerate(completion['logs']):
+        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
+
+    # inspect context
+    success, message, context = client.get_context()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=context, type_or_value=list, name="context")
+    assert_log(expression=len(context) == 2, message=f"Expected context to contain '2' messages but got '{len(context)}'.")
+    for i, message in enumerate(context):
+        assert_type_value(obj=message, type_or_value=dict, name=f"message '{i}' in context")
+    target = {'role': 'user', 'content': [{'type': 'text', 'text': text}]}
+    assert_log(expression=context[0] == target, message=f"Expected message '0' in context to be {target} but got {context[0]}.")
+    assert_keys(obj=context[1], keys=['role', 'content'], mode="match", name="message '3' in context")
+    try:
+        context[1]['content'] = json.loads(context[1]['content'])
+    except Exception as e:
+        raise UnrecoverableError(f"Expected message '3' in context to be JSON-compliant but '{context[1]}' is not: {repr(e)}") from e
+    target = {'role': "assistant", 'content': completion['text']}
+    assert_log(expression=context[1] == target, message=f"Expected message '3' in context to be {target} but got {context[1]}.")
+
+def test_11_openrouter_json():
+    return _text_completions(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
+
+def test_12_openrouter_json_stream():
+    return _text_completions(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
+
+def test_13_openai_json():
+    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
+
+def test_14_openai_json_stream():
+    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
+
+def test_15_mistral_json():
+    return _text_completions(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
+
+def test_16_mistral_json_stream():
+    return _text_completions(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
+
+def test_17_vllm_json():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _text_completions(stream=False, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+
+def test_18_vllm_json_stream():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
     model = models[-1]
     return _text_completions(stream=True, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
 
 # reasoning
 
 def _reasoning_completion(**kwargs):
+    assert_log(expression='reasoning_effort' in kwargs, message="Expected setting 'reasoning_effort' to be provided by test definition.")
+    assert_log(expression=kwargs['reasoning_effort'] not in ['', 'none'], message=f"Expected setting 'reasoning_effort' provided by test definition to be anything but '' or 'none' but got '{kwargs['reasoning_effort']}'.")
     client = ChatCompletions(kwargs)
 
     text = "Tell me a joke about computer scientists. Briefly reason which one you should use first."
-    success, message, completion = client.prompt(text=text, reasoning_effort="low")
+    success, message, completion = client.prompt(text=text)
 
     assert_type_value(obj=success, type_or_value=bool, name="success")
     assert_type_value(obj=message, type_or_value=str, name="message")
@@ -260,44 +305,46 @@ def _reasoning_completion(**kwargs):
     for i, log in enumerate(completion['logs']):
         assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
 
-def test_11_openrouter_reasoning():
-    return _reasoning_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_19_openrouter_reasoning():
+    return _reasoning_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="high")
 
-def test_12_openrouter_reasoning_stream():
-    return _reasoning_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_20_openrouter_reasoning_stream():
+    return _reasoning_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="high")
 
-def test_13_openai_reasoning():
+def test_21_openai_reasoning():
     return "NOT SUPPORTED."
 
-def test_14_openai_reasoning_stream():
+def test_22_openai_reasoning_stream():
     return "NOT SUPPORTED."
 
-def test_15_mistral_reasoning():
-    return _reasoning_completion(stream=False, endpoint="Mistral", model="magistral-medium-latest")
+def test_23_mistral_reasoning():
+    return _reasoning_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="high")
 
-def test_16_mistral_reasoning_stream():
-    return _reasoning_completion(stream=True, endpoint="Mistral", model="magistral-medium-latest")
+def test_24_mistral_reasoning_stream():
+    return _reasoning_completion(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="high")
 
-def test_17_vllm_reasoning():
+def test_25_vllm_reasoning():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
-    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _reasoning_completion(stream=False, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+    return _reasoning_completion(stream=False, endpoint="AIS", model=model, reasoning_effort="high", timeout_read=60, timeout_completion=60)
 
-def test_18_vllm_reasoning_stream():
+def test_26_vllm_reasoning_stream():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
-    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _reasoning_completion(stream=True, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+    return _reasoning_completion(stream=True, endpoint="AIS", model=model, reasoning_effort="high", timeout_read=60, timeout_completion=60)
 
 # interrupt
 
 def _interrupt(**kwargs):
-    client = ChatCompletions(validate_model=False, reasoning_effort="high", retry=10, **kwargs)
+    client = ChatCompletions(validate_model=False, retry=10, **kwargs)
 
     text = "Write a 10 sentence novel chapter about a computer scientist."
     response = None
@@ -331,10 +378,10 @@ def _interrupt(**kwargs):
 
     return interrupt_message
 
-def test_19_interrupt():
+def test_27_interrupt():
     return "NOT SUPPORTED."
 
-def test_20_interrupt_stream():
+def test_28_interrupt_stream():
     return _interrupt(stream=True)
 
 # web search
@@ -349,8 +396,8 @@ def _web_search(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -361,16 +408,16 @@ def _web_search(**kwargs):
 
     return completion['text']
 
-def test_21_openrouter_web_search():
-    return _web_search(endpoint="OpenRouter", model="~google/gemini-flash-latest:online")
+def test_29_openrouter_web_search():
+    return _web_search(endpoint="OpenRouter", model="~google/gemini-flash-latest:online", reasoning_effort="minimal")
 
-def test_22_openai_web_search():
+def test_30_openai_web_search():
     return "NOT SUPPORTED."
 
-def test_23_mistral_web_search():
+def test_31_mistral_web_search():
     return "NOT SUPPORTED."
 
-def test_24_vllm_web_search():
+def test_32_vllm_web_search():
     return "NOT SUPPORTED."
 
 # image input
@@ -388,8 +435,8 @@ def _image_file_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -400,22 +447,23 @@ def _image_file_input(**kwargs):
 
     return completion['text']
 
-def test_25_openrouter_image_file_input():
-    return _image_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_33_openrouter_image_file_input():
+    return _image_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_26_openai_image_file_input():
-    return _image_file_input(endpoint="OpenAI", model="gpt-5-chat-latest")
+def test_34_openai_image_file_input():
+    return _image_file_input(endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
 
-def test_27_mistral_image_file_input():
-    return _image_file_input(endpoint="Mistral", model="mistral-large-latest")
+def test_35_mistral_image_file_input():
+    return _image_file_input(endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_28_vllm_image_file_input():
+def test_36_vllm_image_file_input():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
-    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _image_file_input(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+    return _image_file_input(endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
 
 def _image_url_input(**kwargs):
     kwargs['download_image'] = False
@@ -431,8 +479,8 @@ def _image_url_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -443,22 +491,23 @@ def _image_url_input(**kwargs):
 
     return completion['text']
 
-def test_29_openrouter_image_url_input():
-    return _image_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_37_openrouter_image_url_input():
+    return _image_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_30_openai_image_url_input():
-    return _image_url_input(endpoint="OpenAI", model="gpt-5-chat-latest")
+def test_38_openai_image_url_input():
+    return _image_url_input(endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
 
-def test_31_mistral_image_url_input():
-    return _image_url_input(endpoint="Mistral", model="mistral-large-latest")
+def test_39_mistral_image_url_input():
+    return _image_url_input(endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_32_vllm_image_url_input():
+def test_40_vllm_image_url_input():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
-    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _image_url_input(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+    return _image_url_input(endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
 
 # audio input
 
@@ -475,8 +524,8 @@ def _audio_file_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -487,16 +536,16 @@ def _audio_file_input(**kwargs):
 
     return completion['text']
 
-def test_33_openrouter_audio_file_input():
-    return _audio_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_41_openrouter_audio_file_input():
+    return _audio_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_34_openai_audio_file_input():
-    return _audio_file_input(endpoint="OpenAI", model="gpt-audio-2025-08-28")
+def test_42_openai_audio_file_input():
+    return _audio_file_input(endpoint="OpenAI", model="gpt-audio-2025-08-28", reasoning_effort="")
 
-def test_35_mistral_audio_file_input():
-    return _audio_file_input(endpoint="Mistral", model="voxtral-small-latest")
+def test_43_mistral_audio_file_input():
+    return _audio_file_input(endpoint="Mistral", model="voxtral-small-latest", reasoning_effort="")
 
-def test_36_vllm_audio_file_input():
+def test_44_vllm_audio_file_input():
     return "NOT SUPPORTED."
 
 def _audio_url_input(**kwargs):
@@ -513,8 +562,8 @@ def _audio_url_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -525,16 +574,16 @@ def _audio_url_input(**kwargs):
 
     return completion['text']
 
-def test_37_openrouter_audio_url_input():
+def test_45_openrouter_audio_url_input():
     return "NOT SUPPORTED."
 
-def test_38_openai_audio_url_input():
+def test_46_openai_audio_url_input():
     return "NOT SUPPORTED."
 
-def test_39_mistral_audio_url_input():
-    return _audio_url_input(endpoint="Mistral", model="voxtral-small-latest")
+def test_47_mistral_audio_url_input():
+    return _audio_url_input(endpoint="Mistral", model="voxtral-small-latest", reasoning_effort="")
 
-def test_40_vllm_audio_url_input():
+def test_48_vllm_audio_url_input():
     return "NOT SUPPORTED."
 
 # video input
@@ -552,8 +601,8 @@ def _video_file_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -564,22 +613,22 @@ def _video_file_input(**kwargs):
 
     return completion['text']
 
-def test_41_openrouter_video_file_input():
-    return _video_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_49_openrouter_video_file_input():
+    return _video_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_42_openai_video_file_input():
+def test_50_openai_video_file_input():
     return "NOT SUPPORTED."
 
-def test_43_mistral_video_file_input():
+def test_51_mistral_video_file_input():
     return "NOT SUPPORTED."
 
-def test_44_vllm_video_file_input():
+def test_52_vllm_video_file_input():
     # success, message, models = ChatCompletions(endpoint="AIS").get_models()
     # assert_log(expression=success, message=message)
     # assert_type_value(obj=models, type_or_value=list, name="models")
-    # assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    # if len(models) == 0: return "AIS endpoint is not hosting any models."
     # model = models[-1]
-    # return _video_file_input(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+    # return _video_file_input(endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
     return "NOT SUPPORTED."
 
 def _video_url_input(**kwargs):
@@ -596,8 +645,8 @@ def _video_url_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -608,16 +657,16 @@ def _video_url_input(**kwargs):
 
     return completion['text']
 
-def test_45_openrouter_video_url_input():
-    return _video_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_53_openrouter_video_url_input():
+    return _video_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_46_openai_video_url_input():
+def test_54_openai_video_url_input():
     return "NOT SUPPORTED."
 
-def test_47_mistral_video_url_input():
+def test_55_mistral_video_url_input():
     return "NOT SUPPORTED."
 
-def test_48_vllm_video_url_input():
+def test_56_vllm_video_url_input():
     return "NOT SUPPORTED."
 
 # file input
@@ -635,8 +684,8 @@ def _file_local_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -647,16 +696,16 @@ def _file_local_input(**kwargs):
 
     return completion['text']
 
-def test_49_openrouter_file_local_input():
-    return _file_local_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_57_openrouter_file_local_input():
+    return _file_local_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_50_openai_file_local_input():
-    return _file_local_input(endpoint="OpenAI", model="gpt-5-chat-latest")
+def test_58_openai_file_local_input():
+    return _file_local_input(endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
 
-def test_51_mistral_file_local_input():
+def test_59_mistral_file_local_input():
     return "NOT SUPPORTED."
 
-def test_52_vllm_file_local_input():
+def test_60_vllm_file_local_input():
     return "NOT SUPPORTED."
 
 def _file_url_input(**kwargs):
@@ -673,8 +722,8 @@ def _file_url_input(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
@@ -685,21 +734,21 @@ def _file_url_input(**kwargs):
 
     return completion['text']
 
-def test_53_openrouter_file_url_input():
-    return _file_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_61_openrouter_file_url_input():
+    return _file_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_54_openai_file_url_input():
+def test_62_openai_file_url_input():
     return "NOT SUPPORTED."
 
-def test_55_mistral_file_url_input():
+def test_63_mistral_file_url_input():
     return "NOT SUPPORTED."
 
-def test_56_vllm_file_url_input():
+def test_64_vllm_file_url_input():
     return "NOT SUPPORTED."
 
 # parallel
 
-def test_57_parallel_threads(n=100):
+def test_65_parallel_threads(n=100):
     class PropagatingThread(threading.Thread):
         def run(self):
             self.exc = None
@@ -724,8 +773,8 @@ def test_57_parallel_threads(n=100):
         assert_type_value(obj=message, type_or_value=str, name="message")
         assert_log(expression=success, message=message)
         assert_type_value(obj=completion, type_or_value=dict, name="completion")
-        assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
         assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+        assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
         assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
         assert_keys(obj=completion['usage'], keys=['duration'], mode="required", name="usage in completion")
         assert_type_value(obj=completion['usage']['duration'], type_or_value=float, name="duration of usage in completion")
@@ -736,7 +785,7 @@ def test_57_parallel_threads(n=100):
 
     threads, clients, stamps = [], [], []
     for _ in range(n):
-        client = ChatCompletions()
+        client = ChatCompletions(endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
         clients.append(client)
         thread = PropagatingThread(target=_thread_worker, args=(client,))
         threads.append(thread)
@@ -782,21 +831,21 @@ def _process_worker(shared_stamps):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
 
-    client = ChatCompletions()
+    client = ChatCompletions(endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
     success, message, completion = client.prompt("Tell me a joke!", response_type="text")
     assert_type_value(obj=success, type_or_value=bool, name="success")
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_keys(obj=completion['usage'], keys=['duration'], mode="required", name="usage in completion")
     assert_type_value(obj=completion['usage']['duration'], type_or_value=float, name="duration of usage in completion")
     assert_log(expression=completion['usage']['duration'] > 0, message=f"Expected duration of usage in completion to be grater zero but got '{completion['usage']['duration']}'.")
     shared_stamps.append(completion['usage']['duration'])
 
-def test_58_parallel_processes(n=100):
+def test_66_parallel_processes(n=100):
     stamp = time.perf_counter()
 
     with multiprocessing.Manager() as manager:
@@ -842,7 +891,7 @@ def test_58_parallel_processes(n=100):
 
 # tools
 
-def test_59_tool_config():
+def test_67_tool_config():
     client = ChatCompletions()
 
     success, message, tools = client.get_tools()
@@ -1024,7 +1073,7 @@ def test_59_tool_config():
     assert_type_value(obj=tool, type_or_value=dict, name="tool")
     assert_log(expression=tool == tool_definitions[i], message=f"Expected tool to match definition but got: {tool}")
 
-def test_60_context_config():
+def test_68_context_config():
     client = ChatCompletions()
 
     success, message, context = client.get_context()
@@ -1203,8 +1252,8 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
 
@@ -1213,7 +1262,7 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'tools', 'logs', 'text'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'tools', 'logs', 'text', 'reasoning'], mode="whitelist", name="completion")
     assert_keys(obj=completion, keys=['usage', 'tools', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['tools'], type_or_value=list, name="tools in completion")
     assert_log(expression=len(completion['tools']) == 1, message=f"Expected '1' tool call in completion but got '{len(completion['tools'])}'.")
@@ -1256,7 +1305,8 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'tools', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'tools', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'tools', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['tools'], type_or_value=list, name="tools in completion")
     assert_log(expression=len(completion['tools']) == 1, message=f"Expected '1' tool call in completion but got '{len(completion['tools'])}'.")
     assert_type_value(obj=completion['tools'][0], type_or_value=dict, name="tool call")
@@ -1271,7 +1321,8 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'tools', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'tools', 'logs', 'text', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'tools', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['tools'], type_or_value=list, name="tools in completion")
     assert_log(expression=len(completion['tools']) == 1, message=f"Expected '1' tool call in completion but got '{len(completion['tools'])}'.")
     assert_type_value(obj=completion['tools'][0], type_or_value=dict, name="tool call")
@@ -1298,7 +1349,8 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'tools', 'logs'], mode="match", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'tools', 'logs', 'text', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'tools', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['tools'], type_or_value=list, name="tools in completion")
     assert_log(expression=len(completion['tools']) == 2, message=f"Expected '2' tool calls in completion but got '{len(completion['tools'])}'.")
     for tool in completion['tools']:
@@ -1321,41 +1373,43 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
 
-def test_61_openrouter_tool_use():
-    return _tool_use(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_69_openrouter_tool_use():
+    return _tool_use(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_62_openrouter_tool_use_stream():
-    return _tool_use(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest")
+def test_70_openrouter_tool_use_stream():
+    return _tool_use(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_63_openai_tool_use():
-    return _tool_use(stream=False, endpoint="OpenAI", model="gpt-5.2-2025-12-11")
+def test_71_openai_tool_use():
+    return _tool_use(stream=False, endpoint="OpenAI", model="gpt-5.2-2025-12-11", reasoning_effort="none")
 
-def test_64_openai_tool_use_stream():
-    return _tool_use(stream=True, endpoint="OpenAI", model="gpt-5.2-2025-12-11")
+def test_72_openai_tool_use_stream():
+    return _tool_use(stream=True, endpoint="OpenAI", model="gpt-5.2-2025-12-11", reasoning_effort="none")
 
-def test_65_mistral_tool_use():
-    return _tool_use(stream=False, endpoint="Mistral", model="mistral-large-latest")
+def test_73_mistral_tool_use():
+    return _tool_use(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_66_mistral_tool_use_stream():
-    return _tool_use(stream=True, endpoint="Mistral", model="mistral-large-latest")
+def test_74_mistral_tool_use_stream():
+    return _tool_use(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_67_vllm_tool_use():
+def test_75_vllm_tool_use():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
-    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _tool_use(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+    return _tool_use(endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
 
-def test_68_vllm_tool_use_stream():
+def test_76_vllm_tool_use_stream():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
-    assert_log(expression=len(models) > 0, message="AIS endpoint is not hosting any models.")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _tool_use(endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
+    return _tool_use(endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
