@@ -58,6 +58,7 @@ full = [
     "numpy",
     "pillow",
     "opencv-python",
+    "jsonschema",
 ]
 
 [project.urls]

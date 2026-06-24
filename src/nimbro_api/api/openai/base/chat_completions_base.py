@@ -1669,7 +1669,7 @@ class ChatCompletionsBase(ClientBase):
 
         # error case: tool-choice "use specific function" was violated
         if len(self.tools) > 0 and response_type != "text" and response_type != "auto" and response_type != "always" and response_type != "json":
-            if text != "":
+            if text != "": # is text actually forbidden if the response still contains the demanded tool call?
                 is_valid = False
                 logs.append(f"Completion contains text content despite tool-choice being set to '{response_type}'.")
                 correction_messages[-1]['content'] = f"Your response must only contain a tool-call of '{response_type}' without additional text."
@@ -1768,8 +1768,7 @@ class ChatCompletionsBase(ClientBase):
                             logs.append(f"Completion contains a tool-call that violates the JSON Schema: {errors[0].message}")
                             reason = f"Your response contains a tool-call that violates the JSON Schema: {errors[0].message}"
                     else:
-                        logs.append("Tool-call cannot be validated against tool definitions because the 'jsonschema' module is not available.")
-                        self._logger.warn(logs[-1], once=True)
+                        self._logger.warn("Tool-call cannot be validated against tool definitions because the 'jsonschema' module is not available.", once=True)
 
         if success:
             self._logger.debug("Tool-call is valid.")
