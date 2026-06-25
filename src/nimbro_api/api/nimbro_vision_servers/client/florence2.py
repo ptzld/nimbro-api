@@ -61,14 +61,14 @@ class Florence2(Client):
                 Logger name shown in each log identifying this object.
             message_results (bool):
                 Include results in successful response messages when using `get_response()`.
-            endpoints (dict[dict]):
-                Endpoint definitions pointing to providers of the NimbRo Vision Servers API for Florence-2.
-                - Each endpoint must be a dictionary (`dict`), with the required keys "api_url", "key_type", and "key_value".
+            endpoints (dict):
+                Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
+                - Each endpoint must be a dictionary (`dict`), with the required keys 'api_flavor', 'api_url', 'key_type', and 'key_value'.
                 - The value of 'key_type' must be either "environment" or "plain".
-                - All values must be non-empty strings (`str`).
+                - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
-                Name of the endpoint to be used from the list of defined 'endpoints'.
-                Pass an endpoint definition (`dict`) to automatically add/update the definition and select it.
+                Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
+                Pass an endpoint definition (`dict`) with the addional key 'name' to automatically add/update the setting 'endpoints' and select it.
             validate_health (float | int | bool):
                 Validate the set 'endpoint' is healthy when using `get_response()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.

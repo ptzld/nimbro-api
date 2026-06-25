@@ -45,13 +45,13 @@ class No(Client):
                 Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
-            endpoints (dict[dict]):
-                Endpoint definitions pointing to providers of the v1 Chat Completions API.
-                - Each endpoint must be a dictionary (`dict`), with the required keys "api_url", "key_type", and "key_value".
-                - The value of 'key_type' must be either "environment" or "plain".
+            endpoints (dict):
+                Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
+                - Each endpoint must be a dictionary (`dict`), with the required key 'api_url'.
+                - All values must be non-empty strings (`str`).
             endpoint (str | dict):
-                Name of the endpoint to be used from the list of defined 'endpoints'.
-                Pass an endpoint definition (`dict`) to automatically add/update the definition and select it.
+                Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
+                Pass an endpoint definition (`dict`) with the addional key 'name' to automatically add/update the setting 'endpoints' and select it.
             timeout_connect (float | int | None):
                 Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
             timeout_read (float | int | None):
