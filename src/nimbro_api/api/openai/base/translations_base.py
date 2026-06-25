@@ -94,7 +94,9 @@ class TranslationsBase(ClientBase):
             return False, message, None
 
         # retrieve API key
-        api_key = self.get_api_key()[2]
+        success, message, api_key = self.get_api_key()
+        if not success:
+            raise UnrecoverableError(message)
 
         # validate connection
         success, message = self.validate_connection(api_key=api_key)
@@ -107,6 +109,8 @@ class TranslationsBase(ClientBase):
             'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
             'X-Title': "NimbRo API"
         }
+        if api_key == "":
+            del headers['Authorization']
         data = {
             'model': self._settings['model'],
             'temperature': self._settings['temperature'],

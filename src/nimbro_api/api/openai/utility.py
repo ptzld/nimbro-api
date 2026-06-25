@@ -79,7 +79,9 @@ def get_models(self, age, api_key=None):
 
     if api_key is None:
         # retrieve API key
-        api_key = self.get_api_key()[2]
+        success, message, api_key = self.get_api_key()
+        if not success:
+            raise UnrecoverableError(message)
 
     # use Models API
     headers = {
@@ -88,6 +90,8 @@ def get_models(self, age, api_key=None):
         'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
         'X-Title': "NimbRo API"
     }
+    if api_key == "":
+        del headers['Authorization']
     success, message, response = get_request(
         api_name="Models API",
         api_url=self._endpoint['models_url'],

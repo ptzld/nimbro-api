@@ -717,12 +717,11 @@ class ChatCompletionsBase(ClientBase):
 
     def generate_completion(self, response_type):
         # retrieve API key
-        try:
-            api_key = self.get_api_key()[2]
-        except UnrecoverableError as e:
+        success, message, api_key = self.get_api_key()
+        if not success:
             self._logger.debug("Restoring original context.")
             self.messages = self.context_dump
-            raise e
+            raise UnrecoverableError(message)
 
         # validate connection
         success, message = self.validate_connection(api_key=api_key)
@@ -1078,6 +1077,8 @@ class ChatCompletionsBase(ClientBase):
                 'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
                 'X-Title': "NimbRo API"
             }
+            if api_key == "":
+                del headers['Authorization']
 
             if self._endpoint['api_flavor'] == "openai":
                 data = {

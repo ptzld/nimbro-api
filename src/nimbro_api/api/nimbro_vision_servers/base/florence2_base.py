@@ -157,7 +157,9 @@ class Florence2Base(ClientBase):
                 return False, message, None
 
         # retrieve API key
-        api_key = self.get_api_key()[2]
+        success, message, api_key = self.get_api_key()
+        if not success:
+            raise UnrecoverableError(message)
 
         # construct payload
         headers = {
@@ -166,6 +168,8 @@ class Florence2Base(ClientBase):
             'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
             'X-Title': "NimbRo API"
         }
+        if api_key == "":
+            del headers['Authorization']
         data = {
             'images': [image_file],
             'prompts': [self._settings['prompt']],

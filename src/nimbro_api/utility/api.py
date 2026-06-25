@@ -6,27 +6,22 @@ from .misc import UnrecoverableError, assert_type_value, assert_keys, assert_log
 
 def get_api_key(self):
     """
-    Retrieves an API key from the environment variables for the current endpoint.
-
-    Args:
-        api_name (str):
-            The name of the API for which the key is being retrieved. Used to construct
-            the environment variable search key.
-        logger (nimbro_api.utility.logger.Logger | None, optional):
-            If provided, logs the success or failure of the environment variable retrieval.
-            Defaults to `None`.
+    Retrieves the API key from the set endpoint.
 
     Raises:
         UnrecoverableError: If the environment variable for 'api_name' is not set.
 
     Returns:
-        str: The retrieved API key string.
+        str: The API key for the set endpoint.
 
     Notes:
-        - The function expects the environment variable to follow a naming convention derived from 'api_name'.
-        - If 'logger' is provided, the API key value itself is never logged; only the status of the retrieval is recorded.
+        - This function assumes a validated endpoint (see `validate_endpoint()`) stored in `self._endpoint`.
     """
-    if self._endpoint['key_type'] == "environment":
+    if self._endpoint['key_value'] == "":
+        api_key = ""
+        message = "Using no API key."
+        self._logger.debug(message)
+    elif self._endpoint['key_type'] == "environment":
         success, message, api_key = nimbro_api.get_api_key(name=self._endpoint['key_value'], mute=True)
         if not success:
             raise UnrecoverableError(message)
@@ -62,10 +57,10 @@ def validate_endpoint(endpoint, *, flavors, require_key, require_name, setting_n
 
     Notes:
         - Required keys always include "api_url", "key_type", and "key_value".
-        - If 'flavors' is provided and non-empty, "api_flavor" is also required and it's value must be in 'flavors'.
+        - If argument 'flavors' is provided and non-empty, "api_flavor" is also required and it's value must be in 'flavors'.
         - The only permitted optional key is "models_url".
-        - All keys and values in 'endpoint' must be non-empty strings.
-        - The value of 'key_type' must be either "environment" or "plain".
+        - All keys and values in 'endpoint' must be non-empty strings, except the value of key "key_value", which can be an empty string.
+        - The value of "key_type" must be either "environment" or "plain".
     """
     # parse arguments
     assert_type_value(obj=flavors, type_or_value=[list, None], name="argument 'flavors'")
@@ -96,7 +91,8 @@ def validate_endpoint(endpoint, *, flavors, require_key, require_name, setting_n
         assert_type_value(obj=key, type_or_value=str, name=f"key '{key}' in {setting_name}")
         assert_log(expression=len(key) > 0, message=f"Expected key '{key}' in {setting_name} to be a non-empty string.")
         assert_type_value(obj=endpoint[key], type_or_value=str, name=f"key '{key}' in {setting_name}")
-        assert_log(expression=len(endpoint[key]) > 0, message=f"Expected value of key '{key}' in {setting_name} to be a non-empty string.")
+        if key != "key_value":
+            assert_log(expression=len(endpoint[key]) > 0, message=f"Expected value of key '{key}' in {setting_name} to be a non-empty string.")
 
     if has_flavors:
         assert_type_value(obj=endpoint['api_flavor'], type_or_value=flavors, name=f"key 'api_flavor' in {setting_name}")

@@ -4,7 +4,7 @@ import copy
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import parse_image_b64
 from nimbro_api.utility.api import get_api_key, validate_endpoint, post_request
-from nimbro_api.utility.misc import assert_type_value, assert_log
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log
 from ..utility import get_status, get_health, get_flavors, load, unload
 
 class Sam2RealtimeBase(ClientBase):
@@ -187,7 +187,9 @@ class Sam2RealtimeBase(ClientBase):
             self._logger.debug(message)
 
         # retrieve API key
-        api_key = self.get_api_key()[2]
+        success, message, api_key = self.get_api_key()
+        if not success:
+            raise UnrecoverableError(message)
 
         # construct payload
         headers = {
@@ -196,6 +198,8 @@ class Sam2RealtimeBase(ClientBase):
             'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
             'X-Title': "NimbRo API"
         }
+        if api_key == "":
+            del headers['Authorization']
         if prompts is None:
             data = {
                 'images': [image_file],

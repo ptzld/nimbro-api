@@ -4,7 +4,7 @@ import time
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import parse_image_b64
 from nimbro_api.utility.api import get_api_key, validate_endpoint, post_request
-from nimbro_api.utility.misc import assert_type_value, assert_keys, assert_log, format_obj
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log, format_obj
 from nimbro_api.utility.string import is_base64
 from ..utility import get_status, get_health, get_flavors, load, unload
 
@@ -183,7 +183,9 @@ class DamBase(ClientBase):
                 return False, message, None
 
         # retrieve API key
-        api_key = self.get_api_key()[2]
+        success, message, api_key = self.get_api_key()
+        if not success:
+            raise UnrecoverableError(message)
 
         # construct payload
         headers = {
@@ -192,6 +194,8 @@ class DamBase(ClientBase):
             'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
             'X-Title': "NimbRo API"
         }
+        if api_key == "":
+            del headers['Authorization']
         data = {
             'images': [image_file],
             'prompts': [prompts],

@@ -389,7 +389,9 @@ class ImagesBase(ClientBase):
             return True, f"Found cached image for prompt: '{prompt}'", image
 
         # retrieve API key
-        api_key = self.get_api_key()[2]
+        success, message, api_key = self.get_api_key()
+        if not success:
+            raise UnrecoverableError(message)
 
         # validate connection
         success, message = self.validate_connection(api_key=api_key)
@@ -403,6 +405,8 @@ class ImagesBase(ClientBase):
             'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
             'X-Title': "NimbRo API"
         }
+        if api_key == "":
+            del headers['Authorization']
         data = {
             'prompt': prompt,
             'model': self._settings['model'],

@@ -3,7 +3,7 @@ import time
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import parse_image_b64
 from nimbro_api.utility.api import get_api_key, validate_endpoint, post_request
-from nimbro_api.utility.misc import assert_type_value, assert_log
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log
 from ..utility import get_status, get_health, get_flavors, load, unload
 
 class MmGroundingDinoBase(ClientBase):
@@ -148,7 +148,9 @@ class MmGroundingDinoBase(ClientBase):
                 return False, message, None
 
         # retrieve API key
-        api_key = self.get_api_key()[2]
+        success, message, api_key = self.get_api_key()
+        if not success:
+            raise UnrecoverableError(message)
 
         # construct payload
         headers = {
@@ -157,6 +159,8 @@ class MmGroundingDinoBase(ClientBase):
             'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
             'X-Title': "NimbRo API"
         }
+        if api_key == "":
+            del headers['Authorization']
         data = {
             'images': [image_file],
             'inference_parameters': [{

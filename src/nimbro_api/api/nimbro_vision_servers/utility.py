@@ -2,7 +2,7 @@ import datetime
 
 import nimbro_api
 from nimbro_api.utility.api import get_request, post_request
-from nimbro_api.utility.misc import assert_type_value, assert_log
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log
 
 def get_status(self, age):
     # parse arguments
@@ -41,7 +41,9 @@ def get_status(self, age):
         self._logger.debug(message)
 
     # retrieve API key
-    api_key = self.get_api_key()[2]
+    success, message, api_key = self.get_api_key()
+    if not success:
+        raise UnrecoverableError(message)
 
     # use status API
     headers = {
@@ -50,6 +52,8 @@ def get_status(self, age):
         'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
         'X-Title': "NimbRo API"
     }
+    if api_key == "":
+        del headers['Authorization']
     success, message, response = get_request(
         api_name="NimbRo-Vision-Servers API",
         api_url=f"{self._endpoint['api_url']}/status",
@@ -132,7 +136,9 @@ def get_health(self, age):
         self._logger.debug(message)
 
     # retrieve API key
-    api_key = self.get_api_key()[2]
+    success, message, api_key = self.get_api_key()
+    if not success:
+        raise UnrecoverableError(message)
 
     # use health API
     headers = {
@@ -141,6 +147,8 @@ def get_health(self, age):
         'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
         'X-Title': "NimbRo API"
     }
+    if api_key == "":
+        del headers['Authorization']
     success, message, response = get_request(
         api_name="NimbRo-Vision-Servers API",
         api_url=f"{self._endpoint['api_url']}/health",
@@ -210,7 +218,9 @@ def get_flavors(self, age):
         self._logger.debug(message)
 
     # retrieve API key
-    api_key = self.get_api_key()[2]
+    success, message, api_key = self.get_api_key()
+    if not success:
+        raise UnrecoverableError(message)
 
     # use model_flavors API
     headers = {
@@ -219,6 +229,8 @@ def get_flavors(self, age):
         'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
         'X-Title': "NimbRo API"
     }
+    if api_key == "":
+        del headers['Authorization']
     success, message, response = get_request(
         api_name="NimbRo-Vision-Servers API",
         api_url=f"{self._endpoint['api_url']}/model_flavors",
@@ -295,7 +307,9 @@ def load(self, flavor=None, age=0):
     self._logger.debug(message)
 
     # retrieve API key
-    api_key = self.get_api_key()[2]
+    success, message, api_key = self.get_api_key()
+    if not success:
+        raise UnrecoverableError(message)
 
     # use load API
     headers = {
@@ -304,6 +318,8 @@ def load(self, flavor=None, age=0):
         'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
         'X-Title': "NimbRo API"
     }
+    if api_key == "":
+        del headers['Authorization']
     success, message, _ = post_request(
         api_name="NimbRo-Vision-Servers API",
         api_url=f"{self._endpoint['api_url']}/load",
@@ -339,7 +355,9 @@ def unload(self):
     self._logger.debug(message)
 
     # retrieve API key
-    api_key = self.get_api_key()[2]
+    success, message, api_key = self.get_api_key()
+    if not success:
+        raise UnrecoverableError(message)
 
     # use unload API
     headers = {
@@ -348,6 +366,8 @@ def unload(self):
         'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
         'X-Title': "NimbRo API"
     }
+    if api_key == "":
+        del headers['Authorization']
     success, message, response = post_request(
         api_name="NimbRo-Vision-Servers API",
         api_url=f"{self._endpoint['api_url']}/unload",
