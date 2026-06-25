@@ -19,6 +19,7 @@
 | Client | API Docs |
 |--------|----------|
 | [nimbro_api.openai.ChatCompletions](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/chat_completions.py) | [Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) |
+| [nimbro_api.openai.Classify](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/classify.py) | [Classify](https://docs.vllm.ai/en/latest/models/pooling_models/classify) |
 | [nimbro_api.openai.Embeddings](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/embeddings.py) | [Embeddings](https://developers.openai.com/api/reference/resources/embeddings/methods/create) |
 | [nimbro_api.openai.Images](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/images.py) | [Images](https://developers.openai.com/api/reference/resources/images/methods/generate) |
 | [nimbro_api.openai.Speech](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/speech.py) | [Speech](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create) |
