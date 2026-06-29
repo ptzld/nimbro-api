@@ -695,10 +695,9 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
             - str: The full formatted string including ANSI styles and prefixes.
 
     Notes:
-        - The function preserves existing line breaks in 'string' and applies wrapping within those segments.
         - Leading indentation in lines is preserved during wrapping where possible.
+        - The function preserves existing line breaks in 'string' and applies wrapping within those segments.
         - Terminal width is determined with a fallback of infinity columns (no wrapping beyond line-breaks) if detection fails.
-        - All printed lines are automatically encapsulated with reset escape codes.
     """
     # parse arguments
     assert_type_value(obj=string, type_or_value=str, name="argument 'string'")
@@ -707,19 +706,21 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
     assert_type_value(obj=line_length, type_or_value=[int, None], name="argument 'line_length'")
     assert_type_value(obj=style, type_or_value=str, name="argument 'style'")
 
+    # obtain relevant lengths
+    len_pfl = len(prefix_first_line)
+    len_pnl = len(prefix_next_lines)
     if line_length is None:
         line_length = shutil.get_terminal_size(fallback=(float("inf"), 0)).columns
     if line_length <= 0:
-        first_line_length = len(string) + len(prefix_first_line)
-        next_line_length = len(string) + len(prefix_first_line)
+        first_line_length = len(string) + len_pfl
+        next_line_length = len(string) + len_pfl
     else:
-        first_line_length = max(line_length - len(prefix_first_line) - 2, 1)
-        next_line_length = max(line_length - len(prefix_next_lines) - 2, 1)
+        first_line_length = max(line_length - len_pfl - 2, 1)
+        next_line_length = max(line_length - len_pnl - 2, 1)
 
+    # format all lines
     final_lines = []
-
     for line in string.splitlines():
-        # If the line fits without wrapping, preserve it exactly (keeping all spaces)
         max_len = first_line_length if len(final_lines) == 0 else next_line_length
         if visible_len(line) <= max_len:
             final_lines.append(line)
@@ -735,6 +736,7 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
             has_content = False
 
             for word in words:
+                word_vlen = visible_len(word)
                 while word:
                     max_len = first_line_length if len(final_lines) == 0 else next_line_length
 
@@ -750,25 +752,28 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
                         parts = [" " * remaining_len] if remaining_len > 0 else []
                         current_len = remaining_len if remaining_len > 0 else 0
                         has_content = False
-                    elif visible_len(word) <= space_left:
+                    elif word_vlen <= space_left:
                         if has_content:
                             parts.append(" ")
                             current_len += 1
                         parts.append(word)
-                        current_len += visible_len(word)
+                        current_len += word_vlen
                         word = ""
                         has_content = True
-                    elif not has_content or visible_len(word) > max_len:
+                    elif not has_content or word_vlen > max_len:
                         if has_content:
                             parts.append(" ")
                             current_len += 1
                         head, word = split_visible(word, space_left)
+                        head_vlen = visible_len(head)
                         parts.append(head)
-                        current_len += visible_len(head)
+                        current_len += head_vlen
                         final_lines.append("".join(parts))
                         parts = []
                         current_len = 0
                         has_content = False
+                        if word:
+                            word_vlen = visible_len(word)
                     else:
                         if has_content:
                             final_lines.append("".join(parts))
@@ -781,7 +786,8 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
         else:
             final_lines.append("")
 
-    printed = ""
+    # prefix all formatted lines
+    printed_parts = []
     for i, line in enumerate(final_lines):
         if i == 0:
             if style == "":
@@ -793,12 +799,14 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
                 p = f"{prefix_next_lines}| {line}"
             else:
                 p = f"{style}{prefix_next_lines}| {line}{escape['end']}"
-        print(p)
-        printed = f"{printed}\n{p}"
-    if len(printed) > 0:
-        printed = printed[1:]
+        printed_parts.append(p)
+    printed_text = "\n".join(printed_parts)
 
-    return final_lines, printed
+    # print everything in a single I/O call
+    if printed_text:
+        print(printed_text)
+
+    return final_lines, printed_text
 
 def format_obj(obj, *, cutoff=3000):
     """
