@@ -328,7 +328,9 @@ class ClientBase:
                             message = f"Expected 'set_settings()' to return a tuple where the second element is of type 'str' but got '{type(message).__name__}'."
                         if success:
                             stage += 1
-                            self._logger.debug(f"Temporarily overwritten settings: {list(kwargs.keys())}: {message}")
+                            overwritten_settings = list(kwargs.keys())
+                            num_overwritten_settings = len(overwritten_settings)
+                            self._logger.debug(f"Temporarily overwritten '{num_overwritten_settings}' setting{'' if num_overwritten_settings == 1 else 's'}: {overwritten_settings} - {message}")
                         else:
                             if retry == -1 or retry >= attempt:
                                 if retry == -1:
@@ -511,7 +513,7 @@ class ClientBase:
                             success = False
                             message = f"Expected 'set_settings()' to return a tuple where the second element is of type 'str' but got '{type(message).__name__}'."
                         if success:
-                            self._logger.debug(f"Reverted settings: {list(kwargs.keys())}: {message}")
+                            self._logger.debug(f"Reverted '{num_overwritten_settings}' temporarily overwritten setting{'' if num_overwritten_settings == 1 else 's'}: {overwritten_settings} - {message}")
                             if response[0]:
                                 if attempt == 1:
                                     message = f"Succeeded '{function.__name__}()'."
@@ -811,19 +813,18 @@ class ClientBase:
             settings = self._expand_dotted_keys(settings)
 
         n_leaves = self._count_leaves(settings)
-        n_total = self._count_leaves(self._default_settings)
         leaf_keys = self._leaf_keys(settings)
 
         if mode == "set":
-            self._logger.debug(f"Applying '{n_leaves}' of '{n_total}' setting{'' if n_total == 1 else 's'}: {leaf_keys}")
+            self._logger.debug(f"Applying '{n_leaves}' setting{'' if n_leaves == 1 else 's'}: {leaf_keys}")
         elif mode == "temp":
-            self._logger.debug(f"Temporarily applying '{n_leaves}' of '{n_total}' setting{'' if n_total == 1 else 's'}: {leaf_keys}")
+            self._logger.debug(f"Temporarily applying '{n_leaves}' setting{'' if n_leaves == 1 else 's'}: {leaf_keys}")
         elif mode == "revert":
-            self._logger.debug(f"Reverting '{n_leaves}' of '{n_total}' setting{'' if n_total == 1 else 's'}: {leaf_keys}")
+            self._logger.debug(f"Reverting '{n_leaves}' setting{'' if n_leaves == 1 else 's'}: {leaf_keys}")
         elif mode == "reset":
-            self._logger.debug(f"Resetting all '{n_leaves}' setting{'' if n_total == 1 else 's'}: {leaf_keys}")
+            self._logger.debug(f"Resetting all '{n_leaves}' setting{'' if n_leaves == 1 else 's'}: {leaf_keys}")
         elif mode == "init":
-            self._logger.debug(f"Initializing all '{n_leaves}' setting{'' if n_total == 1 else 's'}: {leaf_keys}")
+            self._logger.debug(f"Initializing all '{n_leaves}' setting{'' if n_leaves == 1 else 's'}: {leaf_keys}")
 
         assert_keys(obj=settings, keys=['mute', 'persist'], mode="blacklist", name="argument 'settings'") # reserved for `wrap()`
         assert_keys(obj=settings, keys=self._default_settings.keys(), mode="whitelist", name="argument 'settings'")
