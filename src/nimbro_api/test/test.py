@@ -107,9 +107,9 @@ def _test_module(prefix, path, function):
     _report(prefix, f"Processed module with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['yellow'] if failures > 0 else escape['blue'])
     return failures
 
-def _test_api(path, module, function):
+def _test_provider(path, module, function):
     failures = 0
-    _report(f"[{path.name}]", "Testing API.", escape['darkcyan'])
+    _report(f"[{path.name}]", "Testing API provider.", escape['darkcyan'])
     stamp = time.perf_counter()
     package_path = path.parent.parent
     test_dir = path / "test"
@@ -121,7 +121,7 @@ def _test_api(path, module, function):
     else:
         failures += 1
         _report(f"[{path.name}]", f"Test directory '{test_dir}' does not exist.", escape['darkred'])
-    _report(f"[{path.name}]", f"Tested API with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['darkyellow'] if failures > 0 else escape['cyan'])
+    _report(f"[{path.name}]", f"Tested API provider with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['darkyellow'] if failures > 0 else escape['cyan'])
     return failures
 
 def _test_client(module, name):
@@ -170,31 +170,31 @@ def _test_client(module, name):
     assert_log(expression='retry' in settings, message="Expected to find setting 'retry'.")
     assert_type_value(obj=settings['retry'], type_or_value=1, name="setting 'retry'")
 
-def _common_tests(api, module):
+def _common_tests(provider, module):
     failures = 0
     _report("", "Performing common tests.", escape['darkcyan'])
     stamp = time.perf_counter()
     for api_name in nimbro_api.api.__all__:
-        if api is None or api_name.find(api) > -1:
+        if provider is None or api_name.find(provider) > -1:
             failures_api = 0
             module_obj = getattr(nimbro_api.api, api_name)
-            _report(f"[{api_name}]", "Handling API.", escape['darkblue'])
+            _report(f"[{api_name}]", "Handling API provider.", escape['darkblue'])
             stamp_api = time.perf_counter()
             for name in module_obj.__all__:
                 if module is None or name.find(module) > -1:
                     failures_api += _test_function(prefix=f"[{api_name}][{name}]", fun=_test_client, args={'module': module_obj, 'name': name})
-            _report(f"[{api_name}]", f"Handled API with '{failures_api}' failure{'' if failures_api == 1 else 's'} in '{time.perf_counter() - stamp_api:.3f}s'.", escape['yellow'] if failures_api > 0 else escape['blue'])
+            _report(f"[{api_name}]", f"Handled API provider with '{failures_api}' failure{'' if failures_api == 1 else 's'} in '{time.perf_counter() - stamp_api:.3f}s'.", escape['yellow'] if failures_api > 0 else escape['blue'])
             failures += failures_api
     _report("", f"Performed common tests with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['darkyellow'] if failures > 0 else escape['cyan'])
     return failures
 
-def test(api=None, *, module=None, function="utilities", common=True, utilities=True, severity=None):
+def test(provider=None, *, module=None, function="utilities", common=True, utilities=True, severity=None):
     """
     Executes a comprehensive suite of tests including common client checks and API-specific test modules.
 
     Args:
-        api (str | None, optional):
-            The name of a specific API group to test. If `None`, all discovered APIs are processed. Defaults to `None`.
+        provider (str | None, optional):
+            The name of a specific API provider to test. If `None`, all discovered APIs are processed. Defaults to `None`.
         module (str | None, optional):
             A sub-string filter used to select specific test modules (files) within an API's test directory. Defaults to `None`.
         function (str | None, optional):
@@ -214,10 +214,10 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
 
     Notes:
         - Two log files are generated in the "test" sub-directory of the package: "test.txt" (raw text) and "test_pretty.txt" (with ANSI color codes).
-        - Test discovery relies on the directory structure where each API resides in a sub-directory of the "api" folder containing a "test" directory.
+        - Test discovery relies on the directory structure where each API provider resides in a sub-directory of the "api" folder containing a "test" directory.
     """
     # parse arguments
-    assert_type_value(obj=api, type_or_value=[str, None], name="argument 'api'")
+    assert_type_value(obj=provider, type_or_value=[str, None], name="argument 'provider'")
     assert_type_value(obj=module, type_or_value=[str, None], name="argument 'module'")
     assert_type_value(obj=function, type_or_value=[str, None], name="argument 'function'")
     assert_type_value(obj=common, type_or_value=bool, name="argument 'common'")
@@ -245,13 +245,13 @@ def test(api=None, *, module=None, function="utilities", common=True, utilities=
         failures += _test_utilities()
 
     if common:
-        failures += _common_tests(api=api, module=module)
+        failures += _common_tests(provider=provider, module=module)
     package_path = Path(nimbro_api.__path__[0])
     api_root_path = package_path / "api"
-    api_paths = [api_root_path / api] if api else [p for p in api_root_path.iterdir() if p.is_dir()]
+    api_paths = [api_root_path / provider] if provider else [p for p in api_root_path.iterdir() if p.is_dir()]
     for path in api_paths:
         if not path.name.startswith("_"):
-            failures += _test_api(path=path, module=module, function=function)
+            failures += _test_provider(path=path, module=module, function=function)
     _report("", f"Finished tests with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['red'] if failures > 0 else escape['green'])
 
     # reset logger severity
