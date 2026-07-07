@@ -153,18 +153,25 @@ def read_json(file_path, *, bypass_orjson=False, name="file", logger=None):
         success = True
 
     if success:
-
         if logger is not None:
             logger.debug(f"Reading {name} '{file_path}'.")
-
         try:
             if ORJSON_AVAILABLE and not bypass_orjson:
-                with open(file_path, "rb") as f:
-                    json_object = orjson.loads(f.read())
+                try:
+                    with open(file_path, "rb") as f:
+                        json_object = orjson.loads(f.read())
+                except Exception as e:
+                    if "Not enough memory to allocate buffer for parsing" in str(e):
+                        if logger is not None:
+                            logger.debug(f"Using slow 'json' module to read {name} after 'orjson' error: {repr(e)}")
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            json_object = json.load(f)
+                    else:
+                        raise e
             else:
                 if logger is not None and not bypass_orjson:
                     logger.debug(f"Using slow 'json' module to read {name}. Install 'orjson' (pip install orjson) to speed this up!", once=True)
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     json_object = json.load(f)
         except Exception as e:
             success = False
@@ -233,24 +240,24 @@ def write_json(file_path, json_object, *, indent=True, name="file", logger=None)
 
     try:
         if ORJSON_AVAILABLE:
-            with open(file_path, "wb") as f:
-                try:
+            try:
+                with open(file_path, "wb") as f:
                     if indent:
                         f.write(orjson.dumps(json_object, option=orjson.OPT_INDENT_2))
                     else:
                         f.write(orjson.dumps(json_object))
-                except Exception as e:
-                    if str(e) == 'Integer exceeds 64-bit range':
-                        if logger is not None:
-                            logger.debug(f"Using slow 'json' module to write {name} after 'orjson' error: {repr(e)}")
-                        with open(file_path, 'w', encoding='utf-8') as f:
-                            json.dump(json_object, f, indent=2 if indent else None)
-                    else:
-                        raise e
+            except Exception as e:
+                if "Integer exceeds 64-bit range" in str(e):
+                    if logger is not None:
+                        logger.debug(f"Using slow 'json' module to write {name} after 'orjson' error: {repr(e)}")
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        json.dump(json_object, f, indent=2 if indent else None)
+                else:
+                    raise e
         else:
             if logger is not None:
                 logger.debug(f"Using slow 'json' module to write {name}. Install 'orjson' (pip install orjson) to speed this up!", once=True)
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(json_object, f, indent=2 if indent else None)
     except Exception as e:
         success = False
