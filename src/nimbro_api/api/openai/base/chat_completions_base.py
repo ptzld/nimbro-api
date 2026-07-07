@@ -739,6 +739,7 @@ class ChatCompletionsBase(ClientBase):
             stamp_start = time.perf_counter()
 
             # start completion thread
+            self.completion_response = None
             self.pipe = multiprocessing.Pipe(duplex=True)
             self.is_prompting = True
             request_thread = threading.Thread(target=self.completion_thread, kwargs={'pipe': self.pipe, 'api_key': api_key})
@@ -746,154 +747,170 @@ class ChatCompletionsBase(ClientBase):
             request_thread.start()
 
             # receive response
-            while True:
-                now = time.perf_counter()
+            try:
+                while True:
+                    now = time.perf_counter()
 
-                if self._settings['timeout_completion'] is not None and now - stamp_start > self._settings['timeout_completion']:
-                    self.pipe[0].send("INTERNAL")
-                    usage = self.save_usage(None, datetime_start)
-                    logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_completion']}s' before completion was finished.")
-                    break
-
-                if self._settings['stream'] is True:
-                    if stamp_last_chunk is None:
-                        if self._settings['timeout_chunk_first'] is not None and now - stamp_start > self._settings['timeout_chunk_first']:
-                            self.pipe[0].send("INTERNAL")
-                            usage = self.save_usage(None, datetime_start)
-                            logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_chunk_first']}s' without receiving the first chunk.")
-                            break
-                    elif self._settings['timeout_chunk_next'] is not None and now - stamp_last_chunk > self._settings['timeout_chunk_next']:
+                    if self._settings['timeout_completion'] is not None and now - stamp_start > self._settings['timeout_completion']:
                         self.pipe[0].send("INTERNAL")
                         usage = self.save_usage(None, datetime_start)
-                        logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_chunk_next']}s' without receiving the next chunk.")
+                        logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_completion']}s' before completion was finished.")
                         break
 
-                alive = request_thread.is_alive()
-
-                if self.pipe[0].poll():
-                    stamp_last_chunk = time.perf_counter()
-
-                    chunk = self.pipe[0].recv()
-                    assert isinstance(chunk, dict), f"Expected chunk '{chunk}' to be of type 'dict' but got '{type(chunk).__name__}'."
-                    assert set(chunk.keys()) == {'code', 'content'}, f"Expected chunk '{chunk}' to have keys 'code' and 'content'."
-                    assert isinstance(chunk['code'], str), f"Expected chunk code '{chunk['code']}' to be of type 'str' but got '{type(chunk['code']).__name__}'."
-                    assert chunk['code'] in ['INTERRUPT', 'ERROR', 'COMPLETION', 'USAGE', 'ALL_CHUNKS_RECEIVED'], f"Expected chunk code '{chunk['code']}' to be in ['INTERRUPT', 'ERROR', 'COMPLETION', 'USAGE', 'ALL_CHUNKS_RECEIVED']."
-
-                    if chunk['code'] == "ERROR" or chunk['code'] == 'INTERRUPT':
-                        assert isinstance(chunk['content'], str), f"Expected chunk content '{chunk['content']}' to be of type 'str' but got '{type(chunk['content']).__name__}'."
-
-                        if usage is None:
+                    if self._settings['stream'] is True:
+                        if stamp_last_chunk is None:
+                            if self._settings['timeout_chunk_first'] is not None and now - stamp_start > self._settings['timeout_chunk_first']:
+                                self.pipe[0].send("INTERNAL")
+                                usage = self.save_usage(None, datetime_start)
+                                logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_chunk_first']}s' without receiving the first chunk.")
+                                break
+                        elif self._settings['timeout_chunk_next'] is not None and now - stamp_last_chunk > self._settings['timeout_chunk_next']:
+                            self.pipe[0].send("INTERNAL")
                             usage = self.save_usage(None, datetime_start)
-
-                        logs.append(chunk['content'])
-                        if len(logs[-1]) > 5000:
-                            logs[-1] = logs[-1][:5000] + "..."
-
-                        if chunk['code'] == 'INTERRUPT':
-                            if self._settings['request_safeguard'] and request_thread.is_alive():
-                                stamp = time.perf_counter()
-                                self._logger.info("Waiting for completion-thread to terminate before acknowledging interrupt.")
-                                request_thread.join()
-                                self._logger.warn(f"Joined completion-thread after waiting '{time.perf_counter() - stamp:.3f}s'.")
-
-                            response = self.post_process_completion(
-                                response_type=response_type,
-                                reasoning=None,
-                                text=None,
-                                tool_calls=[],
-                                is_valid=False,
-                                correction=False,
-                                usage=usage,
-                                logs=logs
-                            )
-                            raise UnrecoverableError("Interrupted completion.")
-                        break
-
-                    if chunk['code'] == "COMPLETION":
-                        reasoning, text, tool_calls = self.parse_chunk(chunk['content'], reasoning, text, tool_calls)
-
-                    elif chunk['code'] == "USAGE":
-                        assert isinstance(chunk['content'], dict), f"Expected chunk content '{chunk['content']}' to be of type 'dict' but got '{type(chunk['content']).__name__}'."
-                        if 'prompt_tokens' not in chunk['content']:
-                            logs.append("Ignoring received usage message that misses expected key 'prompt_tokens'.")
-                            self._logger.warn(logs[-1])
-                        elif 'completion_tokens' not in chunk['content']:
-                            logs.append("Ignoring received usage message that misses expected key 'completion_tokens'.")
-                            self._logger.warn(logs[-1])
-                        else:
-                            usage = self.save_usage(chunk, datetime_start)
-
-                    elif chunk['code'] == "ALL_CHUNKS_RECEIVED":
-                        if reasoning == "" and text == "" and len(tool_calls) == 0:
-                            logs.append("Completion finished before receiving any content.")
-                            self._logger.warn(logs[-1])
+                            logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_chunk_next']}s' without receiving the next chunk.")
                             break
 
-                        is_complete = True
+                    alive = request_thread.is_alive()
 
-                        if usage is None:
-                            usage = self.save_usage(None, datetime_start)
-                            logs.append("Received completion without usage information.")
-                            self._logger.warn(logs[-1])
+                    if self.pipe[0].poll():
+                        stamp_last_chunk = time.perf_counter()
 
-                        # move reasoning to text when completion contains reasoning only
-                        if reasoning != "" and len(tool_calls) == 0 and text == "":
-                            self._logger.warn("Completion contains nothing but reasoning. Interpreting reasoning content as text-completion.")
-                            text = reasoning
-                            reasoning = ""
+                        chunk = self.pipe[0].recv()
+                        assert isinstance(chunk, dict), f"Expected chunk '{chunk}' to be of type 'dict' but got '{type(chunk).__name__}'."
+                        assert set(chunk.keys()) == {'code', 'content'}, f"Expected chunk '{chunk}' to have keys 'code' and 'content'."
+                        assert isinstance(chunk['code'], str), f"Expected chunk code '{chunk['code']}' to be of type 'str' but got '{type(chunk['code']).__name__}'."
+                        assert chunk['code'] in ['INTERRUPT', 'ERROR', 'COMPLETION', 'USAGE', 'ALL_CHUNKS_RECEIVED'], f"Expected chunk code '{chunk['code']}' to be in ['INTERRUPT', 'ERROR', 'COMPLETION', 'USAGE', 'ALL_CHUNKS_RECEIVED']."
 
-                        # extract tool-calls from text
-                        if len(tool_calls) == 0 and response_type not in ["text", "auto", "json"]:
-                            text, tool_calls, logs = self.extract_tool(text, tool_calls, logs)
+                        if chunk['code'] == "ERROR" or chunk['code'] == 'INTERRUPT':
+                            assert isinstance(chunk['content'], str), f"Expected chunk content '{chunk['content']}' to be of type 'str' but got '{type(chunk['content']).__name__}'."
 
-                        # extract JSON from text
-                        if response_type == "json":
-                            try:
-                                dict_extracted = json.loads(text)
-                            except Exception:
-                                dict_extracted = extract_json(text, first_over_longest=False)
-                                if dict_extracted is not None:
-                                    if "\n" in text:
-                                        text_str = f"\n{text}"
-                                    else:
-                                        text_str = text
-                                    logs.append(f"Extracted JSON {format_obj(dict_extracted)} from invalid text-completion: '{text_str}'.")
-                                    self._logger.warn(logs[-1])
-                                    text = json.dumps(dict_extracted, indent=2)
+                            if usage is None:
+                                usage = self.save_usage(None, datetime_start)
+
+                            logs.append(chunk['content'])
+                            if len(logs[-1]) > 5000:
+                                logs[-1] = logs[-1][:5000] + "..."
+
+                            if chunk['code'] == 'INTERRUPT':
+                                if self._settings['request_safeguard'] and request_thread.is_alive():
+                                    stamp = time.perf_counter()
+                                    self._logger.info("Waiting for completion-thread to terminate before acknowledging interrupt.")
+                                    request_thread.join()
+                                    self._logger.warn(f"Joined completion-thread after waiting '{time.perf_counter() - stamp:.3f}s'.")
+
+                                response = self.post_process_completion(
+                                    response_type=response_type,
+                                    reasoning=None,
+                                    text=None,
+                                    tool_calls=[],
+                                    is_valid=False,
+                                    correction=False,
+                                    usage=usage,
+                                    logs=logs
+                                )
+                                raise UnrecoverableError("Interrupted completion.")
+                            break
+
+                        if chunk['code'] == "COMPLETION":
+                            reasoning, text, tool_calls = self.parse_chunk(chunk['content'], reasoning, text, tool_calls)
+
+                        elif chunk['code'] == "USAGE":
+                            assert isinstance(chunk['content'], dict), f"Expected chunk content '{chunk['content']}' to be of type 'dict' but got '{type(chunk['content']).__name__}'."
+                            if 'prompt_tokens' not in chunk['content']:
+                                logs.append("Ignoring received usage message that misses expected key 'prompt_tokens'.")
+                                self._logger.warn(logs[-1])
+                            elif 'completion_tokens' not in chunk['content']:
+                                logs.append("Ignoring received usage message that misses expected key 'completion_tokens'.")
+                                self._logger.warn(logs[-1])
                             else:
-                                text = json.dumps(dict_extracted, indent=2)
+                                usage = self.save_usage(chunk, datetime_start)
 
-                        # ensure tool-call arguments are valid and extract them if not
-                        for i, tool in enumerate(tool_calls):
-                            if tool['arguments'] == "":
-                                tool_calls[i]['arguments'] = r"{}"
-                            else:
+                        elif chunk['code'] == "ALL_CHUNKS_RECEIVED":
+                            if reasoning == "" and text == "" and len(tool_calls) == 0:
+                                logs.append("Completion finished before receiving any content.")
+                                self._logger.warn(logs[-1])
+                                break
+
+                            is_complete = True
+
+                            if usage is None:
+                                usage = self.save_usage(None, datetime_start)
+                                logs.append("Received completion without usage information.")
+                                self._logger.warn(logs[-1])
+
+                            # move reasoning to text when completion contains reasoning only
+                            if reasoning != "" and len(tool_calls) == 0 and text == "":
+                                self._logger.warn("Completion contains nothing but reasoning. Interpreting reasoning content as text-completion.")
+                                text = reasoning
+                                reasoning = ""
+
+                            # extract tool-calls from text
+                            if len(tool_calls) == 0 and response_type not in ["text", "auto", "json"]:
+                                text, tool_calls, logs = self.extract_tool(text, tool_calls, logs)
+
+                            # extract JSON from text
+                            if response_type == "json":
                                 try:
-                                    parameters = json.loads(tool['arguments'])
+                                    dict_extracted = json.loads(text)
                                 except Exception:
-                                    parameters = extract_json(tool['arguments'], first_over_longest=False)
-                                    if parameters is not None:
-                                        if "\n" in tool['arguments']:
-                                            text_str = f"\n{tool['arguments']}"
+                                    dict_extracted = extract_json(text, first_over_longest=False)
+                                    if dict_extracted is not None:
+                                        if "\n" in text:
+                                            text_str = f"\n{text}"
                                         else:
-                                            text_str = tool['arguments']
-                                        logs.append(f"Extracted JSON {format_obj(parameters)} from invalid tool-call arguments: '{text_str}'.")
+                                            text_str = text
+                                        logs.append(f"Extracted JSON {format_obj(dict_extracted)} from invalid text-completion: '{text_str}'.")
                                         self._logger.warn(logs[-1])
-                                        tool_calls[i]['arguments'] = json.dumps(parameters, indent=2)
+                                        text = json.dumps(dict_extracted, indent=2)
                                 else:
-                                    tool_calls[i]['arguments'] = json.dumps(parameters, indent=2)
+                                    text = json.dumps(dict_extracted, indent=2)
 
-                        # ensure valid tool names
-                        tool_calls, logs = self.clean_tool_calls(tool_calls, logs)
+                            # ensure tool-call arguments are valid and extract them if not
+                            for i, tool in enumerate(tool_calls):
+                                if tool['arguments'] == "":
+                                    tool_calls[i]['arguments'] = r"{}"
+                                else:
+                                    try:
+                                        parameters = json.loads(tool['arguments'])
+                                    except Exception:
+                                        parameters = extract_json(tool['arguments'], first_over_longest=False)
+                                        if parameters is not None:
+                                            if "\n" in tool['arguments']:
+                                                text_str = f"\n{tool['arguments']}"
+                                            else:
+                                                text_str = tool['arguments']
+                                            logs.append(f"Extracted JSON {format_obj(parameters)} from invalid tool-call arguments: '{text_str}'.")
+                                            self._logger.warn(logs[-1])
+                                            tool_calls[i]['arguments'] = json.dumps(parameters, indent=2)
+                                    else:
+                                        tool_calls[i]['arguments'] = json.dumps(parameters, indent=2)
 
-                        logs = self.add_completion_to_context(reasoning, text, tool_calls, logs)
+                            # ensure valid tool names
+                            tool_calls, logs = self.clean_tool_calls(tool_calls, logs)
+
+                            logs = self.add_completion_to_context(reasoning, text, tool_calls, logs)
+                            break
+                    elif not alive:
+                        usage = self.save_usage(None, datetime_start)
+                        logs.append(f"Error while receiving completion: Completion thread unexpectedly died after '{now - stamp_start:.3f}s'.")
                         break
-                elif not alive:
-                    usage = self.save_usage(None, datetime_start)
-                    logs.append(f"Error while receiving completion: Completion thread unexpectedly died after '{now - stamp_start:.3f}s'.")
-                    break
-                else:
-                    time.sleep(0.01)
+                    else:
+                        time.sleep(0.01)
+            finally:
+                # deterministically release pipe FDs and reap the completion thread
+                if request_thread.is_alive():
+                    if self.completion_response is not None:
+                        try:
+                            self.completion_response.close()
+                        except Exception as e:
+                            self._logger.warn(f"Failed to close HTTP response to unblock completion thread: {repr(e)}")
+                        else:
+                            self._logger.debug("Closed HTTP response to unblock completion thread.")
+                    request_thread.join(timeout=5.0)
+                    if request_thread.is_alive():
+                        self._logger.warn("Completion thread did not terminate after closing its HTTP response.")
+                self.pipe[0].close()
+                self.pipe[1].close()
 
             if is_complete:
                 is_valid, correction_messages, logs = self.validate_completion(response_type, text, tool_calls, logs)
@@ -1016,6 +1033,12 @@ class ChatCompletionsBase(ClientBase):
             raise NotImplementedError(f"Undefined API flavor '{self._endpoint['api_flavor']}'.")
 
     def completion_thread(self, pipe, api_key):
+        try:
+            self._completion_thread(pipe=pipe, api_key=api_key)
+        except (BrokenPipeError, OSError):
+            self._logger.debug("Completion thread stopped after its pipe was closed.")
+
+    def _completion_thread(self, pipe, api_key):
         self._logger.debug("Starting completion thread.")
 
         messages = copy.deepcopy(self.messages)
@@ -1176,6 +1199,7 @@ class ChatCompletionsBase(ClientBase):
 
             self._logger.debug("Sending POST request.")
             completion = requests.post(self._endpoint['api_url'], headers=headers, json=data, stream=self._settings['stream'], timeout=(self._settings['timeout_connect'], self._settings['timeout_read']))
+            self.completion_response = completion
 
             if not self._settings['stream']:
                 if completion.status_code != 200:
@@ -1400,7 +1424,7 @@ class ChatCompletionsBase(ClientBase):
             except Exception as e:
                 message = f"Error while receiving completion: {repr(e)}."
                 pipe[1].send({'code': "ERROR", 'content': message})
-            else:
+            finally:
                 completion.close()
                 self._logger.debug("Connection closed.")
 
@@ -2028,12 +2052,12 @@ class ChatCompletionsBase(ClientBase):
             # keep trying until is_prompting is cleared
             while self.is_prompting:
                 from multiprocessing.connection import wait
-                ready = wait([self.pipe[0]], timeout=0.01)
-                if ready:
-                    try:
+                try:
+                    ready = wait([self.pipe[0]], timeout=0.01)
+                    if ready:
                         self.pipe[0].send("EXTERNAL")
-                    except (BrokenPipeError, OSError):
-                        break  # receiver gone
+                except (BrokenPipeError, OSError):
+                    break  # receiver gone
                 self._logger.debug("Waiting until completion is interrupted.", throttle=1.0, skip_first=True)
                 time.sleep(0.005)
 
