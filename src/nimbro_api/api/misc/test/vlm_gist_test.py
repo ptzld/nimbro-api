@@ -592,6 +592,11 @@ def test_13_parallel_threads(n=10):
 
 def test_14_parallel_multiprocessing(n=10):
     client = VlmGist(settings={
+        'scene_description.chat_completions.logger_severity': "off",
+        'structured_description.chat_completions.logger_severity': "off",
+        'detection.mmgroundingdino.logger_severity': "off",
+        'segmentation.sam2_realtime.logger_severity': "off",
+        'batch.logger_severity': "off",
         'batch.size': n,
         'batch.style': "multiprocessing",
         'batch.retry': 2,
