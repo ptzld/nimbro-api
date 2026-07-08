@@ -254,6 +254,9 @@ def test(provider=None, *, module=None, function="utilities", common=True, utili
             failures += _test_provider(path=path, module=module, function=function)
     _report("", f"Finished tests with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['red'] if failures > 0 else escape['green'])
 
+    # ensure deferred jobs are drained
+    nimbro_api.execute_deferred_jobs()
+
     # reset logger severity
     success, message = nimbro_api.set_settings(settings={'logger_mute': logger_mute, 'keys_cache': keys_cache})
     assert_log(expression=success, message=message)

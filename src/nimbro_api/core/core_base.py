@@ -1,19 +1,14 @@
 import os
 import time
 import copy
-import signal
+import atexit
 import datetime
 import threading
 import traceback
-from queue import SimpleQueue
+from queue import SimpleQueue, Empty
 
 from ..client import ClientBase
 from ..utility.misc import UnrecoverableError, assert_type_value, assert_log
-
-_SIGNAL_NAMES = {
-    v: k for k, v in signal.__dict__.items()
-    if k.startswith("SIG") and not k.startswith("SIG_") and isinstance(v, int)
-}
 
 class CoreBase(ClientBase):
 
@@ -22,24 +17,9 @@ class CoreBase(ClientBase):
         self._cache = {}
         self._defer_queue = SimpleQueue()
         self._defer_timer = None
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+        atexit.register(self.execute_deferred_jobs)
         self._logger.debug("Core initialized.")
         self._initialized = True
-
-    def _signal_handler(self, signum, frame):
-        name = _SIGNAL_NAMES.get(signum, f"Unknown ({signum})")
-        self._logger_settings['logger_line_length'] = 0
-        self._logger.info(f"Terminating after receiving signal '{name}' at '{frame.f_code.co_filename}:{frame.f_lineno}'.")
-        self._logger.debug("Traceback:\n" + "".join(traceback.format_stack(frame)))
-
-        if self._defer_timer is not None:
-            self._logger.debug("Cancelling deferred job.")
-            self._defer_timer.cancel()
-        self._deferred_thread()
-
-        signal.signal(signum, signal.SIG_DFL)
-        os.kill(os.getpid(), signum)
 
     # settings
 
@@ -298,10 +278,13 @@ class CoreBase(ClientBase):
         stamp_thread = time.perf_counter()
         self._logger.debug("Deferred thread started.")
         jobs, errors, = 0, 0
-        while not self._defer_queue.empty():
+        while True:
+            try:
+                job = self._defer_queue.get_nowait()
+            except Empty:
+                break
             # execute job
             stamp_job = time.perf_counter()
-            job = self._defer_queue.get_nowait()
             self._logger.debug(f"Executing deferred job '{job[0].__name__}'.")
             try:
                 job[0](job[1])
@@ -329,6 +312,7 @@ class CoreBase(ClientBase):
         if self._defer_timer is not None:
             self._defer_timer.cancel()
         self._defer_timer = threading.Timer(self._settings['defer_delay'], self._deferred_thread)
+        self._defer_timer.daemon = True
         message = "Registered deferred job."
         self._logger.debug(message)
         self._defer_timer.start()
@@ -337,6 +321,6 @@ class CoreBase(ClientBase):
 
     def execute_deferred_jobs(self):
         if self._defer_timer is not None:
-            self._logger.debug("Cancelling deferred thread timer.")
+            self._logger.debug("Cancelling deferred thread timer before executing deferred thread.")
             self._defer_timer.cancel()
         return self._deferred_thread()

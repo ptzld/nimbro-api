@@ -237,7 +237,8 @@ class Core(Client):
 
     def register_deferred_job(self, job, **kwargs):
         """
-        Register a job to be executed when no other jobs have been registered within the timeframe defined by the "defer_delay" setting.
+        Register a job to be executed after a number of seconds defined by the 'defer_delay' setting.
+        All pending cache jobs that were registered but not yet executed get deferred further alongside the new job.
 
         Args:
             job (tuple | list):
@@ -260,7 +261,7 @@ class Core(Client):
 
     def execute_deferred_jobs(self, **kwargs):
         """
-        Execute all threads that have been registered via `register_deferred_job()` but have not yet been run.
+        Execute all pending jobs that have been registered via `register_deferred_job()` but have not yet been executed.
 
         Args:
             **kwargs:
