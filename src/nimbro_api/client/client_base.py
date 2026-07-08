@@ -611,6 +611,7 @@ class ClientBase:
             settings (dict | None, optional):
                 New settings to apply. Settings not contained are kept.
                 See the documentation of `get_settings()` for a comprehensive list of all available settings.
+                Nested settings can be specified using dot-separated keys (e.g., "a.b.c" is equivalent to {"a": {"b": {"c": ...}}}).
                 Use `None` to reset all settings to their initial values. Defaults to `None`.
             mode (str):
                 Signals where this function is used and configures the logging messages it emits.

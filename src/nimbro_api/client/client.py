@@ -17,14 +17,15 @@ class Client:
             client_base (type):
                 The class providing the API implementation. Must be a subclass of `ClientBase`.
             settings (dict | None, optional):
-                Settings initializing the client. Missing settings are drawn from 'default_settings'.
-                See the documentation of `get_settings()` for of comprehensive list of all available settings.
-                Use `None` to use default settings. Defaults to `None`.
+                Settings initializing the object. Settings not contained are initialized to their default values.
+                See the documentation of `get_settings()` for a comprehensive list of all available settings.
+                Nested settings can be specified using dot-separated keys (e.g., "a.b.c" is equivalent to {"a": {"b": {"c": ...}}}).
+                Use `None` to initialize with default settings. Defaults to `None`.
             default_settings (dict | None, optional):
                 The default settings of this client.
                 Use `None` to use default settings. Defaults to `None`.
             **kwargs:
-                The initial settings (see `get_settings()`) can also be configured via keyword arguments.
+                All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
 
         Raises:
@@ -78,6 +79,7 @@ class Client:
             settings (dict | None, optional):
                 New settings to apply. Settings not contained are kept.
                 See the documentation of `get_settings()` for a comprehensive list of all available settings.
+                Nested settings can be specified using dot-separated keys (e.g., "a.b.c" is equivalent to {"a": {"b": {"c": ...}}}).
                 Use `None` to reset all settings to their initial values. Defaults to `None`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments.

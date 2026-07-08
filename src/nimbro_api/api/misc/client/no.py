@@ -28,6 +28,16 @@ class No(Client):
     def __init__(self, settings=None, **kwargs):
         """
         Create an Client implementing the no-as-a-service API (https://github.com/hotheadhacker/no-as-a-service).
+
+        Args:
+            settings (dict | None, optional):
+                Settings initializing the object. Settings not contained are initialized to their default values.
+                See the documentation of `get_settings()` for a comprehensive list of all available settings.
+                Nested settings can be specified using dot-separated keys (e.g., "a.b.c" is equivalent to {"a": {"b": {"c": ...}}}).
+                Use `None` to initialize with default settings. Defaults to `None`.
+            **kwargs:
+                All settings (see `get_settings()`) can also be initialized via keyword arguments.
+                When doing so, 'settings' must be `None` or an empty `dict`.
         """
         super().__init__(client_base=NoBase, settings=settings, default_settings=default_settings, **kwargs)
 
@@ -80,6 +90,7 @@ class No(Client):
             settings (dict | None, optional):
                 New settings to apply. Settings not contained are kept.
                 See the documentation of `get_settings()` for a comprehensive list of all available settings.
+                Nested settings can be specified using dot-separated keys (e.g., "a.b.c" is equivalent to {"a": {"b": {"c": ...}}}).
                 Use `None` to reset all settings to their initial values. Defaults to `None`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments.
