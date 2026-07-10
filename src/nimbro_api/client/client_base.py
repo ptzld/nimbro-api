@@ -50,6 +50,7 @@ class ClientBase:
         # locks
         self._lock_api = threading.Lock()
         self._lock_settings = threading.Lock()
+        self._lock_settings_transient = False
 
         # logger
         if len(kwargs) > 0:
@@ -558,7 +559,8 @@ class ClientBase:
         if toggle_bypass:
             self._logger._bypass = not self._logger._bypass
 
-        if self._lock_settings.locked():
+        if self._lock_settings_transient:
+            self._lock_settings_acquired_by_wrap = False
             self._lock_settings.release()
         self._lock_api.release()
         if raise_error:
@@ -802,6 +804,8 @@ class ClientBase:
         if self._lock_settings.locked():
             self._logger.debug("Waiting for settings lock in 'set_settings()'.")
         self._lock_settings.acquire()
+        self._lock_settings_transient = True
+
         assert_type_value(obj=settings, type_or_value=[dict, None], name="argument 'settings'")
         assert_type_value(obj=mode, type_or_value=["set", "temp", "revert", "reset", "init"], name="argument 'mode'")
         if settings is None:
@@ -864,8 +868,10 @@ class ClientBase:
         self._logger.debug("Applying settings.")
         assert_type_value(obj=settings, type_or_value=dict, name="argument 'settings'")
         if settings.keys() != self._default_settings.keys():
+            self._lock_settings_transient = False
             self._lock_settings.release()
             raise RuntimeError("Unexpected mismatch between keys of settings and default settings.")
+
         assert_type_value(obj=mode, type_or_value=["set", "temp", "revert", "reset", "init"], name="argument 'mode'")
         if self._initialized:
             self._walk_settings(self._settings, settings, mode=mode, tense="past")
@@ -875,6 +881,7 @@ class ClientBase:
         settings['logger_severity'] = self._logger.get_settings(name="severity")
 
         self._settings = settings
+        self._lock_settings_transient = False
         self._lock_settings.release()
         if mode == "set":
             message = "Settings applied."
