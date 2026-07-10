@@ -798,7 +798,10 @@ class ClientBase:
             self._logger.debug(f"{verbs[mode]} '{prefix}' from {from_str} to {to_str}.")
         else:
             verbs = {"set": "Set", "temp": "Temporarily set", "revert": "Reverted", "reset": "Reset"}
-            self._logger.info(f"{verbs[mode]} '{prefix}' from {from_str} to {to_str}.")
+            if prefix == "logger_mute":
+                self._logger.debug(f"{verbs[mode]} '{prefix}' from {from_str} to {to_str}.")
+            else:
+                self._logger.info(f"{verbs[mode]} '{prefix}' from {from_str} to {to_str}.")
 
     def _introduce_settings(self, settings, mode):
         if self._lock_settings.locked():

@@ -136,7 +136,7 @@ class VlmGist(Client):
 
         Settings:
             logger_severity (str | None):
-                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
+                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
             message_process (bool):
@@ -201,7 +201,7 @@ class VlmGist(Client):
                 - allow_excessive (bool): If `False`, returns an error or triggers a retry when a detection is segmented more than once.
             batch (dict):
                 Settings for processing multiple images passed to `run()`. Ignored when not passing a list of images to `run()`.
-                - logger_severity (str | None): Logger severity applied to each worker in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
+                - logger_severity (str | None): Logger severity applied to each worker in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
                 - size (int): Number of parallel workers when processing a list of images (>= 0). Use `0` to spawn one worker per image.
                 - style (str): Parallelization backend used for batch processing. One of ["threading", "multiprocessing"].
                 - retry (bool | int): Retry behavior for a single worker when passing multiple images.

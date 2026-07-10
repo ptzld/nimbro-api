@@ -52,7 +52,7 @@ class Client:
 
         Settings: See the global dictionary for defaults.
             logger_severity (str | None):
-                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
+                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log for identifying this object.
             retry (bool | int):

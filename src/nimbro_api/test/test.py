@@ -258,11 +258,13 @@ def test(provider=None, *, module=None, function="utilities", common=True, utili
     nimbro_api.execute_deferred_jobs()
 
     # reset logger severity
-    success, message = nimbro_api.set_settings(settings={'logger_mute': logger_mute, 'keys_cache': keys_cache})
+    success, message = nimbro_api.set_settings(keys_cache=keys_cache)
     assert_log(expression=success, message=message)
     if severity is not None:
-        success, message = nimbro_api.set_settings(settings={'logger_severity': logger_severity})
+        success, message = nimbro_api.set_settings(logger_severity=logger_severity)
         assert_log(expression=success, message=message)
+    success, message = nimbro_api.set_settings(logger_mute=logger_mute)
+    assert_log(expression=success, message=message)
 
     # write files
     path = package_path / "test"

@@ -574,7 +574,7 @@ def test_13_structured_description_bbox_as_detection():
     assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
     # log_result(result=result)
 
-def test_13_parallel_threads(n=10):
+def test_14_parallel_threads(n=10):
     client = VlmGist(settings={
         'batch.size': n,
         'batch.style': "threading",
@@ -590,7 +590,7 @@ def test_13_parallel_threads(n=10):
     # log_result(result=result)
     return message
 
-def test_14_parallel_multiprocessing(n=10):
+def test_15_parallel_multiprocessing(n=10):
     client = VlmGist(settings={
         'scene_description.chat_completions.logger_severity': "off",
         'structured_description.chat_completions.logger_severity': "off",

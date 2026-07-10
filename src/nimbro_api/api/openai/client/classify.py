@@ -75,7 +75,7 @@ class Classify(Client):
 
         Settings:
             logger_severity (str | None):
-                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str) or `None` to adopt global process-wide severity.
+                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
             endpoints (dict):
@@ -86,7 +86,7 @@ class Classify(Client):
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
-                Pass an endpoint definition (`dict`) with the addional key 'name' to automatically add/update the setting 'endpoints' and select it.
+                Pass an endpoint definition (`dict`) with the additional key 'name' to automatically add/update the setting 'endpoints' and select it.
             mode (str):
                 Determines the mode in which the API is used ("input" or "messages").
                 Accordingly, the prompt passed to `classify()` is forwarded to the "input" or "messages" field in the request.
