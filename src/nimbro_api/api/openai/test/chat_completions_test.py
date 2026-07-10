@@ -9,7 +9,7 @@ import nimbro_api
 from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log
 from ..client.chat_completions import ChatCompletions
 
-def test_01_utilities():
+def test_001_utilities():
     client = ChatCompletions()
 
     settings = client.get_settings()
@@ -37,7 +37,7 @@ def test_01_utilities():
 
     assert_type_value(obj=os.getenv(key_name), type_or_value=key_before, name=f"environment variable '{key_name}' (post)")
 
-def test_02_endpoint():
+def test_002_endpoint():
     client = ChatCompletions()
 
     success, message, models = client.get_models()
@@ -49,6 +49,7 @@ def test_02_endpoint():
 # text completions
 
 def _text_completions(**kwargs):
+    kwargs['parser'] = []
     client = ChatCompletions(kwargs)
 
     # text completion
@@ -62,7 +63,7 @@ def _text_completions(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -92,7 +93,7 @@ def _text_completions(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -168,25 +169,25 @@ def _text_completions(**kwargs):
     target = {'role': "assistant", 'content': completion['text']}
     assert_log(expression=context[1] == target, message=f"Expected message '1' in context to be {target} but got {context[1]}.")
 
-def test_03_openrouter_text_completions():
+def test_003_openrouter_text_completions():
     return _text_completions(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_04_openrouter_text_completions_stream():
+def test_004_openrouter_text_completions_stream():
     return _text_completions(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_05_openai_text_completions():
-    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
+def test_005_openai_text_completions():
+    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
 
-def test_06_openai_text_completions_stream():
-    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
+def test_006_openai_text_completions_stream():
+    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
 
-def test_07_mistral_text_completions():
+def test_007_mistral_text_completions():
     return _text_completions(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_08_mistral_text_completions_stream():
+def test_008_mistral_text_completions_stream():
     return _text_completions(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_09_vllm_text_completions():
+def test_009_vllm_text_completions():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -195,7 +196,7 @@ def test_09_vllm_text_completions():
     model = models[-1]
     return _text_completions(stream=False, endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
 
-def test_10_vllm_text_completions_stream():
+def test_010_vllm_text_completions_stream():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -204,9 +205,186 @@ def test_10_vllm_text_completions_stream():
     model = models[-1]
     return _text_completions(stream=True, endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
 
+# text completions choices
+
+def _text_completions_choices(**kwargs):
+    assert_log(expression='choices' in kwargs, message="Expected setting 'choices' to be provided by test definition.")
+    assert_log(expression=kwargs['choices'] > 1, message=f"Expected setting 'choices' provided by test definition to be greater '1' but got '{kwargs['choices']}'.")
+    kwargs['parser'] = []
+    client = ChatCompletions(kwargs)
+
+    # text completion
+    text = "Hi!"
+    success, message, completion = client.prompt(text=text, response_type="text")
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=completion, type_or_value=dict, name="completion")
+    assert_keys(obj=completion, keys=['usage', 'choices', 'logs'], mode="match", name="completion")
+    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
+    assert_type_value(obj=completion['choices'], type_or_value=list, name="choices in completion")
+    assert_log(expression=len(completion['choices']) == kwargs['choices'], message=f"Expected number of choices in completion to match setting 'choices' provided by test definition but got '{len(completion['choices'])}' instead of '{kwargs['choices']}'.")
+    for i, choice in enumerate(completion['choices']):
+        assert_type_value(obj=choice, type_or_value=dict, name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['text', 'reasoning', 'logs'], mode="whitelist", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['text'], mode="required", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        if 'text' in choice:
+            assert_type_value(obj=choice['text'], type_or_value=str, name=f"text in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['text']) > 0, message=f"Expected text in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'reasoning' in choice:
+            assert_type_value(obj=choice['reasoning'], type_or_value=str, name=f"reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['reasoning']) > 0, message=f"Expected reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'logs' in choice:
+            assert_type_value(obj=choice['logs'], type_or_value=list, name=f"logs in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['logs']) > 0, message=f"Expected to find at least one log in in choice '{i + 1}' of '{len(completion['choices'])}' completion.")
+            for i, log in enumerate(choice['logs']):
+                assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion logs")
+    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
+    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
+    for i, log in enumerate(completion['logs']):
+        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
+
+    # inspect context
+    success, message, context = client.get_context()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=context, type_or_value=list, name="context")
+    assert_log(expression=len(context) == 1, message=f"Expected context to contain '1' messages but got '{len(context)}'.")
+
+    # auto completion
+    success, message, completion = client.prompt(text=text, reset_context=True, response_type="auto")
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=completion, type_or_value=dict, name="completion")
+    assert_keys(obj=completion, keys=['usage', 'choices', 'logs'], mode="match", name="completion")
+    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
+    assert_type_value(obj=completion['choices'], type_or_value=list, name="choices in completion")
+    assert_log(expression=len(completion['choices']) == kwargs['choices'], message=f"Expected number of choices in completion to match setting 'choices' provided by test definition but got '{len(completion['choices'])}' instead of '{kwargs['choices']}'.")
+    for i, choice in enumerate(completion['choices']):
+        assert_type_value(obj=choice, type_or_value=dict, name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['text', 'reasoning', 'logs'], mode="whitelist", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['text'], mode="required", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        if 'text' in choice:
+            assert_type_value(obj=choice['text'], type_or_value=str, name=f"text in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['text']) > 0, message=f"Expected text in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'reasoning' in choice:
+            assert_type_value(obj=choice['reasoning'], type_or_value=str, name=f"reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['reasoning']) > 0, message=f"Expected reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'logs' in choice:
+            assert_type_value(obj=choice['logs'], type_or_value=list, name=f"logs in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['logs']) > 0, message=f"Expected to find at least one log in in choice '{i + 1}' of '{len(completion['choices'])}' completion.")
+            for i, log in enumerate(choice['logs']):
+                assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion logs")
+    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
+    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
+    for i, log in enumerate(completion['logs']):
+        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
+
+    # inspect context
+    success, message, context = client.get_context()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=context, type_or_value=list, name="context")
+    assert_log(expression=len(context) == 1, message=f"Expected context to contain '1' messages but got '{len(context)}'.")
+
+    # add one message
+    target = {'role': 'user', 'content': [{'type': 'text', 'text': "Hi, what's up?"}]}
+    success, message = client.set_context(messages=[target])
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+
+    # inspect context
+    success, message, context = client.get_context()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=context, type_or_value=list, name="context")
+    assert_log(expression=len(context) == 1, message=f"Expected context to contain '1' message but got '{len(context)}'.")
+    assert_log(expression=context[0] == target, message=f"Expected message '1' in context to be {target} but got '{context[0]}'.")
+
+    # prompt
+    success, message, completion = client.prompt()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=completion, type_or_value=dict, name="completion")
+    assert_keys(obj=completion, keys=['usage', 'choices', 'logs'], mode="match", name="completion")
+    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
+    assert_type_value(obj=completion['choices'], type_or_value=list, name="choices in completion")
+    assert_log(expression=len(completion['choices']) == kwargs['choices'], message=f"Expected number of choices in completion to match setting 'choices' provided by test definition but got '{len(completion['choices'])}' instead of '{kwargs['choices']}'.")
+    for i, choice in enumerate(completion['choices']):
+        assert_type_value(obj=choice, type_or_value=dict, name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['text', 'reasoning', 'logs'], mode="whitelist", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['text'], mode="required", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        if 'text' in choice:
+            assert_type_value(obj=choice['text'], type_or_value=str, name=f"text in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['text']) > 0, message=f"Expected text in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'reasoning' in choice:
+            assert_type_value(obj=choice['reasoning'], type_or_value=str, name=f"reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['reasoning']) > 0, message=f"Expected reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'logs' in choice:
+            assert_type_value(obj=choice['logs'], type_or_value=list, name=f"logs in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['logs']) > 0, message=f"Expected to find at least one log in in choice '{i + 1}' of '{len(completion['choices'])}' completion.")
+            for i, log in enumerate(choice['logs']):
+                assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion logs")
+    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
+    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
+    for i, log in enumerate(completion['logs']):
+        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
+
+    # inspect context
+    success, message, context = client.get_context()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=context, type_or_value=list, name="context")
+    assert_log(expression=len(context) == 1, message=f"Expected context to contain '1' messages but got '{len(context)}'.")
+    assert_log(expression=context[0] == target, message=f"Expected message '1' in context to be {target} but got '{context[0]}'.")
+
+def test_011_openrouter_text_completions_choices():
+    return "NOT SUPPORTED."
+
+def test_012_openrouter_text_completions_choices_stream():
+    return "NOT SUPPORTED."
+
+def test_013_openai_text_completions_choices():
+    return _text_completions_choices(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", choices=2, reasoning_effort="none")
+
+def test_014_openai_text_completions_choices_stream():
+    return _text_completions_choices(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", choices=2, reasoning_effort="none")
+
+def test_015_mistral_text_completions_choices():
+    return _text_completions_choices(stream=False, endpoint="Mistral", model="mistral-small-latest", choices=2, reasoning_effort="none")
+
+def test_016_mistral_text_completions_choices_stream():
+    return _text_completions_choices(stream=True, endpoint="Mistral", model="mistral-small-latest", choices=2, reasoning_effort="none")
+
+def test_017_vllm_text_completions_choices():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _text_completions_choices(stream=False, endpoint="AIS", model=model, choices=2, reasoning_effort="none", timeout_read=60, timeout_completion=60)
+
+def test_018_vllm_text_completions_choices_stream():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _text_completions_choices(stream=True, endpoint="AIS", model=model, choices=2, reasoning_effort="none", timeout_read=60, timeout_completion=60)
+
 # JSON mode
 
 def _json_completion(**kwargs):
+    kwargs['parser'] = []
     client = ChatCompletions(kwargs)
 
     # JSON mode completion
@@ -244,25 +422,25 @@ def _json_completion(**kwargs):
     target = {'role': "assistant", 'content': completion['text']}
     assert_log(expression=context[1] == target, message=f"Expected message '3' in context to be {target} but got {context[1]}.")
 
-def test_11_openrouter_json():
+def test_019_openrouter_json():
     return _text_completions(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_12_openrouter_json_stream():
+def test_020_openrouter_json_stream():
     return _text_completions(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_13_openai_json():
-    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
+def test_021_openai_json():
+    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
 
-def test_14_openai_json_stream():
-    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
+def test_022_openai_json_stream():
+    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
 
-def test_15_mistral_json():
+def test_023_mistral_json():
     return _text_completions(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_16_mistral_json_stream():
+def test_024_mistral_json_stream():
     return _text_completions(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_17_vllm_json():
+def test_025_vllm_json():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -271,7 +449,7 @@ def test_17_vllm_json():
     model = models[-1]
     return _text_completions(stream=False, endpoint="AIS", model=model, timeout_read=60, timeout_completion=60)
 
-def test_18_vllm_json_stream():
+def test_026_vllm_json_stream():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -287,7 +465,18 @@ def _reasoning_completion(**kwargs):
     assert_log(expression=kwargs['reasoning_effort'] not in ['', 'none'], message=f"Expected setting 'reasoning_effort' provided by test definition to be anything but '' or 'none' but got '{kwargs['reasoning_effort']}'.")
     client = ChatCompletions(kwargs)
 
-    text = "Tell me a joke about computer scientists. Briefly reason which one you should use first."
+    # text = (
+    #     "Five distinct tasks A–E must be assigned to five consecutive slots, "
+    #     "one task per slot.\n\n"
+    #     "- A occurs before D.\n"
+    #     "- B occurs immediately after C.\n"
+    #     "- E occurs before A.\n"
+    #     "- D is not last.\n\n"
+    #     "How many valid schedules exist?\n\n"
+    #     "Reason through the constraints internally, check your result, and output "
+    #     "only the final integer. Do not reveal calculations or intermediate steps."
+    # )
+    text = "Tell me a joke about computer scientists. Briefly reason which one you should use and then only respond with the joke."
     success, message, completion = client.prompt(text=text)
 
     assert_type_value(obj=success, type_or_value=bool, name="success")
@@ -297,33 +486,33 @@ def _reasoning_completion(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'reasoning', 'logs'], mode="match", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['reasoning'], type_or_value=str, name="reasoning in completion")
-    assert_log(expression=len(completion['reasoning']) > 0, message="Expected reasoning in completion to be non-empty string.")
+    assert_log(expression=len(completion['reasoning']) > 0, message="Expected reasoning in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
         assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
 
-def test_19_openrouter_reasoning():
+def test_027_openrouter_reasoning():
     return _reasoning_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="high")
 
-def test_20_openrouter_reasoning_stream():
+def test_028_openrouter_reasoning_stream():
     return _reasoning_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="high")
 
-def test_21_openai_reasoning():
+def test_029_openai_reasoning():
     return "NOT SUPPORTED."
 
-def test_22_openai_reasoning_stream():
+def test_030_openai_reasoning_stream():
     return "NOT SUPPORTED."
 
-def test_23_mistral_reasoning():
+def test_031_mistral_reasoning():
     return _reasoning_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="high")
 
-def test_24_mistral_reasoning_stream():
+def test_032_mistral_reasoning_stream():
     return _reasoning_completion(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="high")
 
-def test_25_vllm_reasoning():
+def test_033_vllm_reasoning():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -332,7 +521,7 @@ def test_25_vllm_reasoning():
     model = models[-1]
     return _reasoning_completion(stream=False, endpoint="AIS", model=model, reasoning_effort="high", timeout_read=60, timeout_completion=60)
 
-def test_26_vllm_reasoning_stream():
+def test_034_vllm_reasoning_stream():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -340,6 +529,93 @@ def test_26_vllm_reasoning_stream():
         return "AIS endpoint is not hosting any models."
     model = models[-1]
     return _reasoning_completion(stream=True, endpoint="AIS", model=model, reasoning_effort="high", timeout_read=60, timeout_completion=60)
+
+# reasoning choices
+
+def _reasoning_choices_completion(**kwargs):
+    assert_log(expression='reasoning_effort' in kwargs, message="Expected setting 'reasoning_effort' to be provided by test definition.")
+    assert_log(expression=kwargs['reasoning_effort'] not in ['', 'none'], message=f"Expected setting 'reasoning_effort' provided by test definition to be anything but '' or 'none' but got '{kwargs['reasoning_effort']}'.")
+    assert_log(expression='choices' in kwargs, message="Expected setting 'choices' to be provided by test definition.")
+    assert_log(expression=kwargs['choices'] > 1, message=f"Expected setting 'choices' provided by test definition to be greater '1' but got '{kwargs['choices']}'.")
+    client = ChatCompletions(kwargs)
+
+    # text = (
+    #     "Five distinct tasks A–E must be assigned to five consecutive slots, "
+    #     "one task per slot.\n\n"
+    #     "- A occurs before D.\n"
+    #     "- B occurs immediately after C.\n"
+    #     "- E occurs before A.\n"
+    #     "- D is not last.\n\n"
+    #     "How many valid schedules exist?\n\n"
+    #     "Reason through the constraints internally, check your result, and output "
+    #     "only the final integer. Do not reveal calculations or intermediate steps."
+    # )
+    text = "Tell me a joke about computer scientists. Briefly reason which one you should use and then only respond with the joke."
+    success, message, completion = client.prompt(text=text)
+
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=completion, type_or_value=dict, name="completion")
+    assert_keys(obj=completion, keys=['usage', 'choices', 'logs'], mode="match", name="completion")
+    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
+    assert_type_value(obj=completion['choices'], type_or_value=list, name="choices in completion")
+    assert_log(expression=len(completion['choices']) == kwargs['choices'], message=f"Expected number of choices in completion to match setting 'choices' provided by test definition but got '{len(completion['choices'])}' instead of '{kwargs['choices']}'.")
+    for i, choice in enumerate(completion['choices']):
+        assert_type_value(obj=choice, type_or_value=dict, name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['text', 'reasoning', 'logs'], mode="whitelist", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['text', 'reasoning'], mode="required", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        if 'text' in choice:
+            assert_type_value(obj=choice['text'], type_or_value=str, name=f"text in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['text']) > 0, message=f"Expected text in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'reasoning' in choice:
+            assert_type_value(obj=choice['reasoning'], type_or_value=str, name=f"reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['reasoning']) > 0, message=f"Expected reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'logs' in choice:
+            assert_type_value(obj=choice['logs'], type_or_value=list, name=f"logs in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['logs']) > 0, message=f"Expected to find at least one log in in choice '{i + 1}' of '{len(completion['choices'])}' completion.")
+            for i, log in enumerate(choice['logs']):
+                assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion logs")
+    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
+    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
+    for i, log in enumerate(completion['logs']):
+        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
+
+def test_035_openrouter_reasoning_choices():
+    return "NOT SUPPORTED."
+
+def test_036_openrouter_reasoning_choices_stream():
+    return "NOT SUPPORTED."
+
+def test_037_openai_reasoning_choices():
+    return "NOT SUPPORTED."
+
+def test_038_openai_reasoning_choices_stream():
+    return "NOT SUPPORTED."
+
+def test_039_mistral_reasoning_choices():
+    return _reasoning_choices_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", choices=2, reasoning_effort="high")
+
+def test_040_mistral_reasoning_choices_stream():
+    return _reasoning_choices_completion(stream=True, endpoint="Mistral", model="mistral-small-latest", choices=2, reasoning_effort="high")
+
+def test_041_vllm_reasoning_choices():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _reasoning_choices_completion(stream=False, endpoint="AIS", model=model, choices=2, reasoning_effort="high", timeout_read=60, timeout_completion=60)
+
+def test_042_vllm_reasoning_choices_stream():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _reasoning_choices_completion(stream=True, endpoint="AIS", model=model, choices=2, reasoning_effort="high", timeout_read=60, timeout_completion=60)
 
 # interrupt
 
@@ -378,10 +654,10 @@ def _interrupt(**kwargs):
 
     return interrupt_message
 
-def test_27_interrupt():
+def test_043_interrupt():
     return "NOT SUPPORTED."
 
-def test_28_interrupt_stream():
+def test_044_interrupt_stream():
     return _interrupt(stream=True)
 
 # web search
@@ -400,7 +676,7 @@ def _web_search(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -408,16 +684,16 @@ def _web_search(**kwargs):
 
     return completion['text']
 
-def test_29_openrouter_web_search():
+def test_045_openrouter_web_search():
     return _web_search(endpoint="OpenRouter", model="~google/gemini-flash-latest:online", reasoning_effort="minimal")
 
-def test_30_openai_web_search():
+def test_046_openai_web_search():
     return "NOT SUPPORTED."
 
-def test_31_mistral_web_search():
+def test_047_mistral_web_search():
     return "NOT SUPPORTED."
 
-def test_32_vllm_web_search():
+def test_048_vllm_web_search():
     return "NOT SUPPORTED."
 
 # image input
@@ -439,7 +715,7 @@ def _image_file_input(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -447,16 +723,16 @@ def _image_file_input(**kwargs):
 
     return completion['text']
 
-def test_33_openrouter_image_file_input():
+def test_049_openrouter_image_file_input():
     return _image_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_34_openai_image_file_input():
-    return _image_file_input(endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
+def test_050_openai_image_file_input():
+    return _image_file_input(endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
 
-def test_35_mistral_image_file_input():
+def test_051_mistral_image_file_input():
     return _image_file_input(endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_36_vllm_image_file_input():
+def test_052_vllm_image_file_input():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -483,7 +759,7 @@ def _image_url_input(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -491,16 +767,16 @@ def _image_url_input(**kwargs):
 
     return completion['text']
 
-def test_37_openrouter_image_url_input():
+def test_053_openrouter_image_url_input():
     return _image_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_38_openai_image_url_input():
-    return _image_url_input(endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
+def test_054_openai_image_url_input():
+    return _image_url_input(endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
 
-def test_39_mistral_image_url_input():
+def test_055_mistral_image_url_input():
     return _image_url_input(endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_40_vllm_image_url_input():
+def test_056_vllm_image_url_input():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -528,7 +804,7 @@ def _audio_file_input(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -536,16 +812,16 @@ def _audio_file_input(**kwargs):
 
     return completion['text']
 
-def test_41_openrouter_audio_file_input():
+def test_057_openrouter_audio_file_input():
     return _audio_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_42_openai_audio_file_input():
+def test_058_openai_audio_file_input():
     return _audio_file_input(endpoint="OpenAI", model="gpt-audio-2025-08-28", reasoning_effort="")
 
-def test_43_mistral_audio_file_input():
+def test_059_mistral_audio_file_input():
     return _audio_file_input(endpoint="Mistral", model="voxtral-small-latest", reasoning_effort="")
 
-def test_44_vllm_audio_file_input():
+def test_060_vllm_audio_file_input():
     return "NOT SUPPORTED."
 
 def _audio_url_input(**kwargs):
@@ -566,7 +842,7 @@ def _audio_url_input(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -574,16 +850,16 @@ def _audio_url_input(**kwargs):
 
     return completion['text']
 
-def test_45_openrouter_audio_url_input():
+def test_061_openrouter_audio_url_input():
     return "NOT SUPPORTED."
 
-def test_46_openai_audio_url_input():
+def test_062_openai_audio_url_input():
     return "NOT SUPPORTED."
 
-def test_47_mistral_audio_url_input():
+def test_063_mistral_audio_url_input():
     return _audio_url_input(endpoint="Mistral", model="voxtral-small-latest", reasoning_effort="")
 
-def test_48_vllm_audio_url_input():
+def test_064_vllm_audio_url_input():
     return "NOT SUPPORTED."
 
 # video input
@@ -605,7 +881,7 @@ def _video_file_input(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -613,16 +889,16 @@ def _video_file_input(**kwargs):
 
     return completion['text']
 
-def test_49_openrouter_video_file_input():
+def test_065_openrouter_video_file_input():
     return _video_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_50_openai_video_file_input():
+def test_066_openai_video_file_input():
     return "NOT SUPPORTED."
 
-def test_51_mistral_video_file_input():
+def test_067_mistral_video_file_input():
     return "NOT SUPPORTED."
 
-def test_52_vllm_video_file_input():
+def test_068_vllm_video_file_input():
     # success, message, models = ChatCompletions(endpoint="AIS").get_models()
     # assert_log(expression=success, message=message)
     # assert_type_value(obj=models, type_or_value=list, name="models")
@@ -649,7 +925,7 @@ def _video_url_input(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -657,16 +933,16 @@ def _video_url_input(**kwargs):
 
     return completion['text']
 
-def test_53_openrouter_video_url_input():
+def test_069_openrouter_video_url_input():
     return _video_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_54_openai_video_url_input():
+def test_070_openai_video_url_input():
     return "NOT SUPPORTED."
 
-def test_55_mistral_video_url_input():
+def test_071_mistral_video_url_input():
     return "NOT SUPPORTED."
 
-def test_56_vllm_video_url_input():
+def test_072_vllm_video_url_input():
     return "NOT SUPPORTED."
 
 # file input
@@ -688,7 +964,7 @@ def _file_local_input(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -696,16 +972,16 @@ def _file_local_input(**kwargs):
 
     return completion['text']
 
-def test_57_openrouter_file_local_input():
+def test_073_openrouter_file_local_input():
     return _file_local_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_58_openai_file_local_input():
-    return _file_local_input(endpoint="OpenAI", model="gpt-5.5-2026-04-23", reasoning_effort="none")
+def test_074_openai_file_local_input():
+    return _file_local_input(endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
 
-def test_59_mistral_file_local_input():
+def test_075_mistral_file_local_input():
     return "NOT SUPPORTED."
 
-def test_60_vllm_file_local_input():
+def test_076_vllm_file_local_input():
     return "NOT SUPPORTED."
 
 def _file_url_input(**kwargs):
@@ -726,7 +1002,7 @@ def _file_url_input(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
     for i, log in enumerate(completion['logs']):
@@ -734,21 +1010,21 @@ def _file_url_input(**kwargs):
 
     return completion['text']
 
-def test_61_openrouter_file_url_input():
+def test_077_openrouter_file_url_input():
     return _file_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_62_openai_file_url_input():
+def test_078_openai_file_url_input():
     return "NOT SUPPORTED."
 
-def test_63_mistral_file_url_input():
+def test_079_mistral_file_url_input():
     return "NOT SUPPORTED."
 
-def test_64_vllm_file_url_input():
+def test_080_vllm_file_url_input():
     return "NOT SUPPORTED."
 
 # parallel
 
-def test_65_parallel_threads(n=100):
+def test_081_parallel_threads(n=64):
     class PropagatingThread(threading.Thread):
         def run(self):
             self.exc = None
@@ -845,7 +1121,7 @@ def _process_worker(shared_stamps):
     assert_log(expression=completion['usage']['duration'] > 0, message=f"Expected duration of usage in completion to be grater zero but got '{completion['usage']['duration']}'.")
     shared_stamps.append(completion['usage']['duration'])
 
-def test_66_parallel_processes(n=100):
+def test_082_parallel_processes(n=32):
     stamp = time.perf_counter()
 
     with multiprocessing.Manager() as manager:
@@ -891,7 +1167,7 @@ def test_66_parallel_processes(n=100):
 
 # tools
 
-def test_67_tool_config():
+def test_083_tool_config():
     client = ChatCompletions()
 
     success, message, tools = client.get_tools()
@@ -1073,7 +1349,7 @@ def test_67_tool_config():
     assert_type_value(obj=tool, type_or_value=dict, name="tool")
     assert_log(expression=tool == tool_definitions[i], message=f"Expected tool to match definition but got: {tool}")
 
-def test_68_context_config():
+def test_084_context_config():
     client = ChatCompletions()
 
     success, message, context = client.get_context()
@@ -1215,7 +1491,10 @@ def test_68_context_config():
     assert_type_value(obj=context, type_or_value=list, name="context")
     assert_log(expression=len(context) == 0, message=f"Expected zero messages in context but got '{len(context)}': {context}")
 
+## tool use
+
 def _tool_use(**kwargs):
+    kwargs['parser'] = []
     kwargs['max_tool_calls'] = 1
     client = ChatCompletions(kwargs)
 
@@ -1255,7 +1534,7 @@ def _tool_use(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
 
     success, message, completion = client.prompt(text="Tell me what time it is!", response_type="auto")
     assert_type_value(obj=success, type_or_value=bool, name="success")
@@ -1305,7 +1584,7 @@ def _tool_use(**kwargs):
     assert_type_value(obj=message, type_or_value=str, name="message")
     assert_log(expression=success, message=message)
     assert_type_value(obj=completion, type_or_value=dict, name="completion")
-    assert_keys(obj=completion, keys=['usage', 'tools', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'tools', 'logs', 'text', 'reasoning'], mode="whitelist", name="completion")
     assert_keys(obj=completion, keys=['usage', 'tools', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['tools'], type_or_value=list, name="tools in completion")
     assert_log(expression=len(completion['tools']) == 1, message=f"Expected '1' tool call in completion but got '{len(completion['tools'])}'.")
@@ -1376,27 +1655,27 @@ def _tool_use(**kwargs):
     assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
     assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
-    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be non-empty string.")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
 
-def test_69_openrouter_tool_use():
+def test_085_openrouter_tool_use():
     return _tool_use(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_70_openrouter_tool_use_stream():
+def test_086_openrouter_tool_use_stream():
     return _tool_use(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
-def test_71_openai_tool_use():
+def test_087_openai_tool_use():
     return _tool_use(stream=False, endpoint="OpenAI", model="gpt-5.2-2025-12-11", reasoning_effort="none")
 
-def test_72_openai_tool_use_stream():
+def test_088_openai_tool_use_stream():
     return _tool_use(stream=True, endpoint="OpenAI", model="gpt-5.2-2025-12-11", reasoning_effort="none")
 
-def test_73_mistral_tool_use():
+def test_089_mistral_tool_use():
     return _tool_use(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_74_mistral_tool_use_stream():
+def test_090_mistral_tool_use_stream():
     return _tool_use(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
 
-def test_75_vllm_tool_use():
+def test_091_vllm_tool_use():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -1405,7 +1684,7 @@ def test_75_vllm_tool_use():
     model = models[-1]
     return _tool_use(endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
 
-def test_76_vllm_tool_use_stream():
+def test_092_vllm_tool_use_stream():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
     assert_log(expression=success, message=message)
     assert_type_value(obj=models, type_or_value=list, name="models")
@@ -1413,3 +1692,235 @@ def test_76_vllm_tool_use_stream():
         return "AIS endpoint is not hosting any models."
     model = models[-1]
     return _tool_use(endpoint="AIS", model=model, reasoning_effort="none", timeout_read=60, timeout_completion=60)
+
+## tool use choices
+
+def _tool_use_choices(**kwargs):
+    assert_log(expression='choices' in kwargs, message="Expected setting 'choices' to be provided by test definition.")
+    assert_log(expression=kwargs['choices'] > 1, message=f"Expected setting 'choices' provided by test definition to be greater '1' but got '{kwargs['choices']}'.")
+    kwargs['parser'] = []
+    kwargs['max_tool_calls'] = 1
+    client = ChatCompletions(kwargs)
+
+    tool_definitions = [
+        {
+            'type': "function",
+            'function': {
+                'name': "get_current_time",
+                'description': "Get the current time at the users location",
+                'parameters': {
+                    'type': "object",
+                    'properties': {},
+                    'additionalProperties': False
+                },
+                'strict': True
+            }
+        }
+    ]
+
+    names_to_args = {tool['function']['name']: set(tool['function']['parameters']['properties'].keys()) for tool in tool_definitions}
+
+    success, message = client.set_tools(tools=tool_definitions)
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+
+    success, message, completion = client.prompt(text="Tell me what time it is!", response_type="always")
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=completion, type_or_value=dict, name="completion")
+    assert_keys(obj=completion, keys=['usage', 'choices', 'logs'], mode="match", name="completion")
+    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
+    assert_type_value(obj=completion['choices'], type_or_value=list, name="choices in completion")
+    assert_log(expression=len(completion['choices']) == kwargs['choices'], message=f"Expected number of choices in completion to match setting 'choices' provided by test definition but got '{len(completion['choices'])}' instead of '{kwargs['choices']}'.")
+    for i, choice in enumerate(completion['choices']):
+        assert_type_value(obj=choice, type_or_value=dict, name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['tools', 'text', 'reasoning', 'logs'], mode="whitelist", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['tools'], mode="required", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        if 'text' in choice:
+            assert_type_value(obj=choice['text'], type_or_value=str, name=f"text in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['text']) > 0, message=f"Expected text in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'reasoning' in choice:
+            assert_type_value(obj=choice['reasoning'], type_or_value=str, name=f"reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['reasoning']) > 0, message=f"Expected reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        assert_type_value(obj=choice['tools'], type_or_value=list, name=f"tools in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_log(expression=len(choice['tools']) == 1, message=f"Expected tools in choice '{i + 1}' of '{len(completion['choices'])}' in completion to to contain '1' tool call but got '{len(choice['tools'])}'.")
+        for j, tool_call in enumerate(choice['tools']):
+            assert_type_value(obj=tool_call, type_or_value=dict, name=f"tool call '{i + j}' of '{len(choice['tools'])}'")
+            assert_keys(obj=tool_call, keys=['id', 'name', 'arguments'], mode="match", name=f"tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_type_value(obj=tool_call['id'], type_or_value=str, name=f"value of key 'id' in tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(tool_call['id']) > 0, message=f"Expected tool call ID in tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be non-empty.")
+            assert_type_value(obj=tool_call['name'], type_or_value=list(names_to_args.keys()), name=f"value of key 'name' in tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=set(tool_call['arguments'].keys()) == names_to_args[tool_call['name']], message=f"Expected tool call '{i + j}' of '{len(choice['tools'])}' with name '{tool_call['name']}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion to contain arguments {names_to_args[tool_call['name']]} but got {set(choice['tools'][0]['arguments'].keys())}.")
+        assert_type_value(obj=choice['tools'][0]['name'], type_or_value=list(names_to_args.keys())[0], name=f"value of key 'name' in tool call in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        if 'logs' in choice:
+            assert_type_value(obj=choice['logs'], type_or_value=list, name=f"logs in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['logs']) > 0, message=f"Expected to find at least one log in in choice '{i + 1}' of '{len(completion['choices'])}' completion.")
+            for i, log in enumerate(choice['logs']):
+                assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion logs")
+    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
+    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
+    for i, log in enumerate(completion['logs']):
+        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
+
+    success, message, context = client.get_context()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=context, type_or_value=list, name="context")
+    assert_log(expression=len(context) == 1, message=f"Expected context to contain '1' messages but got '{len(context)}'.")
+
+    tool_definitions.append({
+        'type': "function",
+        'function': {
+            'name': "get_current_weather",
+            'description': "Get the current weather at the users location",
+            'parameters': {
+                'type': "object",
+                'properties': {},
+                'additionalProperties': False
+            },
+            'strict': True
+        }
+    })
+
+    names_to_args = {tool['function']['name']: set(tool['function']['parameters']['properties'].keys()) for tool in tool_definitions}
+
+    success, message = client.set_tools(tools=tool_definitions)
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+
+    success, message, completion = client.prompt(text="Tell me how warm it is!", response_type=tool_definitions[-1]['function']['name'], reset_context=True)
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_keys(obj=completion, keys=['usage', 'choices', 'logs'], mode="match", name="completion")
+    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
+    assert_type_value(obj=completion['choices'], type_or_value=list, name="choices in completion")
+    assert_log(expression=len(completion['choices']) == kwargs['choices'], message=f"Expected number of choices in completion to match setting 'choices' provided by test definition but got '{len(completion['choices'])}' instead of '{kwargs['choices']}'.")
+    for i, choice in enumerate(completion['choices']):
+        assert_type_value(obj=choice, type_or_value=dict, name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['tools', 'text', 'reasoning', 'logs'], mode="whitelist", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['tools'], mode="required", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        if 'text' in choice:
+            assert_type_value(obj=choice['text'], type_or_value=str, name=f"text in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['text']) > 0, message=f"Expected text in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'reasoning' in choice:
+            assert_type_value(obj=choice['reasoning'], type_or_value=str, name=f"reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['reasoning']) > 0, message=f"Expected reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        assert_type_value(obj=choice['tools'], type_or_value=list, name=f"tools in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_log(expression=len(choice['tools']) == 1, message=f"Expected tools in choice '{i + 1}' of '{len(completion['choices'])}' in completion to to contain '1' tool call but got '{len(choice['tools'])}'.")
+        for j, tool_call in enumerate(choice['tools']):
+            assert_type_value(obj=tool_call, type_or_value=dict, name=f"tool call '{i + j}' of '{len(choice['tools'])}'")
+            assert_keys(obj=tool_call, keys=['id', 'name', 'arguments'], mode="match", name=f"tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_type_value(obj=tool_call['id'], type_or_value=str, name=f"value of key 'id' in tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(tool_call['id']) > 0, message=f"Expected tool call ID in tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be non-empty.")
+            assert_type_value(obj=tool_call['name'], type_or_value=list(names_to_args.keys()), name=f"value of key 'name' in tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=set(tool_call['arguments'].keys()) == names_to_args[tool_call['name']], message=f"Expected tool call '{i + j}' of '{len(choice['tools'])}' with name '{tool_call['name']}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion to contain arguments {names_to_args[tool_call['name']]} but got {set(choice['tools'][0]['arguments'].keys())}.")
+        assert_type_value(obj=choice['tools'][0]['name'], type_or_value=list(names_to_args.keys())[1], name=f"value of key 'name' in tool call in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        if 'logs' in choice:
+            assert_type_value(obj=choice['logs'], type_or_value=list, name=f"logs in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['logs']) > 0, message=f"Expected to find at least one log in in choice '{i + 1}' of '{len(completion['choices'])}' completion.")
+            for i, log in enumerate(choice['logs']):
+                assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion logs")
+    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
+    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
+    for i, log in enumerate(completion['logs']):
+        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
+
+    success, message, context = client.get_context()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=context, type_or_value=list, name="context")
+    assert_log(expression=len(context) == 1, message=f"Expected context to contain '1' messages but got '{len(context)}'.")
+
+    success, message = client.set_settings(max_tool_calls=2)
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+
+    success, message, completion = client.prompt(text="Tell me the time and how warm it is! Use both tools simultaneously!", response_type="always", reset_context=True)
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_keys(obj=completion, keys=['usage', 'choices', 'logs'], mode="match", name="completion")
+    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
+    assert_type_value(obj=completion['choices'], type_or_value=list, name="choices in completion")
+    assert_log(expression=len(completion['choices']) == kwargs['choices'], message=f"Expected number of choices in completion to match setting 'choices' provided by test definition but got '{len(completion['choices'])}' instead of '{kwargs['choices']}'.")
+    for i, choice in enumerate(completion['choices']):
+        assert_type_value(obj=choice, type_or_value=dict, name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['tools', 'text', 'reasoning', 'logs'], mode="whitelist", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_keys(obj=choice, keys=['tools'], mode="required", name=f"choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        if 'text' in choice:
+            assert_type_value(obj=choice['text'], type_or_value=str, name=f"text in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['text']) > 0, message=f"Expected text in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        if 'reasoning' in choice:
+            assert_type_value(obj=choice['reasoning'], type_or_value=str, name=f"reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['reasoning']) > 0, message=f"Expected reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+        assert_type_value(obj=choice['tools'], type_or_value=list, name=f"tools in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+        assert_log(expression=len(choice['tools']) == 2, message=f"Expected tools in choice '{i + 1}' of '{len(completion['choices'])}' in completion to to contain '2' tool call but got '{len(choice['tools'])}'.")
+        names = []
+        for j, tool_call in enumerate(choice['tools']):
+            assert_type_value(obj=tool_call, type_or_value=dict, name=f"tool call '{i + j}' of '{len(choice['tools'])}'")
+            assert_keys(obj=tool_call, keys=['id', 'name', 'arguments'], mode="match", name=f"tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_type_value(obj=tool_call['id'], type_or_value=str, name=f"value of key 'id' in tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(tool_call['id']) > 0, message=f"Expected tool call ID in tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be non-empty.")
+            assert_type_value(obj=tool_call['name'], type_or_value=list(names_to_args.keys()), name=f"value of key 'name' in tool call '{i + j}' of '{len(choice['tools'])}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=set(tool_call['arguments'].keys()) == names_to_args[tool_call['name']], message=f"Expected tool call '{i + j}' of '{len(choice['tools'])}' with name '{tool_call['name']}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion to contain arguments {names_to_args[tool_call['name']]} but got {set(choice['tools'][0]['arguments'].keys())}.")
+            names.append(tool_call['name'])
+        assert_log(expression=set(names) == set(names_to_args.keys()), message=f"Expected tool calls in choice '{i + 1}' of '{len(completion['choices'])}' in completion to cover the names {set(names_to_args.keys())} but got {names}.")
+        if 'logs' in choice:
+            assert_type_value(obj=choice['logs'], type_or_value=list, name=f"logs in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
+            assert_log(expression=len(choice['logs']) > 0, message=f"Expected to find at least one log in in choice '{i + 1}' of '{len(completion['choices'])}' completion.")
+            for i, log in enumerate(choice['logs']):
+                assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in choice '{i + 1}' of '{len(completion['choices'])}' in completion logs")
+    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
+    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
+    for i, log in enumerate(completion['logs']):
+        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
+
+    success, message, context = client.get_context()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=context, type_or_value=list, name="context")
+    assert_log(expression=len(context) == 1, message=f"Expected context to contain '1' messages but got '{len(context)}'.")
+
+def test_093_openrouter_tool_use_choices():
+    return "NOT SUPPORTED."
+
+def test_094_openrouter_tool_use_choices_stream():
+    return "NOT SUPPORTED."
+
+def test_095_openai_tool_use_choices():
+    return _tool_use_choices(stream=False, endpoint="OpenAI", model="gpt-5.2-2025-12-11", choices=2, reasoning_effort="none")
+
+def test_096_openai_tool_use_choices_stream():
+    return "NOT SUPPORTED."
+
+def test_097_mistral_tool_use_choices():
+    return _tool_use_choices(stream=False, endpoint="Mistral", model="mistral-small-latest", choices=2, reasoning_effort="none")
+
+def test_098_mistral_tool_use_choices_stream():
+    return _tool_use_choices(stream=True, endpoint="Mistral", model="mistral-small-latest", choices=2, reasoning_effort="none")
+
+def test_099_vllm_tool_use_choices():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _tool_use_choices(endpoint="AIS", model=model, choices=2, reasoning_effort="none", timeout_read=60, timeout_completion=60)
+
+def test_100_vllm_tool_use_choices_stream():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _tool_use_choices(endpoint="AIS", model=model, choices=2, reasoning_effort="none", timeout_read=60, timeout_completion=60)

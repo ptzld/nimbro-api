@@ -50,9 +50,10 @@ default_settings = {
     'endpoint': "OpenRouter",
     'model': "~anthropic/claude-sonnet-latest",
     'validate_model': 3600,
+    'choices': 1,
     'temperature': 1.0,
     'top_p': 1.0,
-    'max_tokens': 5000,
+    'max_tokens': 10000,
     'presence_penalty': 0.0,
     'frequency_penalty': 0.0,
     'reasoning_effort': "none",
@@ -141,6 +142,14 @@ class ChatCompletions(Client):
                 Validate the set 'model' is available with the Models API of the set 'endpoint' when using `prompt()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
+            choices (int):
+                Number of assistant responses generated (>= 1):
+                Use 1 to generate one assistant response:
+                  - If valid, the generated assistant response is returned at the top-level of the returned dictionary (keys 'text', 'tools', 'reasoning', etc.).
+                  - If valid, the generated assistant response is automatically added to the managed context.
+                Use >1 to generate multiple assistant responses:
+                  - If valid, the generated assistant responses are returned behind the 'choices' key as a list of dictionaries (`list` of `dict` items with keys 'text', 'reasoning', 'tools', etc.).
+                  - None of the generated completions are added to the managed context (use `set_context()`).
             temperature (float | int):
                 Model temperature parameter (from 0.0 to 1.5).
             top_p (float | int):
@@ -308,11 +317,11 @@ class ChatCompletions(Client):
                 A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
-                - dict | None: A dictionary containing the assistant response ('text', 'tools', 'reasoning'),
-                  as well as 'logs', 'usage' and possibly other items, or `None` if not successful.
-
+                - dict | None: A dictionary containing the assistant response(s) as well as 'logs', 'usage' and possibly other items, or `None` if not successful.
         Notes:
-            - Any valid assistant response is automatically added to the context window, allowing `prompt()` alone to implement a chat-style client.
+            - With setting 'choices' set to 1, any valid assistant response is automatically added to the context window, allowing `prompt()` alone to implement a chat-style client.
+            - With setting 'choices' set to 1, the generated assistant response is returned at the top-level of the returned dictionary (keys 'text', 'tools', 'reasoning', etc.).
+            - With setting 'choices' set to >1, the generated assistant responses are returned behind the 'choices' key as a list of dictionaries (`list` of `dict` items with keys 'text', 'reasoning', 'tools', etc.).
         """
         return self._base.wrap(1, self._base.prompt, text, reset_context, response_type, **kwargs)
 

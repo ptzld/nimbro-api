@@ -90,6 +90,13 @@ class ChatCompletionsBase(ClientBase):
                 message=f"Expected setting 'validate_model' provided as '{type(settings['validate_model']).__name__}' to be non-negative but got '{settings['validate_model']}'."
             )
 
+        # choices
+        assert_type_value(obj=settings['choices'], type_or_value=int, name="setting 'choices'")
+        assert_log(
+            expression=settings['choices'] >= 1,
+            message=f"Expected setting 'choices' to be '1' or greater but got '{settings['choices']}'."
+        )
+
         # temperature
         assert_type_value(obj=settings['temperature'], type_or_value=[float, int], name="setting 'temperature'")
         settings['temperature'] = float(settings['temperature'])
@@ -212,6 +219,12 @@ class ChatCompletionsBase(ClientBase):
             settings['parser'] = [settings['parser']]
         for item in settings['parser']:
             assert_type_value(obj=item, type_or_value=str, name="element in setting 'parser'")
+
+        # warnings
+        if settings['endpoints'][settings['endpoint']]['api_flavor'] == "openai" and settings['choices'] > 1 and (settings['max_tool_calls'] is None or settings['max_tool_calls'] > 1) and settings['stream'] is True:
+            self._logger.warn("OpenAI ignores the 'choices' setting when the 'max_tool_calls' setting is unrestricted (None) or greater than 1 and the 'stream' setting is True. Therefore, completions using an endpoint with the flavor \"openai\" flavor together with this particular combination of settings will likely fail because the endpoint only responds with one choice.", once=True)
+        if settings['endpoints'][settings['endpoint']]['api_flavor'] == "openrouter" and settings['choices'] > 1:
+            self._logger.warn("OpenRouter ignores the 'choices' setting, so completions using an endpoint with the \"openrouter\" flavor and a 'choices' setting greater than 1 will likely fail because the endpoint only responds with one choice.", once=True)
 
         # apply settings
         self._endpoint = settings['endpoints'][settings['endpoint']]
@@ -734,7 +747,7 @@ class ChatCompletionsBase(ClientBase):
         self.set_tool_choice(response_type)
 
         while True:
-            reasoning, text, tool_calls, usage, is_complete, stamp_last_chunk = "", "", [], None, False, None
+            choices_acc, usage, is_complete, stamp_last_chunk = {}, None, False, None
             datetime_start = datetime.datetime.now(datetime.timezone.utc)
             stamp_start = time.perf_counter()
 
@@ -753,7 +766,7 @@ class ChatCompletionsBase(ClientBase):
 
                     if self._settings['timeout_completion'] is not None and now - stamp_start > self._settings['timeout_completion']:
                         self.pipe[0].send("INTERNAL")
-                        usage = self.save_usage(None, datetime_start)
+                        usage = self.save_usage(chunk=None, stamp_start=datetime_start)
                         logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_completion']}s' before completion was finished.")
                         break
 
@@ -761,12 +774,12 @@ class ChatCompletionsBase(ClientBase):
                         if stamp_last_chunk is None:
                             if self._settings['timeout_chunk_first'] is not None and now - stamp_start > self._settings['timeout_chunk_first']:
                                 self.pipe[0].send("INTERNAL")
-                                usage = self.save_usage(None, datetime_start)
+                                usage = self.save_usage(chunk=None, stamp_start=datetime_start)
                                 logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_chunk_first']}s' without receiving the first chunk.")
                                 break
                         elif self._settings['timeout_chunk_next'] is not None and now - stamp_last_chunk > self._settings['timeout_chunk_next']:
                             self.pipe[0].send("INTERNAL")
-                            usage = self.save_usage(None, datetime_start)
+                            usage = self.save_usage(chunk=None, stamp_start=datetime_start)
                             logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_chunk_next']}s' without receiving the next chunk.")
                             break
 
@@ -785,7 +798,7 @@ class ChatCompletionsBase(ClientBase):
                             assert isinstance(chunk['content'], str), f"Expected chunk content '{chunk['content']}' to be of type 'str' but got '{type(chunk['content']).__name__}'."
 
                             if usage is None:
-                                usage = self.save_usage(None, datetime_start)
+                                usage = self.save_usage(chunk=None, stamp_start=datetime_start)
 
                             logs.append(chunk['content'])
                             if len(logs[-1]) > 5000:
@@ -800,9 +813,7 @@ class ChatCompletionsBase(ClientBase):
 
                                 response = self.post_process_completion(
                                     response_type=response_type,
-                                    reasoning=None,
-                                    text=None,
-                                    tool_calls=[],
+                                    choices=[],
                                     is_valid=False,
                                     correction=False,
                                     usage=usage,
@@ -812,7 +823,14 @@ class ChatCompletionsBase(ClientBase):
                             break
 
                         if chunk['code'] == "COMPLETION":
-                            reasoning, text, tool_calls = self.parse_chunk(chunk['content'], reasoning, text, tool_calls)
+                            idx = chunk['content']['index']
+                            acc = choices_acc.setdefault(idx, {'reasoning': "", 'text': "", 'tool_calls': [], 'logs': []})
+                            acc['reasoning'], acc['text'], acc['tool_calls'] = self.parse_chunk(
+                                chunk=chunk['content']['delta'],
+                                reasoning=acc['reasoning'],
+                                text=acc['text'],
+                                tool_calls=acc['tool_calls']
+                            )
 
                         elif chunk['code'] == "USAGE":
                             assert isinstance(chunk['content'], dict), f"Expected chunk content '{chunk['content']}' to be of type 'dict' but got '{type(chunk['content']).__name__}'."
@@ -823,10 +841,16 @@ class ChatCompletionsBase(ClientBase):
                                 logs.append("Ignoring received usage message that misses expected key 'completion_tokens'.")
                                 self._logger.warn(logs[-1])
                             else:
-                                usage = self.save_usage(chunk, datetime_start)
+                                usage = self.save_usage(chunk=chunk, stamp_start=datetime_start)
 
                         elif chunk['code'] == "ALL_CHUNKS_RECEIVED":
-                            if reasoning == "" and text == "" and len(tool_calls) == 0:
+                            n = self._settings['choices']
+
+                            if len(choices_acc) != n:
+                                logs.append(f"Expected to receive '{n}' choice{'' if n == 1 else 's'} but got '{len(choices_acc)}'.")
+                                self._logger.warn(logs[-1])
+                                break
+                            if any(acc['reasoning'] == "" and acc['text'] == "" and len(acc['tool_calls']) == 0 for acc in choices_acc.values()):
                                 logs.append("Completion finished before receiving any content.")
                                 self._logger.warn(logs[-1])
                                 break
@@ -834,64 +858,51 @@ class ChatCompletionsBase(ClientBase):
                             is_complete = True
 
                             if usage is None:
-                                usage = self.save_usage(None, datetime_start)
+                                usage = self.save_usage(chunk=None, stamp_start=datetime_start)
                                 logs.append("Received completion without usage information.")
                                 self._logger.warn(logs[-1])
 
-                            # move reasoning to text when completion contains reasoning only
-                            if reasoning != "" and len(tool_calls) == 0 and text == "":
-                                self._logger.warn("Completion contains nothing but reasoning. Interpreting reasoning content as text-completion.")
-                                text = reasoning
-                                reasoning = ""
-
-                            # extract tool-calls from text
-                            if len(tool_calls) == 0 and response_type not in ["text", "auto", "json"]:
-                                text, tool_calls, logs = self.extract_tool(text, tool_calls, logs)
-
-                            # extract JSON from text
-                            if response_type == "json":
-                                try:
-                                    dict_extracted = json.loads(text)
-                                except Exception:
-                                    dict_extracted = extract_json(text, first_over_longest=False)
-                                    if dict_extracted is not None:
-                                        if "\n" in text:
-                                            text_str = f"\n{text}"
-                                        else:
-                                            text_str = text
-                                        logs.append(f"Extracted JSON {format_obj(dict_extracted)} from invalid text-completion: '{text_str}'.")
-                                        self._logger.warn(logs[-1])
-                                        text = json.dumps(dict_extracted, indent=2)
+                            for idx in sorted(choices_acc):
+                                acc = choices_acc[idx]
+                                choice_logs = logs if n == 1 else acc['logs']
+                                acc['reasoning'], acc['text'], acc['tool_calls'], choice_logs = self.finalize_choice(
+                                    response_type=response_type,
+                                    reasoning=acc['reasoning'],
+                                    text=acc['text'],
+                                    tool_calls=acc['tool_calls'],
+                                    logs=choice_logs
+                                )
+                                if n == 1:
+                                    logs = choice_logs
                                 else:
-                                    text = json.dumps(dict_extracted, indent=2)
+                                    acc['logs'] = choice_logs
 
-                            # ensure tool-call arguments are valid and extract them if not
-                            for i, tool in enumerate(tool_calls):
-                                if tool['arguments'] == "":
-                                    tool_calls[i]['arguments'] = r"{}"
-                                else:
-                                    try:
-                                        parameters = json.loads(tool['arguments'])
-                                    except Exception:
-                                        parameters = extract_json(tool['arguments'], first_over_longest=False)
-                                        if parameters is not None:
-                                            if "\n" in tool['arguments']:
-                                                text_str = f"\n{tool['arguments']}"
-                                            else:
-                                                text_str = tool['arguments']
-                                            logs.append(f"Extracted JSON {format_obj(parameters)} from invalid tool-call arguments: '{text_str}'.")
-                                            self._logger.warn(logs[-1])
-                                            tool_calls[i]['arguments'] = json.dumps(parameters, indent=2)
-                                    else:
-                                        tool_calls[i]['arguments'] = json.dumps(parameters, indent=2)
+                            if n == 1:
+                                acc = next(iter(choices_acc.values()))
+                                logs = self.validate_completion(
+                                    reasoning=acc['reasoning'],
+                                    text=acc['text'],
+                                    tool_calls=acc['tool_calls'],
+                                    logs=logs,
+                                    add_to_context=True,
+                                    choice_index=None
+                                )
 
-                            # ensure valid tool names
-                            tool_calls, logs = self.clean_tool_calls(tool_calls, logs)
-
-                            logs = self.add_completion_to_context(reasoning, text, tool_calls, logs)
+                            else:
+                                for idx in sorted(choices_acc):
+                                    acc = choices_acc[idx]
+                                    acc['logs'] = self.validate_completion(
+                                        reasoning=acc['reasoning'],
+                                        text=acc['text'],
+                                        tool_calls=acc['tool_calls'],
+                                        logs=acc['logs'],
+                                        add_to_context=False,
+                                        choice_index=idx
+                                    )
                             break
+
                     elif not alive:
-                        usage = self.save_usage(None, datetime_start)
+                        usage = self.save_usage(chunk=None, stamp_start=datetime_start)
                         logs.append(f"Error while receiving completion: Completion thread unexpectedly died after '{now - stamp_start:.3f}s'.")
                         break
                     else:
@@ -913,10 +924,24 @@ class ChatCompletionsBase(ClientBase):
                 self.pipe[1].close()
 
             if is_complete:
-                is_valid, correction_messages, logs = self.validate_completion(response_type, text, tool_calls, logs)
+                is_valid = True
+                n = self._settings['choices']
+                for idx in sorted(choices_acc):
+                    acc = choices_acc[idx]
+                    choice_logs = logs if n == 1 else acc['logs']
+                    choice_valid, correction_messages, choice_logs = self.heal_completion(response_type, acc['text'], acc['tool_calls'], choice_logs)
+                    if n == 1:
+                        logs = choice_logs
+                    else:
+                        acc['logs'] = choice_logs
+                    if not choice_valid:
+                        is_valid = False
+                        if n > 1:
+                            logs.append(f"Choice '{idx}' is invalid: {acc['logs'][-1]}")
+                        break
                 if is_valid:
                     break
-                if not is_correction and self._settings['correction']:
+                if self._settings['choices'] == 1 and not is_correction and self._settings['correction']:
                     is_correction = True
                     logs[-1] = f"Completion failed after '{time.perf_counter() - stamp_start:.3f}s': {logs[-1]}"
                     logs.append("Attempting to correct invalid completion: ")
@@ -933,11 +958,11 @@ class ChatCompletionsBase(ClientBase):
                         self._logger.info(f"Joined completion-thread after waiting '{time.perf_counter() - stamp:.3f}s'.")
                 else:
                     logs[-1] = f"Completion failed after '{time.perf_counter() - stamp_start:.3f}s': {logs[-1]}"
-                    reasoning, text, tool_calls = "", "", []
+                    choices_acc = {}
                     break
             else:
                 logs[-1] = f"Completion failed after '{time.perf_counter() - stamp_start:.3f}s': {logs[-1]}"
-                reasoning, text, tool_calls = "", "", []
+                choices_acc = {}
                 break
 
         if self._settings['request_safeguard'] and request_thread.is_alive():
@@ -948,14 +973,20 @@ class ChatCompletionsBase(ClientBase):
 
         response = self.post_process_completion(
             response_type=response_type,
-            reasoning=reasoning if len(reasoning) > 0 else None,
-            text=text if len(text) > 0 else None,
-            tool_calls=tool_calls,
+            choices=[
+                {
+                    'reasoning': choices_acc[idx]['reasoning'] if choices_acc[idx]['reasoning'] else None,
+                    'text': choices_acc[idx]['text'] if choices_acc[idx]['text'] else None,
+                    'tool_calls': choices_acc[idx]['tool_calls'],
+                    'logs': choices_acc[idx]['logs']
+                } for idx in sorted(choices_acc)
+            ],
             is_valid=is_valid,
             correction=is_correction,
             usage=usage,
             logs=logs
         )
+
         return response
 
     def set_tool_choice(self, response_type):
@@ -1021,7 +1052,7 @@ class ChatCompletionsBase(ClientBase):
             elif response_type == "always":
                 self.response_format = {'type': "text"}
                 self.tool_choice = "auto" # wait until v1 engines supports 'required'
-                self._logger.warn(f"Tool-choice '{response_type}' is not available for API flavor '{self._endpoint['api_flavor']}', using '{self.tool_choice}' instead.")
+                self._logger.warn(f"Tool-choice '{response_type}' is not available for API flavor '{self._endpoint['api_flavor']}', using '{self.tool_choice}' instead.", once=True)
             elif response_type == "auto":
                 self.response_format = {'type': "text"}
                 self.tool_choice = "auto"
@@ -1115,7 +1146,7 @@ class ChatCompletionsBase(ClientBase):
                     'frequency_penalty': self._settings['frequency_penalty'],
                     'response_format': self.response_format,
                     # 'verbosity': "medium",
-                    'n': 1,
+                    'n': self._settings['choices'],
                     'stream': self._settings['stream']
                 }
                 if self._settings['reasoning_effort'] != "":
@@ -1139,7 +1170,7 @@ class ChatCompletionsBase(ClientBase):
                     'top_p': self._settings['top_p'],
                     'max_tokens': self._settings['max_tokens'],
                     'response_format': self.response_format,
-                    'n': 1,
+                    'n': self._settings['choices'],
                     'stream': self._settings['stream']
                 }
                 if self._settings['reasoning_effort'] != "":
@@ -1158,7 +1189,7 @@ class ChatCompletionsBase(ClientBase):
                     'presence_penalty': self._settings['presence_penalty'],
                     'frequency_penalty': self._settings['frequency_penalty'],
                     'response_format': self.response_format,
-                    'n': 1,
+                    'n': self._settings['choices'],
                     'stream': self._settings['stream']
                 }
                 if self._settings['reasoning_effort'] != "":
@@ -1182,7 +1213,7 @@ class ChatCompletionsBase(ClientBase):
                     'presence_penalty': self._settings['presence_penalty'],
                     'frequency_penalty': self._settings['frequency_penalty'],
                     'response_format': self.response_format,
-                    'n': 1,
+                    'n': self._settings['choices'],
                     'stream': self._settings['stream'],
                     'chat_template_kwargs': {'enable_thinking': self._settings['reasoning_effort'] not in ["", "none"]}
                 }
@@ -1255,26 +1286,28 @@ class ChatCompletionsBase(ClientBase):
                             message = "Error while receiving completion: Expected list 'choices' to contain at least one element."
                             pipe[1].send({'code': "ERROR", 'content': message})
                         # finish_reason
-                        elif 'finish_reason' not in json_data['choices'][0]:
-                            message = "Error while receiving completion: Expected choice to contain key 'finish_reason'."
-                            pipe[1].send({'code': "ERROR", 'content': message})
-                        elif json_data['choices'][0]['finish_reason'] not in [None, "stop", "tool_calls", "STOP", "end_turn"]:
-                            message = f"Error while receiving completion: Expected value of key 'finish_reason' to be in '{[None, 'stop', 'tool_calls', 'STOP', 'end_turn']}' but got '{json_data['choices'][0]['finish_reason']}'."
-                            pipe[1].send({'code': "ERROR", 'content': message})
-                        # message
-                        elif 'message' not in json_data['choices'][0]:
-                            message = "Error while receiving completion: Expected choice to contain key 'message'."
-                            pipe[1].send({'code': "ERROR", 'content': message})
-                        elif not isinstance(json_data['choices'][0]['message'], dict):
-                            message = f"Error while receiving completion: Expected value of key 'message' to be of type 'dict' but got '{type(json_data['choices'][0]['message']).__name__}'."
-                            pipe[1].send({'code': "ERROR", 'content': message})
                         else:
-                            completion = json_data['choices'][0]['message']
-                            if 'tool_calls' in completion and completion['tool_calls'] is None:
-                                del completion['tool_calls']
-                            pipe[1].send({'code': "COMPLETION", 'content': completion})
-                            pipe[1].send({'code': "ALL_CHUNKS_RECEIVED", 'content': ''})
-
+                            error = None
+                            for choice in json_data['choices']:
+                                if 'finish_reason' not in choice:
+                                    error = "Expected choice to contain key 'finish_reason'."
+                                elif choice['finish_reason'] not in [None, "stop", "tool_calls", "STOP", "end_turn"]:
+                                    error = f"Expected value of key 'finish_reason' to be in '{[None, 'stop', 'tool_calls', 'STOP', 'end_turn']}' but got '{choice['finish_reason']}'."
+                                elif 'message' not in choice:
+                                    error = "Expected choice to contain key 'message'."
+                                elif not isinstance(choice['message'], dict):
+                                    error = f"Expected value of key 'message' to be of type 'dict' but got '{type(choice['message']).__name__}'."
+                                if error is not None:
+                                    break
+                            if error is not None:
+                                pipe[1].send({'code': "ERROR", 'content': f"Error while receiving completion: {error}"})
+                            else:
+                                for i, choice in enumerate(json_data['choices']):
+                                    completion_message = choice['message']
+                                    if 'tool_calls' in completion_message and completion_message['tool_calls'] is None:
+                                        del completion_message['tool_calls']
+                                    pipe[1].send({'code': "COMPLETION", 'content': {'index': choice.get('index', i), 'delta': completion_message}})
+                                pipe[1].send({'code': "ALL_CHUNKS_RECEIVED", 'content': ''})
                 self._logger.debug("Finished completion thread.")
                 return
 
@@ -1381,27 +1414,31 @@ class ChatCompletionsBase(ClientBase):
                                                     pipe[1].send({'code': "USAGE", 'content': json_data['usage']})
 
                                             # extract choices
-                                            if len(json_data.get('choices', [])) > 0:
-                                                try:
-                                                    json_choice = json_data['choices'][0]
-                                                except Exception as e:
-                                                    self._logger.warn(f"Ignoring data '{json_data}' after failure to parse choice as JSON: {repr(e)}")
-                                                else:
-                                                    # unexpected finish reason
-                                                    if json_choice.get('finish_reason') not in [None, "stop", "tool_calls", "STOP", "end_turn"]:
-                                                        # forward usage before end of process
-                                                        if self._endpoint['api_flavor'] in ["vllm", "openrouter"]:
-                                                            if usage is None:
-                                                                self._logger.warn("Expected to receive usage before [ERROR] message.")
-                                                            else:
-                                                                pipe[1].send({'code': "USAGE", 'content': usage})
-                                                        message = f"Error while receiving completion: Unexpected finish reason '{json_choice.get('finish_reason')}'."
-                                                        pipe[1].send({'code': "ERROR", 'content': message})
-                                                        early_stop = True
-                                                        break
+                                            for json_choice in json_data.get('choices', []):
+                                                # unexpected finish reason
+                                                if json_choice.get('finish_reason') not in [None, "stop", "tool_calls", "STOP", "end_turn"]:
+                                                    # forward usage before end of process
+                                                    if self._endpoint['api_flavor'] in ["vllm", "openrouter"]:
+                                                        if usage is None:
+                                                            self._logger.warn("Expected to receive usage before [ERROR] message.")
+                                                        else:
+                                                            pipe[1].send({'code': "USAGE", 'content': usage})
+                                                    message = f"Error while receiving completion: Unexpected finish reason '{json_choice.get('finish_reason')}'."
+                                                    pipe[1].send({'code': "ERROR", 'content': message})
+                                                    early_stop = True
+                                                    break
 
-                                                    # forward delta
-                                                    pipe[1].send({'code': "COMPLETION", 'content': json_choice['delta']})
+                                                # forward non-empty delta
+                                                if 'delta' in json_choice and json_choice['delta'] not in [{}, None]:
+                                                    pipe[1].send({
+                                                        'code': "COMPLETION",
+                                                        'content': {
+                                                            'index': json_choice.get('index', 0),
+                                                            'delta': json_choice['delta']
+                                                        }
+                                                    })
+                                            if early_stop:
+                                                break
                                 else:
                                     error += line
                 else:
@@ -1568,6 +1605,59 @@ class ChatCompletionsBase(ClientBase):
 
         return reasoning, text, tool_calls
 
+    def finalize_choice(self, response_type, reasoning, text, tool_calls, logs):
+        # move reasoning to text when completion contains reasoning only
+        if reasoning != "" and len(tool_calls) == 0 and text == "":
+            self._logger.warn("Completion contains nothing but reasoning. Interpreting reasoning content as text-completion.")
+            text = reasoning
+            reasoning = ""
+
+        # extract tool-calls from text
+        if len(tool_calls) == 0 and response_type not in ["text", "auto", "json"]:
+            text, tool_calls, logs = self.extract_tool(text=text, tool_calls=tool_calls, logs=logs)
+
+        # extract JSON from text
+        if response_type == "json":
+            try:
+                dict_extracted = json.loads(text)
+            except Exception:
+                dict_extracted = extract_json(text, first_over_longest=False)
+                if dict_extracted is not None:
+                    if "\n" in text:
+                        text_str = f"\n{text}"
+                    else:
+                        text_str = text
+                    logs.append(f"Extracted JSON {format_obj(dict_extracted)} from invalid text-completion: '{text_str}'.")
+                    self._logger.warn(logs[-1])
+                    text = json.dumps(dict_extracted, indent=2)
+            else:
+                text = json.dumps(dict_extracted, indent=2)
+
+        # ensure tool-call arguments are valid and extract them if not
+        for i, tool in enumerate(tool_calls):
+            if tool['arguments'] == "":
+                tool_calls[i]['arguments'] = r"{}"
+            else:
+                try:
+                    parameters = json.loads(tool['arguments'])
+                except Exception:
+                    parameters = extract_json(tool['arguments'], first_over_longest=False)
+                    if parameters is not None:
+                        if "\n" in tool['arguments']:
+                            text_str = f"\n{tool['arguments']}"
+                        else:
+                            text_str = tool['arguments']
+                        logs.append(f"Extracted JSON {format_obj(parameters)} from invalid tool-call arguments: '{text_str}'.")
+                        self._logger.warn(logs[-1])
+                        tool_calls[i]['arguments'] = json.dumps(parameters, indent=2)
+                else:
+                    tool_calls[i]['arguments'] = json.dumps(parameters, indent=2)
+
+        # ensure valid tool names
+        tool_calls, logs = self.clean_tool_calls(tool_calls=tool_calls, logs=logs)
+
+        return reasoning, text, tool_calls, logs
+
     def extract_tool(self, text, tool_calls, logs):
         first_text_call = extract_json(text, first_over_longest=True)
         if first_text_call is not None:
@@ -1604,7 +1694,7 @@ class ChatCompletionsBase(ClientBase):
                 self._logger.warn(logs[-1])
         return tool_calls, logs
 
-    def add_completion_to_context(self, reasoning, text, tool_calls, logs):
+    def validate_completion(self, reasoning, text, tool_calls, logs, add_to_context, choice_index):
         def print_unvalidated_tool(dictionary):
             dictionary = copy.deepcopy(dictionary)
             try:
@@ -1613,28 +1703,30 @@ class ChatCompletionsBase(ClientBase):
                 pass
             return json.dumps(dictionary, indent=2)
 
+        choice_str = "" if choice_index is None else f" - Choice ID '{choice_index}' ('{choice_index + 1}' of '{self._settings['choices']}')"
+
         # log
         if self._settings['logger_info_completion']:
             if sum([reasoning != "", text != "", len(tool_calls) > 0]) > 1:
-                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Mixed-completion:{escape['end']}\n"
+                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Mixed-completion{escape['end']}{choice_str}:\n"
                 if reasoning != "":
-                    response_msg += f"\nReasoning:\n'\n{reasoning}\n'\n"
+                    response_msg += f"\n{escape['yellow']}{escape['bold']}>{escape['end']} Reasoning\n{escape['yellow']}{escape['bold']}'{escape['end']}\n{reasoning}\n{escape['yellow']}{escape['bold']}'{escape['end']}\n"
                 if text != "":
-                    response_msg += f"\nText:\n'\n{text}\n'\n"
+                    response_msg += f"\n{escape['cyan']}{escape['bold']}>{escape['end']} Text\n{escape['cyan']}{escape['bold']}'{escape['end']}\n{text}\n{escape['cyan']}{escape['bold']}'{escape['end']}\n"
                 if len(tool_calls) > 0:
                     tool_msg = ',\n'.join([f"{(str(i) + ': ') if len(tool_calls) > 1 else ''}{print_unvalidated_tool(tool)}" for i, tool in enumerate(tool_calls)])
                     if len(tool_calls) > 1:
                         tool_msg = f"[{tool_msg}]"
-                    response_msg += f"\nTool-call{'' if len(tool_calls) == 1 else 's'}:\n{tool_msg}\n"
+                    response_msg += f"\n{escape['white']}{escape['bold']}>{escape['end']} Tool-call{'' if len(tool_calls) == 1 else 's'}\n{tool_msg}\n"
             elif reasoning != "":
-                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Reasoning-completion{escape['end']}:\n'\n{reasoning}\n'"
+                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Reasoning-completion{escape['end']}{choice_str}:\n{escape['yellow']}{escape['bold']}'{escape['end']}\n{reasoning}\n{escape['yellow']}{escape['bold']}'{escape['end']}"
             elif text != "":
-                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Text-completion{escape['end']}:\n{escape['green']}'{escape['end']}\n{text}\n{escape['green']}'{escape['end']}"
+                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Text-completion{escape['end']}{choice_str}:\n{escape['cyan']}{escape['bold']}'{escape['end']}\n{text}\n{escape['cyan']}{escape['bold']}'{escape['end']}"
             elif len(tool_calls) > 0:
                 tool_msg = '\n'.join([f"{(str(i) + ': ') if len(tool_calls) > 1 else ''}{print_unvalidated_tool(tool)}" for i, tool in enumerate(tool_calls)])
-                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Tool-completion{escape['end']}:\n{tool_msg}"
+                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Tool-completion{escape['end']}{choice_str}:\n{tool_msg}"
             else:
-                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Malformed-completion{escape['end']}:\nReasoning: {reasoning}\nText: {text}\nTool-calls: {tool_calls}\n"
+                response_msg = f"{escape['green']}{escape['bold']}{escape['underline']}Malformed-completion{escape['end']}{choice_str}:\n> Reasoning: {reasoning}\n> Text: {text}\n> Tool-calls: {tool_calls}\n"
             self._logger.info(response_msg)
 
         # construct message
@@ -1661,12 +1753,15 @@ class ChatCompletionsBase(ClientBase):
             self._logger.warn(logs[-1])
 
         # add message to context
-        self.messages.append(message)
-        self._logger.debug(f"Completion added to context: {format_obj(message)}.")
+        if add_to_context:
+            self.messages.append(message)
+            self._logger.debug(f"Completion added to context: {format_obj(message)}.")
+        else:
+            self._logger.debug(f"Completion not added to context: {format_obj(message)}.")
 
         return logs
 
-    def validate_completion(self, response_type, text, tool_calls, logs):
+    def heal_completion(self, response_type, text, tool_calls, logs):
         is_valid = True
 
         # create generic correction response # TODO have a single correction response rather than number-of-tools-calls + 1 single messages
@@ -1693,25 +1788,23 @@ class ChatCompletionsBase(ClientBase):
                     correction_messages[i]['content'] = "Your response must not contain any tool-call, but only text content."
 
         # error case: tool-choice "use specific function" was violated
-        if len(self.tools) > 0 and response_type != "text" and response_type != "auto" and response_type != "always" and response_type != "json":
-            if text != "": # is text actually forbidden if the response still contains the demanded tool call?
+        if len(self.tools) > 0 and response_type not in ["text", "auto", "always", "json"]:
+            valid_ids = []
+            invalid_ids_names = {}
+            for c in tool_calls:
+                if c['name'] == response_type:
+                    valid_ids.append(c['id'])
+                else:
+                    invalid_ids_names[c['id']] = c['name']
+            if len(valid_ids) == 0:
                 is_valid = False
-                logs.append(f"Completion contains text content despite tool-choice being set to '{response_type}'.")
-                correction_messages[-1]['content'] = f"Your response must only contain a tool-call of '{response_type}' without additional text."
-            else:
-                valid_ids = []
-                invalid_ids_names = {}
-                for c in tool_calls:
-                    if c['name'] == response_type:
-                        valid_ids.append(c['id'])
-                    else:
-                        invalid_ids_names[c['id']] = c['name']
-                for i, message in enumerate(correction_messages):
-                    if message['role'] == "tool":
-                        if message['tool_call_id'] not in valid_ids:
-                            is_valid = False
-                            logs.append(f"Completion contains tool-call '{invalid_ids_names[message['tool_call_id']]}' despite tool-choice being set to '{response_type}'.")
-                            correction_messages[i]['content'] = f"Your response must only contain the tool-call '{response_type}'."
+                logs.append(f"Completion does not contain required tool-call '{response_type}'.")
+                correction_messages[-1]['content'] = f"Your response must contain a tool-call of '{response_type}'. Text content is allowed, but the tool-call is required."
+            for i, message in enumerate(correction_messages):
+                if message['role'] == "tool" and message['tool_call_id'] not in valid_ids:
+                    is_valid = False
+                    logs.append(f"Completion contains tool-call '{invalid_ids_names[message['tool_call_id']]}' despite tool-choice being set to '{response_type}'.")
+                    correction_messages[i]['content'] = f"Your response must contain the tool-call '{response_type}'. Text content is allowed, but other tool-calls are not."
 
         # error case: exceeding maximum number of tool-calls per response
         if self._settings['max_tool_calls'] is not None and len(tool_calls) > self._settings['max_tool_calls']:
@@ -1735,7 +1828,7 @@ class ChatCompletionsBase(ClientBase):
                 if 'tool_call_id' in message:
                     if call['id'] == message['tool_call_id']:
                         if message['content'] == tool_call_is_valid_default_correction:
-                            valid, reason, logs = self.validate_tool_call(call, logs)
+                            valid, reason, logs = self.validate_tool_call(tool_call=call, logs=logs)
                             if not valid:
                                 is_valid = False
                                 correction_messages[i]['content'] = reason
@@ -1800,9 +1893,10 @@ class ChatCompletionsBase(ClientBase):
 
         return success, reason, logs
 
-    def post_process_completion(self, response_type, reasoning, text, tool_calls, is_valid, correction, usage, logs):
+    def post_process_completion(self, response_type, choices, is_valid, correction, usage, logs):
         assert self.is_prompting
         self.is_prompting = False
+        n = self._settings['choices']
 
         if not is_valid:
             error_log_i = len(logs) - 1
@@ -1815,81 +1909,133 @@ class ChatCompletionsBase(ClientBase):
             num_removed = len(self.messages) - len(self.new_messages) - 1 if self.reset_context else len(self.messages) - len(self.context_dump) - len(self.new_messages) - 1
             self._logger.info(f"Removing '{num_removed}' correction-related message{'' if num_removed == 1 else 's'} from context.")
             self.messages = self.new_messages + [self.messages[-1]] if self.reset_context else self.context_dump + self.new_messages + [self.messages[-1]]
-            assert len(self.messages) == num_messages_after_correction - num_removed, \
-                f"Expected context to contain '{num_messages_after_correction - num_removed}' messages after removing corrections but it contains '{len(self.messages)}'."
+            assert len(self.messages) == num_messages_after_correction - num_removed, f"Expected context to contain '{num_messages_after_correction - num_removed}' messages after removing corrections but it contains '{len(self.messages)}'."
         else:
-            num_expected = len(self.new_messages) + 1 if self.reset_context else len(self.context_dump) + len(self.new_messages) + 1
-            assert len(self.messages) == num_expected, \
-                f"Expected context to contain '{num_expected}' messages after completion without corrections but it contains '{len(self.messages)}'."
+            num_expected = len(self.new_messages) if self.reset_context else len(self.context_dump) + len(self.new_messages)
+            if n == 1:
+                num_expected += 1
+            assert len(self.messages) == num_expected, f"Expected context to contain '{num_expected}' messages after completion without corrections but it contains '{len(self.messages)}'."
 
         success = is_valid
 
         completion = {}
-
         if usage is not None:
             assert 'duration' in usage, str(usage)
             completion = {'usage': usage}
-        if reasoning is not None:
-            completion['reasoning'] = reasoning
-        if len(tool_calls) > 0:
-            completion['tools'] = []
-        for call in tool_calls:
-            if call['arguments'] == "": # fix empty arguments (e.g. Claude does that)
-                logs.append(f"Fixing empty arguments of tool-call '{call['name']}' to empty dictionary.")
-                self._logger.debug(logs[-1])
-                call['arguments'] = r"{}"
-            call['arguments'] = json.loads(call['arguments'])
-            completion['tools'].append(call)
-        if text is not None:
-            if response_type == "json":
-                text = json.loads(text)
-            completion['text'] = text
+
+        choice_dicts = []
+        for c in choices:
+            choice_logs = logs if n == 1 else c['logs']
+            choice = self.build_choice_dict(
+                response_type=response_type,
+                reasoning=c['reasoning'],
+                text=c['text'],
+                tool_calls=c['tool_calls'],
+                logs=choice_logs
+            )
+            if n > 1 and len(choice_logs) > 0:
+                choice['logs'] = choice_logs
+            choice_dicts.append(choice)
+        if n == 1 and len(choice_dicts) == 1:
+            completion.update(choice_dicts[0])
+        elif len(choice_dicts) > 0:
+            completion['choices'] = choice_dicts
 
         if is_valid:
-            if sum([completion.get('reasoning', "") != "", completion.get('text', "") != "", len(completion.get('tools', [])) > 0]) > 1:
-                type_str = "mixed"
-            elif 'reasoning' in completion:
-                type_str = "reasoning"
-            elif 'text' in completion:
-                type_str = "text"
-            elif 'tools' in completion:
-                type_str = "tool"
-            else:
-                raise RuntimeError
-
             if correction:
                 correction_str = " after automatic correction"
             else:
                 correction_str = ""
 
-            if 'tokens_output' in usage:
-                logs.append(f"Generated {type_str}-completion with '{usage['tokens_output']}' token{'' if usage['tokens_output'] == 1 else 's'} in '{usage['duration']:.3f}s'{correction_str}.")
+            if n == 1:
+                if sum([completion.get('reasoning', "") != "", completion.get('text', "") != "", len(completion.get('tools', [])) > 0]) > 1:
+                    type_str = "mixed"
+                elif 'reasoning' in completion:
+                    type_str = "reasoning"
+                elif 'text' in completion:
+                    type_str = "text"
+                elif 'tools' in completion:
+                    type_str = "tool"
+                else:
+                    raise RuntimeError
+
+                if 'tokens_output' in usage:
+                    logs.append(f"Generated {type_str}-completion with '{usage['tokens_output']}' token{'' if usage['tokens_output'] == 1 else 's'} in '{usage['duration']:.3f}s'{correction_str}.")
+                else:
+                    logs.append(f"Generated {type_str}-completion in '{usage['duration']:.3f}s'{correction_str}.")
             else:
-                logs.append(f"Generated {type_str}-completion in '{usage['duration']:.3f}s'{correction_str}.")
+                if 'tokens_output' in usage:
+                    logs.append(f"Generated '{n}' completions with '{usage['tokens_output']}' token{'' if usage['tokens_output'] == 1 else 's'} in '{usage['duration']:.3f}s'{correction_str}.")
+                else:
+                    logs.append(f"Generated '{n}' completions in '{usage['duration']:.3f}s'{correction_str}.")
 
             completion['logs'] = logs
             message = logs[-1]
 
-            for parser in self._settings['parser']:
-                success, message, completion, allow_retry = self.execute_parser(
-                    path_or_name=parser,
-                    success=success,
-                    message=message,
-                    completion=completion
-                )
-                if not success and not allow_retry:
+            if n == 1:
+                for parser in self._settings['parser']:
+                    success, message, completion, allow_retry = self.execute_parser(
+                        path_or_name=parser,
+                        success=success,
+                        message=message,
+                        completion=completion
+                    )
+                    if not success and not allow_retry:
+                        self._logger.debug("Restoring original context.")
+                        self.messages = self.context_dump
+                        raise UnrecoverableError(message)
+                if not success:
                     self._logger.debug("Restoring original context.")
                     self.messages = self.context_dump
-                    raise UnrecoverableError(message)
-
-            if not success:
-                self._logger.debug("Restoring original context.")
-                self.messages = self.context_dump
+            else:
+                for i, choice in enumerate(completion['choices']):
+                    parsed_choice = copy.deepcopy(choice)
+                    parsed_choice.setdefault('logs', [])
+                    for parser in self._settings['parser']:
+                        success, message, parsed_choice, allow_retry = self.execute_parser(
+                            path_or_name=parser,
+                            success=success,
+                            message=message,
+                            completion=parsed_choice
+                        )
+                        if not success and not allow_retry:
+                            self._logger.debug("Restoring original context.")
+                            self.messages = self.context_dump
+                            raise UnrecoverableError(message)
+                        if not success:
+                            break
+                    if parsed_choice['logs'] == []:
+                        del parsed_choice['logs']
+                    completion['choices'][i] = parsed_choice
+                    if not success:
+                        break
+                if not success:
+                    self._logger.debug("Restoring original context.")
+                    self.messages = self.context_dump
         else:
             completion['logs'] = logs
             message = logs[error_log_i]
 
         return success, message, completion
+
+    def build_choice_dict(self, response_type, reasoning, text, tool_calls, logs):
+        choice = {}
+        if reasoning is not None:
+            choice['reasoning'] = reasoning
+        if len(tool_calls) > 0:
+            choice['tools'] = []
+        for call in tool_calls:
+            if call['arguments'] == "":  # fix empty arguments (e.g. Claude does that)
+                logs.append(f"Fixing empty arguments of tool-call '{call['name']}' to empty dictionary.")
+                self._logger.debug(logs[-1])
+                call['arguments'] = r"{}"
+            call['arguments'] = json.loads(call['arguments'])
+            choice['tools'].append(call)
+        if text is not None:
+            if response_type == "json":
+                text = json.loads(text)
+            choice['text'] = text
+        return choice
 
     def execute_parser(self, path_or_name, success, message, completion):
         # resolve path
@@ -1903,11 +2049,11 @@ class ChatCompletionsBase(ClientBase):
         else:
             default_path = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "parser", path_or_name)
             if os.path.isfile(default_path):
-                self._logger.debug(f"Executing default completion parser '{default_path}'.")
+                self._logger.debug(f"Executing packaged completion parser '{default_path}'.")
                 file_path = default_path
             elif os.path.isfile(f"{default_path}.py"):
                 default_path = f"{default_path}.py"
-                self._logger.debug(f"Executing default completion parser '{default_path}'.")
+                self._logger.debug(f"Executing packaged completion parser '{default_path}'.")
                 file_path = default_path
             else:
                 raise UnrecoverableError(f"Parser '{custom_path}' does not exist.")
@@ -1952,6 +2098,8 @@ class ChatCompletionsBase(ClientBase):
                 assert_type_value(obj=success, type_or_value=bool, name="first element in completion parser response")
                 assert_type_value(obj=message, type_or_value=str, name="second element in completion parser response")
                 assert_type_value(obj=completion, type_or_value=dict, name="third element in completion parser response")
+                assert_log(expression='logs' in completion, message="Expected completion parser response dictionary to contain key 'logs'.")
+                assert_type_value(obj=completion['logs'], type_or_value=list, name="value of key 'logs' in completion parser response")
             except UnrecoverableError as e:
                 success = False
                 message = f"Failed to execute completion parser '{file_path}': {e}"
@@ -2319,7 +2467,7 @@ class ChatCompletionsBase(ClientBase):
                         lines.append(f"{i}{'*' if exists else ''}: {json.dumps(tool, indent=2)}")
                     tool_msg = message.rstrip(".") + ":\n" + '\n'.join(lines)
                     if updates > 0:
-                        tool_msg += f"\n*tool existed before ({updates} of {len(tools)})"
+                        tool_msg += f"\n*tool existed before ('{updates}' of '{len(tools)}')"
 
                 self._logger.info(tool_msg)
                 self.tools = copy.deepcopy(tools)
