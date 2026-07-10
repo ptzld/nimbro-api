@@ -17,7 +17,25 @@ from .misc import (
 
 from .string import is_url, is_base64, extract_json
 
-from .visual import Color, ColorPalette, nimbro_colors, kelly_colors, visualize_detections, draw_rectangle, draw_text, convert_boxes
+_VISUAL_EXPORTS = {
+    "Color",
+    "ColorPalette",
+    "nimbro_colors",
+    "kelly_colors",
+    "visualize_detections",
+    "draw_rectangle",
+    "draw_text",
+    "convert_boxes",
+}
+
+def __getattr__(name):
+    if name in _VISUAL_EXPORTS:
+        import importlib
+        visual = importlib.import_module(".visual", __name__)
+        value = getattr(visual, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"Module '{__name__}' has no attribute '{name}'.")
 
 __all__ = [
     name for name, obj in globals().items()
