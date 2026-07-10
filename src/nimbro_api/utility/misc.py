@@ -808,7 +808,9 @@ def print_lines(string, *, prefix_first_line, prefix_next_lines, line_length, st
 
     return final_lines, printed_text
 
-def format_obj(obj, *, cutoff=3000):
+FORMAT_CUTOFF = None
+
+def format_obj(obj, *, cutoff=-1):
     """
     Formats a Python object into a string representation optimized for logging purposes.
 
@@ -817,7 +819,9 @@ def format_obj(obj, *, cutoff=3000):
             The object to be formatted. Typically a Python builtin type or a JSON-serializable object.
         cutoff (int | None, optional):
             The maximum character length allowed for strings or `dict` values before they are replaced
-            with an excessive length placeholder. If `None`, no truncation is performed. Defaults to 3000.
+            with an excessive length placeholder. Use `None` to perform no truncation.
+            Use negative integer to adopt core setting 'logger_object_cutoff'.
+            Defaults to core setting 'logger_object_cutoff'.
 
     Returns:
         str: The formatted string representation of 'obj', wrapped in single quotes.
@@ -832,6 +836,8 @@ def format_obj(obj, *, cutoff=3000):
     """
     # parse arguments
     assert_type_value(obj=cutoff, type_or_value=[int, None], name="argument 'cutoff'")
+    if cutoff < 0:
+        cutoff = FORMAT_CUTOFF
 
     # format object
     try:

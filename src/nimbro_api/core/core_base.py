@@ -9,6 +9,7 @@ from queue import SimpleQueue, Empty
 
 from ..client import ClientBase
 from ..utility.misc import UnrecoverableError, assert_type_value, assert_log
+from ..utility import misc
 
 class CoreBase(ClientBase):
 
@@ -29,13 +30,19 @@ class CoreBase(ClientBase):
         # validate settings
         assert_type_value(obj=settings['logger_mute'], type_or_value=bool, name="setting 'logger_mute'")
         assert_type_value(obj=settings['logger_line_length'], type_or_value=[int, None], name="setting 'logger_mute'")
+        if isinstance(settings['logger_line_length'], int):
+            assert_log(expression=settings['logger_line_length'] > 0, message=f"Expected setting 'logger_line_length' to be non-negative but got '{settings['logger_line_length']}'.")
         assert_type_value(obj=settings['logger_multi_line_prefix'], type_or_value=bool, name="setting 'logger_multi_line_prefix'")
+        assert_type_value(obj=settings['logger_object_cutoff'], type_or_value=[int, None], name="setting 'logger_mute'")
+        if isinstance(settings['logger_object_cutoff'], int):
+            assert_log(expression=settings['logger_object_cutoff'] >= 0, message=f"Expected setting 'logger_object_cutoff' to be non-negative but got '{settings['logger_object_cutoff']}'.")
         assert_type_value(obj=settings['keys_hide'], type_or_value=bool, name="setting 'keys_hide'")
         assert_type_value(obj=settings['keys_cache'], type_or_value=bool, name="setting 'keys_cache'")
         assert_type_value(obj=settings['defer_delay'], type_or_value=[int, float], name="setting 'defer_delay'")
         assert_log(expression=settings['defer_delay'] >= 0, message=f"Expected setting 'defer_delay' to be non-negative but got '{settings['defer_delay']}'.")
 
         # apply settings
+        misc.FORMAT_CUTOFF = settings['logger_object_cutoff']
         self._logger_settings['logger_mute'] = settings['logger_mute']
         self._logger_settings['logger_line_length'] = settings['logger_line_length']
         self._logger_settings['logger_multi_line_prefix'] = settings['logger_multi_line_prefix']

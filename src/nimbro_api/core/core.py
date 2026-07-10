@@ -7,6 +7,7 @@ default_settings = {
     'logger_mute': False,
     'logger_line_length': None,
     'logger_multi_line_prefix': False,
+    'logger_object_cutoff': 3000,
     'keys_hide': True,
     'keys_cache': True,
     'defer_delay': 1.0,
@@ -54,6 +55,10 @@ class Core(Client):
                 Use zero or below to deactivate line-wrapping.
             logger_multi_line_prefix (bool):
                 Fully prefix multi-line logs instead of indenting with whitespace only.
+            logger_object_cutoff (int, None):
+                Maximum number of characters beyond which objects formatted
+                with `nimbro_api.utilities.format_obj()` are replaced by a placeholder.
+                Use `None` to apply no restriction.
             keys_hide (bool):
                 Do not show values of API keys in logs.
             keys_cache (bool):
