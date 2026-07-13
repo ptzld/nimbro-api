@@ -14,8 +14,9 @@ default_settings = {
         'chat_completions': {
             'logger_severity': "warn",
             'endpoint': "OpenRouter",
-            'model': "~google/gemini-pro-latest",
-            'reasoning_effort': "minimal"
+            'model': "google/gemini-3.1-flash-lite",
+            'choices': 1,
+            'reasoning_effort': "none",
         },
         'system_prompt_role': "system",
         'system_prompt': "You are a visual perception system that identifies and analyzes objects and other visible features in an image.",
@@ -34,8 +35,9 @@ default_settings = {
         'chat_completions': {
             'logger_severity': "warn",
             'endpoint': "OpenRouter",
-            'model': "~google/gemini-pro-latest",
-            'reasoning_effort': "minimal"
+            'model': "google/gemini-3.1-flash-lite",
+            'choices': 1,
+            'reasoning_effort': "none"
         },
         'use_scene_description': False,
         'system_prompt_role': "system",
@@ -44,25 +46,19 @@ default_settings = {
         'image_prompt_detail': "high",
         'description_prompt_role': "user",
         'description_prompt':
-            "Provide a list in JSON format that contains each object (including furniture, persons, and animals) visible in the image above. "
+            "Provide a list in JSON format that contains each object (including furniture, persons, animals, etc.) visible in the image above. "
             "Explicitly include each object instance without exception as an individual list element. "
             "Never group multiple instances that are clearly distinct from one another. "
-            "Each list element must be a dictionary with the fields label, description, box_2d, point_2d, distance, weight, moving, and safety. "
-            "The label of all humans must be person. "
-            "The description must be a single short sentence (max. 10 words, starting with 'A' or 'An'), "
-            "that differs from the other descriptions and summarizes the most important information about the type, color, and appearance of the object, "
-            "allowing for a visual identification of the object without knowing any of the descriptions generated for the other objects. "
-            "The key box_2d must contain a bounding box of the object in [y_min, y_min, x_max, y_max] format normalized to pixel coordinates from 0 to 1000. "
-            "The key point_2d must contain a point on the object in [y, x] format normalized to pixel coordinates from 0 to 1000. "
-            "The key distance must indicate the estimated distance of the object from the camera in centimeters as an integer. "
-            "The key weight must indicate the estimated weight of the object in grams as an integer. "
-            "The key moving must indicate how likely it is that the object is is going to move or be moved within the next three seconds, "
-            "on a Likert scale from 1 to 5, where 1 is very unlikely, 2 is likely, 3 is ambiguous or unknown, 4 is likely, and 5 is very likely. "
-            "The key safety must indicate how safe the object is for a ten year old child to interact with it without supervision on a Likert scale scale from 1 to 5, "
-            "where 1 is very unsafe, 2 is unsafe, 3 is ambiguous or unknown, 4 is safe, and 5 is very safe. Make sure to not ignore any object do not forget any of the required keys.",
+            "Each list element must be a dictionary with the fields label, description, and box_2d. "
+            "The key label must specify the general object category or class (one or two words), so that similar objects across multiple images can be grouped by it."
+            "The key description must contain an analysis of the object comprising at least ten and no more than twenty sentences that describe its properties (type, brand, model, state, function, etc.), appearance (material, design, color, texture, wear, labels, writing, etc.), and relation to other objects (position, orientation, attachment, proximity, etc.) in great detail. This description must be self-contained and not refer to any of the other descriptions, so that finding the corresponding object in the image is possible purely from reading it. "
+            "The key box_2d must contain a bounding box of the object in [y_min, x_min, y_max, x_max] format normalized to pixel coordinates from 0 to 1000. "
+            "Make sure to not ignore any object, do not forget any of the required keys, and follow the per-key instructions exactly. "
+            "Be sure to include not only the objects in the center of the image, but absolutely everything, regardless of its size or location. "
+            "If you're unsure about an object's nature, include it anyway to the best of your ability.",
         'response_type': "json",
-        'keys_required': ['label', 'description', 'box_2d', 'point_2d', 'distance', 'weight', 'moving', 'safety'],
-        'keys_required_types': ['str', 'str', 'box_yxyx[int1000]', 'point_yx[int1000]', 'int', 'int', 'likert5', 'likert5'],
+        'keys_required': ['label', 'description', 'box_2d'],
+        'keys_required_types': ['str', 'str', 'box_yxyx[int1000]'],
         'keys_optional': [],
         'keys_optional_types': []
     },

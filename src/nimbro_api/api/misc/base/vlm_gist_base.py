@@ -52,6 +52,7 @@ class VlmGistBase(ClientBase):
         success, message = client.set_settings(settings=copy.deepcopy(settings['scene_description']['chat_completions']), mute=True)
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['scene_description']['chat_completions'] = client.get_settings()
+        assert_type_value(obj=settings['scene_description']['chat_completions']['choices'], type_or_value=1, name="setting 'scene_description.chat_completions.choices'")
 
         # scene_description.system_prompt_role
         assert_type_value(obj=settings['scene_description']['system_prompt_role'], type_or_value=["system", "user"], name="setting 'scene_description.system_prompt_role'")
@@ -89,6 +90,7 @@ class VlmGistBase(ClientBase):
         success, message = client.set_settings(settings=settings['structured_description']['chat_completions'], mute=True)
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['structured_description']['chat_completions'] = client.get_settings()
+        assert_type_value(obj=settings['structured_description']['chat_completions']['choices'], type_or_value=1, name="setting 'structured_description.chat_completions.choices'")
 
         # structured_description.use_scene_description
         assert_type_value(obj=settings['structured_description']['use_scene_description'], type_or_value=bool, name="setting 'structured_description.use_scene_description'")
@@ -142,6 +144,11 @@ class VlmGistBase(ClientBase):
         for item in settings['structured_description']['keys_optional_types']:
             assert_type_value(obj=item, type_or_value=types, name="all elements of setting 'structured_description.keys_optional_types'")
 
+        keys = settings['structured_description']['keys_required'] + settings['structured_description']['keys_optional']
+        keys_normalized = [re.sub(r"[.,;:_\-\s]", "", key).lower().strip() for key in keys]
+        assert_log(expression=all(len(key) > 0 for key in keys_normalized), message="Expected settings 'structured_description.keys_required' and 'structured_description.keys_optional' to contain non-empty keys after normalization.")
+        assert_log(expression=len(keys_normalized) == len(set(keys_normalized)), message="Expected settings 'structured_description.keys_required' and 'structured_description.keys_optional' to contain unique keys after normalization.")
+
         # detection
         assert_type_value(obj=settings['detection'], type_or_value=dict, name="setting 'detection'")
         assert_keys(obj=settings['detection'], keys=['skip', 'message_process', 'message_results', 'extract_from_description', 'prompt_key', 'mmgroundingdino', 'allow_incomplete', 'allow_excessive'], mode="match", name="setting 'detection'")
@@ -158,13 +165,15 @@ class VlmGistBase(ClientBase):
         # detection.extract_from_description
         assert_type_value(obj=settings['detection']['extract_from_description'], type_or_value=bool, name="setting 'detection.extract_from_description'")
         if settings['detection']['extract_from_description']:
-            num_required_bbox_keys = sum(t in settings['structured_description']['keys_required_types'] for t in box_types)
-            num_optional_bbox_keys = sum(t in settings['structured_description']['keys_optional_types'] for t in box_types)
+            num_required_bbox_keys = sum(t in box_types for t in settings['structured_description']['keys_required_types'])
+            num_optional_bbox_keys = sum(t in box_types for t in settings['structured_description']['keys_optional_types'])
             assert_log(expression=num_required_bbox_keys == 1, message=f"Expected setting 'structured_description.keys_required_types' to contain exactly one box type when 'detection.extract_from_description' is 'True' but got '{num_required_bbox_keys}': {settings['structured_description']['keys_required_types']}")
-            assert_log(expression=num_optional_bbox_keys == 0, message=f"Expected setting 'structured_description.keys_optional_types' to contain exactly one box type when 'detection.extract_from_description' is 'True' but got '{num_optional_bbox_keys}': {settings['structured_description']['keys_optional_types']}")
+            assert_log(expression=num_optional_bbox_keys == 0, message=f"Expected setting 'structured_description.keys_optional_types' to contain zero box types when 'detection.extract_from_description' is 'True' but got '{num_optional_bbox_keys}': {settings['structured_description']['keys_optional_types']}")
 
         # detection.prompt_key
         assert_type_value(obj=settings['detection']['prompt_key'], type_or_value=settings['structured_description']['keys_required'], name="setting 'detection.prompt_key'")
+        prompt_key_index = settings['structured_description']['keys_required'].index(settings['detection']['prompt_key'])
+        assert_log(expression=settings['structured_description']['keys_required_types'][prompt_key_index] == "str", message=f"Expected setting 'detection.prompt_key' to reference a required structured description key of type 'str' but key '{settings['detection']['prompt_key']}' has type '{settings['structured_description']['keys_required_types'][prompt_key_index]}'.")
 
         # detection.mmgroundingdino
         client = MmGroundingDino()
@@ -218,6 +227,7 @@ class VlmGistBase(ClientBase):
 
         # batch.size
         assert_type_value(obj=settings['batch']['size'], type_or_value=int, name="setting 'batch.size'")
+
         assert_log(expression=settings['batch']['size'] >= 0, message=f"Expected setting 'batch.size' to be non-negative but got '{settings['batch']['size']}'.")
 
         # batch.style
@@ -244,7 +254,7 @@ class VlmGistBase(ClientBase):
         assert_type_value(obj=output_dir, type_or_value=[None, str], name="argument 'output_dir'")
         if isinstance(output_dir, str):
             output_dir = os.path.realpath(output_dir)
-            assert_log(expression=os.path.isfile(output_dir), message="Expected argument 'output_dir' to not exist or point to an existing folder but it points to an existing file.")
+            assert_log(expression=not os.path.isfile(output_dir), message="Expected argument 'output_dir' to not exist or point to an existing folder but it points to an existing file.")
             os.makedirs(output_dir, exist_ok=True)
         assert_log(expression=IMPORT_ERROR is None, message=f"Visual utilities are not available due to missing dependencies: {IMPORT_ERROR}")
         if isinstance(result, str):
@@ -259,16 +269,22 @@ class VlmGistBase(ClientBase):
         if result['run']['type'] == "batch":
             assert_keys(obj=result['run'], keys=['settings'], mode="required", name="value of key 'run' in argument 'result'")
             assert_type_value(obj=result['run']['settings'], type_or_value=dict, name="value of key 'run.settings' in argument 'result'")
-            assert_keys(obj=result['run']['settings'], keys=['structured_description'], mode="required", name="value of key 'run.settings.structured_description' in argument 'result'")
+            assert_keys(obj=result['run']['settings'], keys=['structured_description', 'detection'], mode="required", name="value of key 'run.settings' in argument 'result'")
+            assert_type_value(obj=result['run']['settings']['structured_description'], type_or_value=dict, name="value of key 'run.settings.structured_description' in argument 'result'")
+            assert_type_value(obj=result['run']['settings']['detection'], type_or_value=dict, name="value of key 'run.settings.detection' in argument 'result'")
             structured_description_settings = result['run']['settings']['structured_description']
             detection_settings = result['run']['settings']['detection']
             assert_keys(obj=result, keys=['batch'], mode="required", name="argument 'result' of type 'batch'")
             assert_type_value(obj=result['batch'], type_or_value=list, name="value of key 'batch' in argument 'result'")
             batch = result['batch']
         else:
-            assert_keys(obj=result, keys=['structured_description'], mode="required", name="argument 'result'")
+            assert_keys(obj=result, keys=['structured_description', 'detection'], mode="required", name="argument 'result'")
             assert_type_value(obj=result['structured_description'], type_or_value=dict, name="value of key 'structured_description' in argument 'result'")
+            assert_type_value(obj=result['detection'], type_or_value=dict, name="value of key 'detection' in argument 'result'")
             assert_keys(obj=result['structured_description'], keys=['settings'], mode="required", name="value of key 'structured_description' in argument 'result'")
+            assert_keys(obj=result['detection'], keys=['settings'], mode="required", name="value of key 'detection' in argument 'result'")
+            assert_type_value(obj=result['structured_description']['settings'], type_or_value=dict, name="value of key 'structured_description.settings' in argument 'result'")
+            assert_type_value(obj=result['detection']['settings'], type_or_value=dict, name="value of key 'detection.settings' in argument 'result'")
             structured_description_settings = result['structured_description']['settings']
             detection_settings = result['detection']['settings']
             batch = [result]
@@ -293,6 +309,7 @@ class VlmGistBase(ClientBase):
 
         assert_type_value(obj=detection_settings, type_or_value=dict, name="detection settings")
         assert_keys(obj=detection_settings, keys=['prompt_key'], mode="required", name="detection settings")
+        assert_type_value(obj=detection_settings['prompt_key'], type_or_value=str, name="detection setting 'prompt_key'")
         prompt_key = detection_settings['prompt_key']
 
         # import
@@ -309,12 +326,14 @@ class VlmGistBase(ClientBase):
         else:
             if isinstance(image, list):
                 assert_log(expression=len(image) == num_images, message=f"Expected argument 'image' provided as list to contain '{num_images}' item{'' if num_images == 1 else 's'} but got '{len(image)}'.")
-            elif os.path.isdir(image):
+            elif isinstance(image, (str, os.PathLike)) and os.path.isdir(image):
                 self._logger.debug("Argument 'image' provide as local path.")
                 path = image
                 image = sorted([os.path.join(image, item) for item in os.listdir(path) if os.path.isfile(os.path.join(path, item))])
                 self._logger.debug(f"Files in '{path}': {image}")
-                assert_log(expression=len(image) == num_images, message=f"Expected argument 'image' provided as path to contain '{num_images}' item{'' if num_images == 1 else 's'} but got '{len(image)}'.")
+                assert_log(expression=len(image) >= num_images, message=f"Expected argument 'image' provided as path to contain at least '{num_images}' item{'' if num_images == 1 else 's'} but got '{len(image)}'.")
+                if len(image) > num_images:
+                    image = image[:num_images]
             else:
                 assert_log(expression=num_images == 1, message=f"Expected argument 'image' to be provided as list containing '{num_images}' item{'' if num_images == 1 else 's'} but got 'str'.")
                 image = [image]
@@ -357,6 +376,13 @@ class VlmGistBase(ClientBase):
                     assert_type_value(obj=batch_item['structured_description']['data'], type_or_value=list, name=f"value of key 'structured_description.data' in result '{i + 1}' of '{num_images}'")
                     for k, item in enumerate(batch_item['structured_description']['data']):
                         assert_type_value(obj=item, type_or_value=dict, name=f"item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}'")
+                        if prompt_key in item:
+                            assert_type_value(obj=item[prompt_key], type_or_value=str, name=f"value of prompt key '{prompt_key}' in item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}'")
+                        for attribute_name, attribute_type in point_attributes:
+                            if attribute_name in item:
+                                assert_type_value(obj=item[attribute_name], type_or_value=list, name=f"value of point attribute '{attribute_name}' in item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}'")
+                                assert_log(expression=len(item[attribute_name]) == 2, message=f"Expected value of point attribute '{attribute_name}' in item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}' to be a list of length '2' but got '{len(item[attribute_name])}'.")
+                                assert_log(expression=all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in item[attribute_name]), message=f"Expected all elements of point attribute '{attribute_name}' in item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}' to be non-negative integers.")
 
                 # validate detection structure
                 assert_keys(obj=batch_item, keys=['detection'], mode="required", name=f"result '{i + 1}' of '{num_images}'")
@@ -373,6 +399,11 @@ class VlmGistBase(ClientBase):
                     for k, item in enumerate(batch_item['detection']['data']):
                         assert_type_value(obj=item, type_or_value=dict, name=f"item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
                         assert_keys(obj=item, keys=['prompt', 'box_xyxy'], mode="required", name=f"item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                        assert_type_value(obj=item['prompt'], type_or_value=str, name=f"value of key 'prompt' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                        assert_type_value(obj=item['box_xyxy'], type_or_value=list, name=f"value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                        assert_log(expression=len(item['box_xyxy']) == 4, message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be a list of length '4' but got '{len(item['box_xyxy'])}'.")
+                        assert_log(expression=all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in item['box_xyxy']), message=f"Expected all elements of value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be non-negative integers.")
+                        assert_log(expression=item['box_xyxy'][2] > item['box_xyxy'][0] and item['box_xyxy'][3] > item['box_xyxy'][1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be a valid bounding box but got '{item['box_xyxy']}'.")
 
                 # validate segmentation structure (only if present)
                 if 'segmentation' in batch_item:
@@ -384,12 +415,20 @@ class VlmGistBase(ClientBase):
                         assert_type_value(obj=batch_item['segmentation']['logs'], type_or_value=list, name=f"value of key 'segmentation.logs' in result '{i + 1}' of '{num_images}'")
                         assert_log(expression=len(batch_item['segmentation']['logs']) > 0, message=f"Expected value of key 'segmentation.logs' in result '{i + 1}' of '{num_images}' to be non-empty.")
                     else:
+                        assert_type_value(obj=batch_item['detection']['success'], type_or_value=True, name=f"value of key 'detection.success' when segmentation succeeded in result '{i + 1}' of '{num_images}'")
                         assert_keys(obj=batch_item['segmentation'], keys=['data'], mode="required", name=f"value of key 'segmentation' in result '{i + 1}' of '{num_images}'")
                         assert_type_value(obj=batch_item['segmentation']['data'], type_or_value=list, name=f"value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
                         for k, item in enumerate(batch_item['segmentation']['data']):
                             assert_type_value(obj=item, type_or_value=dict, name=f"item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
-                            assert_keys(obj=item, keys=['box_xyxy', 'mask'], mode="required", name=f"item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
+                            assert_keys(obj=item, keys=['track_id', 'box_xyxy', 'mask'], mode="required", name=f"item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
+                            assert_type_value(obj=item['track_id'], type_or_value=int, name=f"value of key 'track_id' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
+                            assert_log(expression=not isinstance(item['track_id'], bool) and 0 <= item['track_id'] < len(batch_item['detection']['data']), message=f"Expected value of key 'track_id' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}' to reference an existing detection but got '{item['track_id']}'.")
+                            assert_type_value(obj=item['box_xyxy'], type_or_value=list, name=f"value of key 'box_xyxy' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
+                            assert_log(expression=len(item['box_xyxy']) == 4, message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}' to be a list of length '4' but got '{len(item['box_xyxy'])}'.")
+                            assert_log(expression=all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in item['box_xyxy']), message=f"Expected all elements of value of key 'box_xyxy' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}' to be non-negative integers.")
+                            assert_log(expression=item['box_xyxy'][2] > item['box_xyxy'][0] and item['box_xyxy'][3] > item['box_xyxy'][1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}' to be a valid bounding box but got '{item['box_xyxy']}'.")
                             assert_type_value(obj=item['mask'], type_or_value=str, name=f"value of key 'mask' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
+
             except UnrecoverableError as e:
                 self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}': {e}")
                 continue
@@ -526,12 +565,13 @@ class VlmGistBase(ClientBase):
         data = {'run': {'stamp': datetime.datetime.now().isoformat(), 'type': "normal"}}
 
         if is_worker:
-            settings = self._settings
             data['run']['type'] = "worker"
-        else:
-            image, data, settings = self.parse_arguments(image=image, scene_description=scene_description, structured_description=structured_description, detection=detection, data=data, stamp_global=stamp_global)
-            if isinstance(image, list):
-                return self.batch_orchestrator(image=image, data=data, settings=settings, stamp_global=stamp_global)
+
+        image, data, settings = self.parse_arguments(image=image, scene_description=scene_description, structured_description=structured_description, detection=detection, data=data, stamp_global=stamp_global)
+        if isinstance(image, list):
+            assert_log(expression=not is_worker, message="Expected a batch worker to receive a single image.")
+            return self.batch_orchestrator(image=image, data=data, settings=settings, scene_description=scene_description, structured_description=structured_description, detection=detection, stamp_global=stamp_global)
+        if not is_worker:
             data['run']['settings'] = {name: settings[name] for name in ['logger_severity', 'logger_name', 'message_results', 'include_image', 'retry']}
 
         success, message, data = self.read_image(image=image, settings=settings, data=data, stamp_global=stamp_global)
@@ -556,6 +596,8 @@ class VlmGistBase(ClientBase):
 
         return self.finalize_result(data=data, settings=settings, is_worker=is_worker, stamp_global=stamp_global)
 
+    # pipeline
+
     def parse_arguments(self, image, scene_description, structured_description, detection, data, stamp_global):
         if isinstance(image, list):
             assert_log(expression=len(image) > 0, message="Expected argument 'image' provided as 'list' to contain at least one element.")
@@ -578,7 +620,8 @@ class VlmGistBase(ClientBase):
             if arg is not None:
                 data['run'][name] = f"Provided from argument as type '{type(arg).__name__}'."
                 if isinstance(arg, dict) and 'settings' in arg:
-                    settings[name] = arg['settings']
+                    settings[name] = copy.deepcopy(arg['settings'])
+                    settings[name]['skip'] = self._settings[name]['skip']
                     validate_settings = True
 
         if validate_settings:
@@ -588,6 +631,9 @@ class VlmGistBase(ClientBase):
             temp['logger_severity'] = "off"
             success, message = client.set_settings(settings=temp)
             assert_log(expression=success, message=message)
+
+        if isinstance(image, list):
+            return image, data, settings
 
         for arg, name in zip([scene_description, structured_description, detection], ["scene_description", "structured_description", "detection"]):
             if arg is None:
@@ -642,7 +688,7 @@ class VlmGistBase(ClientBase):
             elif name == "structured_description":
                 success, message, data = self.read_image(image=image, settings=settings, data=data, stamp_global=stamp_global)
                 if not success:
-                    return False, message, data
+                    raise UnrecoverableError(message)
                 dummy_data['image'] = data['image']
                 success, message, dummy_data = self.parse_structured_description(settings=settings, data=dummy_data, stamp_local=None)
                 if success:
@@ -677,7 +723,7 @@ class VlmGistBase(ClientBase):
 
         return image, data, settings
 
-    def batch_orchestrator(self, image, data, settings, stamp_global):
+    def batch_orchestrator(self, image, data, settings, scene_description, structured_description, detection, stamp_global):
         # log
         message = (
             f"Processing batch with '{len(image)}' image{'' if len(image) == 1 else 's'} using "
@@ -696,11 +742,9 @@ class VlmGistBase(ClientBase):
         for key in ['keys_required_types', 'keys_optional_types']:
             for i, _type in enumerate(settings['structured_description'][key]):
                 data['run']['settings']['structured_description'][key][i] = _type.replace("[int1000]", "[int]")
-
-        # forward parsed arguments
-        scene_description = data.get('scene_description')
-        structured_description = data.get('structured_description')
-        detection = data.get('detection')
+        for arg, name in zip([scene_description, structured_description, detection], ["scene_description", "structured_description", "detection"]):
+            if arg is not None and (not isinstance(arg, dict) or 'settings' not in arg):
+                del data['run']['settings'][name]
 
         # configure workers
         max_workers = settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)
@@ -758,9 +802,11 @@ class VlmGistBase(ClientBase):
             assert_keys(obj=image, keys=['data'], mode="required", name="image provided as 'dict'")
             width = image.get('width', 1)
             assert_type_value(obj=width, type_or_value=int, name="key 'width' in image provided as 'dict'")
+            assert_log(expression=not isinstance(width, bool), message="Expected value of key 'width' in image provided as 'dict' to be of type 'int' but got 'bool'.")
             assert_log(expression=width > 0, message=f"Expected value of key 'width' in image provided as 'dict' to greater zero but got '{width}'.")
             height = image.get('height', 1)
             assert_type_value(obj=height, type_or_value=int, name="key 'height' in image provided as 'dict'")
+            assert_log(expression=not isinstance(height, bool), message="Expected value of key 'height' in image provided as 'dict' to be of type 'int' but got 'bool'.")
             assert_log(expression=height > 0, message=f"Expected value of key 'height' in image provided as 'dict' to greater zero but got '{height}'.")
             metadata = copy.deepcopy(image)
             image = metadata.pop('data')
@@ -788,7 +834,7 @@ class VlmGistBase(ClientBase):
         return self.consolidate_error(key='image', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
     def generate_scene_description(self, data, settings, is_worker, stamp_global):
-        if self._settings['scene_description']['skip']:
+        if settings['scene_description']['skip']:
             return True, "Skipping scene description.", data
 
         # log
@@ -844,8 +890,6 @@ class VlmGistBase(ClientBase):
             if key in completion:
                 return False, f"Expected {name} completion to not contain the reserved key '{key}'.", data
 
-        assert completion.get('success', True)
-
         if not isinstance(completion['usage'], dict):
             return False, f"Expected value of key 'usage' in {name} completion to be of type 'dict' but got '{type(completion['usage']).__name__}'.", data
 
@@ -891,7 +935,7 @@ class VlmGistBase(ClientBase):
         return True, data['scene_description']['logs'][-1], data
 
     def generate_structured_description(self, data, settings, is_worker, stamp_global):
-        if self._settings['structured_description']['skip']:
+        if settings['structured_description']['skip']:
             return True, "Skipping structured description.", data
 
         # log
@@ -1010,6 +1054,9 @@ class VlmGistBase(ClientBase):
 
             valid_obj = {}
             keys_left = list(obj.keys())
+            for key in keys_left:
+                if not isinstance(key, str):
+                    return False, f"Expected all keys in object '{i}' of structured description to be of type 'str' but got key '{key}' of type '{type(key).__name__}'.", data
 
             # object can feature required keys
             for j, target_key in enumerate(settings['structured_description']['keys_required'] + settings['structured_description']['keys_optional']):
@@ -1078,11 +1125,15 @@ class VlmGistBase(ClientBase):
                                 is_valid = True
 
                         elif expected_type in ["point_xy[int]", "point_yx[int]"]:
+                            if isinstance(val, list) and len(val) == 1:
+                                val = val[0]
                             if isinstance(val, list) and len(val) == 2 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in val):
                                 valid_obj[target_key] = val
                                 is_valid = True
 
                         elif expected_type in ["point_xy[int1000]", "point_yx[int1000]"]:
+                            if isinstance(val, list) and len(val) == 1:
+                                val = val[0]
                             if isinstance(val, list) and len(val) == 2 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 and x <= 1000 for x in val):
                                 if expected_type == "point_xy[int1000]":
                                     x = min(max(int(round(val[0] / 1000 * data['image']['width'])), 0), data['image']['width'])
@@ -1096,11 +1147,15 @@ class VlmGistBase(ClientBase):
                                 is_valid = True
 
                         elif expected_type in ["box_xyxy[int]", "box_yxyx[int]"]:
+                            if isinstance(val, list) and len(val) == 1:
+                                val = val[0]
                             if isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in val) and val[2] > val[0] and val[3] > val[1]:
                                 valid_obj[target_key] = val
                                 is_valid = True
 
                         elif expected_type in ["box_xyxy[int1000]", "box_yxyx[int1000]"]:
+                            if isinstance(val, list) and len(val) == 1:
+                                val = val[0]
                             if isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 and x <= 1000 for x in val) and val[2] > val[0] and val[3] > val[1]:
                                 if expected_type == "box_xyxy[int1000]":
                                     x_min = min(max(int(round(val[0] / 1000 * data['image']['width'])), 0), data['image']['width'])
@@ -1160,7 +1215,7 @@ class VlmGistBase(ClientBase):
         return True, data['structured_description']['logs'][-1], data
 
     def generate_detection(self, data, settings, is_worker, stamp_global):
-        if self._settings['detection']['skip']:
+        if settings['detection']['skip']:
             return True, "Skipping detection.", data
 
         # log
@@ -1241,10 +1296,12 @@ class VlmGistBase(ClientBase):
             for key in required_keys:
                 if not isinstance(item[key], required_format[key]):
                     return False, f"Expected key '{key}' of detection '{i}' to be of type '{required_format[key].__name__}' but got '{type(item[key]).__name__}'.", data
+            if 'confidence' in item and not isinstance(item['confidence'], float):
+                return False, f"Expected value of optional key 'confidence' of detection '{i}' to be of type 'float' but got '{type(item['confidence']).__name__}'.", data
             if len(item['box_xyxy']) != 4:
                 return False, f"Expected value of key 'box_xyxy' in detection '{i}' to be a list of length '4' but got '{len(item['box_xyxy'])}'.", data
             for j, sub_item in enumerate(item['box_xyxy']):
-                if not isinstance(sub_item, int):
+                if not isinstance(sub_item, int) or isinstance(sub_item, bool):
                     return False, f"Expected element '{j}' in value of key 'box_xyxy' in detection '{i}' to be of type 'int' but got '{type(sub_item).__name__}'.", data
                 if sub_item < 0:
                     return False, f"Expected element '{j}' in value of key 'box_xyxy' in detection '{i}' to be a non-negative integer but got '{sub_item}'.", data
@@ -1277,6 +1334,7 @@ class VlmGistBase(ClientBase):
             for prompt, items in items_by_prompt.items():
                 requested_count = prompt_counts_initial[prompt]
                 selected = sorted(items, key=lambda pair: pair[1].get('confidence', float('-inf')), reverse=True)[:requested_count]
+
                 selected_indices = {i for i, _ in selected}
                 keep_indices.update(selected_indices)
                 if len(items) > requested_count:
@@ -1320,7 +1378,7 @@ class VlmGistBase(ClientBase):
         return True, data['detection']['logs'][-1], data
 
     def generate_segmentation(self, data, settings, is_worker, stamp_global):
-        if self._settings['segmentation']['skip']:
+        if settings['segmentation']['skip']:
             return True, "Skipping segmentation.", data
 
         # log
@@ -1343,11 +1401,11 @@ class VlmGistBase(ClientBase):
             segmenter = Sam2Realtime(settings=settings['segmentation']['sam2_realtime'])
             data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'], prompts=prompts)
             data['segmentation']['logs'] = [message]
-        if data['segmentation']['success']:
-            if settings['segmentation']['track']:
-                data['segmentation']['duration_init'] = time.perf_counter() - stamp_local
-                data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'])
-                data['segmentation']['logs'].append(message)
+            if data['segmentation']['success']:
+                if settings['segmentation']['track']:
+                    data['segmentation']['duration_init'] = time.perf_counter() - stamp_local
+                    data['segmentation']['success'], message, segmentation = segmenter.get_response(image=data['image']['data'])
+                    data['segmentation']['logs'].append(message)
         if data['segmentation']['success']:
             data['segmentation']['raw'] = segmentation
             success, message, data = self.parse_segmentation(data=data, settings=settings, stamp_local=stamp_local)
@@ -1356,7 +1414,7 @@ class VlmGistBase(ClientBase):
                 num_segmented = len(data['segmentation']['data'])
                 if settings['segmentation']['message_process']:
                     if settings['segmentation']['message_results'] and num_segmented > 0:
-                        self._logger.info(f"Segmented '{num_segmented}' detected object{'' if num_segmented == 1 else 's'} in '{data['segmentation']['duration']:.3f}s': '\n{json.dumps(data['detection']['data'], indent=4)}'")
+                        self._logger.info(f"Segmented '{num_segmented}' detected object{'' if num_segmented == 1 else 's'} in '{data['segmentation']['duration']:.3f}s': '\n{json.dumps(data['segmentation']['data'], indent=4)}'")
                     else:
                         self._logger.info(f"Segmented '{num_segmented}' detected object{'' if num_segmented == 1 else 's'} in '{data['segmentation']['duration']:.3f}s'.")
                 else:
@@ -1383,10 +1441,12 @@ class VlmGistBase(ClientBase):
             for key in required_format:
                 if not isinstance(item[key], required_format[key]):
                     return False, f"Expected key '{key}' of segmentation '{i}' to be of type '{required_format[key].__name__}' but got '{type(item[key]).__name__}'.", data
+            if isinstance(item['track_id'], bool):
+                return False, f"Expected key 'track_id' of segmentation '{i}' to be of type 'int' but got 'bool'.", data
             if len(item['box_xyxy']) != 4:
                 return False, f"Expected value of key 'box_xyxy' in segmentation '{i}' to be a list of length '4' but got '{len(item['box_xyxy'])}'.", data
             for j, sub_item in enumerate(item['box_xyxy']):
-                if not isinstance(sub_item, int):
+                if not isinstance(sub_item, int) or isinstance(sub_item, bool):
                     return False, f"Expected element '{j}' in value of key 'box_xyxy' in segmentation '{i}' to be of type 'int' but got '{type(sub_item).__name__}'.", data
                 if sub_item < 0:
                     return False, f"Expected element '{j}' in value of key 'box_xyxy' in segmentation '{i}' to be a non-negative integer but got '{sub_item}'.", data
