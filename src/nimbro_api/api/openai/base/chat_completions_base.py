@@ -1292,7 +1292,13 @@ class ChatCompletionsBase(ClientBase):
                                 if 'finish_reason' not in choice:
                                     error = "Expected choice to contain key 'finish_reason'."
                                 elif choice['finish_reason'] not in [None, "stop", "tool_calls", "STOP", "end_turn"]:
-                                    error = f"Expected value of key 'finish_reason' to be in '{[None, 'stop', 'tool_calls', 'STOP', 'end_turn']}' but got '{choice['finish_reason']}'."
+                                    if 'error' in choice and len(str(choice['error'])) > 0:
+                                        if isinstance(choice['error'], dict):
+                                            error = f"\n{json.dumps(choice['error'], indent=2)}"
+                                        else:
+                                            error = str(choice['error'])
+                                    else:
+                                        error = f"Expected value of key 'finish_reason' to be in '{[None, 'stop', 'tool_calls', 'STOP', 'end_turn']}' but got '{choice['finish_reason']}'."
                                 elif 'message' not in choice:
                                     error = "Expected choice to contain key 'message'."
                                 elif not isinstance(choice['message'], dict):
@@ -1401,7 +1407,15 @@ class ChatCompletionsBase(ClientBase):
                                                         self._logger.warn("Expected to receive usage before [ERROR] message.")
                                                     else:
                                                         pipe[1].send({'code': "USAGE", 'content': usage})
-                                                message = f"Error while receiving completion: Unexpected finish reason '{json_data.get('finish_reason')}'."
+                                                # extract potential error
+                                                if 'error' in json_data and len(str(json_data['error'])) > 0:
+                                                    if isinstance(json_data['error'], dict):
+                                                        message = f"\n{json.dumps(json_data['error'], indent=2)}"
+                                                    else:
+                                                        message = str(json_data['error'])
+                                                else:
+                                                    message = f"Unexpected finish reason '{json_data.get('finish_reason')}'."
+                                                message = f"Error while receiving completion: {message}"
                                                 pipe[1].send({'code': "ERROR", 'content': message})
                                                 early_stop = True
                                                 break
@@ -1423,7 +1437,15 @@ class ChatCompletionsBase(ClientBase):
                                                             self._logger.warn("Expected to receive usage before [ERROR] message.")
                                                         else:
                                                             pipe[1].send({'code': "USAGE", 'content': usage})
-                                                    message = f"Error while receiving completion: Unexpected finish reason '{json_choice.get('finish_reason')}'."
+                                                    # extract potential error
+                                                    if 'error' in json_data and len(str(json_data['error'])) > 0:
+                                                        if isinstance(json_data['error'], dict):
+                                                            message = f"\n{json.dumps(json_data['error'], indent=2)}"
+                                                        else:
+                                                            message = str(json_data['error'])
+                                                    else:
+                                                        message = f"Unexpected finish reason '{json_data.get('finish_reason')}'."
+                                                    message = f"Error while receiving completion: {message}"
                                                     pipe[1].send({'code': "ERROR", 'content': message})
                                                     early_stop = True
                                                     break
