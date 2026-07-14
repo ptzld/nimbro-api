@@ -560,7 +560,7 @@ class ClientBase:
             self._logger._bypass = not self._logger._bypass
 
         if self._lock_settings_transient:
-            self._lock_settings_acquired_by_wrap = False
+            self._lock_settings_transient = False
             self._lock_settings.release()
         self._lock_api.release()
         if raise_error:
@@ -568,7 +568,7 @@ class ClientBase:
         return response
 
     def get_settings(self, name):
-        """
+        """f
         Retrieve all current settings or a specific one.
 
         Args:
