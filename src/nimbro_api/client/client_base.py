@@ -144,16 +144,16 @@ class ClientBase:
         if not callable(function):
             # check function
             if self._initialized:
-                message = f"Failed in '{function.__name__}()': Expected argument 'function' to be a callable but got type '{type(function).__name__}'."
+                message = f"Failed in 'wrap()': Expected argument 'function' to be a callable but got type '{type(function).__name__}'."
                 self._logger.error(message)
                 response = False, message, *[None] * responses
             else:
-                message = f"Failed in '{function.__name__}()' during initialization: Expected argument 'function' to be a callable but got type '{type(function).__name__}'."
+                message = f"Failed in 'wrap()' during initialization: Expected argument 'function' to be a callable but got type '{type(function).__name__}'."
                 self._logger.fatal(message)
                 raise_error = True
             skip = True
 
-        if not skip and not isinstance(responses, int) and responses >= 0:
+        if not skip and (not isinstance(responses, int) or responses < 0):
             # check responses
             if self._initialized:
                 message = f"Failed in '{function.__name__}()': Expected argument 'responses' to be a non-negative 'int' but got '{responses}'."
