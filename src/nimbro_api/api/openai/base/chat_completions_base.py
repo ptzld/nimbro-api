@@ -755,7 +755,7 @@ class ChatCompletionsBase(ClientBase):
             request_thread = threading.Thread(target=self.completion_thread, kwargs={'pipe': self.pipe, 'api_key': api_key})
             request_thread.daemon = True
             request_thread.start()
-            interrupt = False
+            interrupt = None
 
             # receive response
             try:
@@ -928,7 +928,7 @@ class ChatCompletionsBase(ClientBase):
                     except BaseException as e:
                         interrupt = e
                     else:
-                        if request_thread.is_alive() and not interrupt:
+                        if request_thread.is_alive() and interrupt is None:
                             self._logger.warn("Completion thread did not terminate after closing its HTTP response.")
                 self.pipe[0].close()
                 self.pipe[1].close()
