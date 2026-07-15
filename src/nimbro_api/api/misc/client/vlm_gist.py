@@ -166,7 +166,7 @@ class VlmGist(Client):
                 - image_prompt_detail (str): Detail level of the image prompt. One of ["high", "low", "auto"].
                 - description_prompt_role (str): Role of the description prompt message. One of ["system", "user"].
                 - description_prompt (str): Content of the description prompt message.
-                - response_type (str): Expected response format. One of ["json", "text"].
+                - response_type (str): Expected response format of the completion. Use "json" to enable JSON mode during inference or "text" to use regular decoding and parse the generated string as JSON afterwards.
                 - keys_required (list[str]): Non-empty list of required keys expected in each object of the structured description.
                 - keys_required_types (list[str]): Types for each required key, parallel to 'keys_required'.
                   Each element must be one of ["str", "bool", "int", "likert5", "likert7", "float", "unit", "list", "point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"].

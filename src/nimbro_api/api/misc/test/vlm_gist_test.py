@@ -610,3 +610,122 @@ def test_15_parallel_multiprocessing(n=10):
     assert_log(expression=len(result['batch']) == len(images), message=f"Expected key 'batch' in result to contain '{len(images)}' elements but got '{len(result['batch'])}'.")
     # log_result(result=result)
     return message
+
+def test_16_choices_single_image():
+    scene_choices = 2
+    structured_choices = 2
+    default_settings = VlmGist().get_settings()
+    client = VlmGist(settings={
+        'scene_description.skip': False,
+        'scene_description.chat_completions.endpoint': "OpenAI",
+        'scene_description.chat_completions.model': "gpt-5.6-terra",
+        'scene_description.chat_completions.reasoning_effort': "none",
+        'scene_description.chat_completions.choices': scene_choices,
+        'scene_description.chat_completions.timeout_read': 40,
+        'scene_description.chat_completions.timeout_completion': 40,
+        'structured_description.skip': False,
+        'structured_description.chat_completions.endpoint': "OpenAI",
+        'structured_description.chat_completions.model': "gpt-5.6-terra",
+        'structured_description.chat_completions.reasoning_effort': "none",
+        'structured_description.chat_completions.choices': structured_choices,
+        'structured_description.chat_completions.timeout_read': 80,
+        'structured_description.chat_completions.timeout_completion': 80,
+        'structured_description.use_scene_description': True,
+        'structured_description.description_prompt': default_settings['structured_description']['description_prompt'].replace("[y_min, x_min, y_max, x_max]", "[x_min, y_min, x_max, y_max]"),
+        'structured_description.keys_required_types': [item.replace("box_yxyx[int1000]", "box_xyxy[int1000]") for item in default_settings['structured_description']['keys_required_types']],
+        'detection.skip': False,
+        'segmentation.skip': False,
+        'segmentation.track': False,
+        'include_image': False
+    })
+    success, message, result = client.run(image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"))
+    assert_log(expression=success, message=message)
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
+    assert_log(expression=result['run']['type'] == "batch", message=f"Expected result type to be 'batch' when using multiple choices but got '{result['run']['type']}'.")
+    assert_log(expression=len(result['batch']) == scene_choices * structured_choices, message=f"Expected key 'batch' in result to contain '{scene_choices * structured_choices}' elements but got '{len(result['batch'])}'.")
+    for scene_choice in range(scene_choices):
+        items = result['batch'][scene_choice * structured_choices:(scene_choice + 1) * structured_choices]
+        assert_log(expression=len(items) == structured_choices, message=f"Expected scene choice '{scene_choice}' to contain '{structured_choices}' structured description choices but got '{len(items)}'.")
+        assert_log(expression=all(item['scene_description']['data'] == items[0]['scene_description']['data'] for item in items), message=f"Expected all structured description choices in group '{scene_choice}' to share the same scene description.")
+        assert_log(expression=all('detection' in item and item['detection']['success'] for item in items), message=f"Expected detection to succeed for all structured description choices in group '{scene_choice}'.")
+        assert_log(expression=all('segmentation' in item and item['segmentation']['success'] for item in items), message=f"Expected segmentation to succeed for all structured description choices in group '{scene_choice}'.")
+    # log_result(result=result)
+
+def test_17_choices_multiple_images():
+    num_images = 2
+    structured_choices = 2
+    default_settings = VlmGist().get_settings()
+    client = VlmGist(settings={
+        'scene_description.skip': True,
+        'structured_description.skip': False,
+        'structured_description.chat_completions.endpoint': "OpenAI",
+        'structured_description.chat_completions.model': "gpt-5.6-terra",
+        'structured_description.chat_completions.reasoning_effort': "none",
+        'structured_description.chat_completions.choices': structured_choices,
+        'structured_description.chat_completions.timeout_read': 40,
+        'structured_description.chat_completions.timeout_completion': 40,
+        'structured_description.use_scene_description': False,
+        'structured_description.description_prompt': default_settings['structured_description']['description_prompt'].replace("[y_min, x_min, y_max, x_max]", "[x_min, y_min, x_max, y_max]"),
+        'structured_description.keys_required_types': [item.replace("box_yxyx[int1000]", "box_xyxy[int1000]") for item in default_settings['structured_description']['keys_required_types']],
+        'detection.skip': False,
+        'segmentation.skip': True,
+        'segmentation.track': False,
+        'batch.size': num_images,
+        'batch.style': "threading",
+        'include_image': False
+    })
+    images = [os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png")] * num_images
+    success, message, result = client.run(image=images)
+    assert_log(expression=success, message=message)
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
+    assert_log(expression=result['run']['type'] == "batch", message=f"Expected result type to be 'batch' for multiple images but got '{result['run']['type']}'.")
+    assert_log(expression=len(result['batch']) == num_images * structured_choices, message=f"Expected key 'batch' in result to contain '{num_images * structured_choices}' elements but got '{len(result['batch'])}'.")
+    for image_index in range(num_images):
+        items = result['batch'][image_index * structured_choices:(image_index + 1) * structured_choices]
+        assert_log(expression=len(items) == structured_choices, message=f"Expected image '{image_index}' to produce '{structured_choices}' structured description choices but got '{len(items)}'.")
+        assert_log(expression=all(item['run']['type'] == "worker" for item in items), message=f"Expected all choices for image '{image_index}' to use worker result format.")
+        assert_log(expression=all('structured_description' in item and item['structured_description']['success'] for item in items), message=f"Expected all structured descriptions for image '{image_index}' to succeed.")
+        assert_log(expression=all('detection' in item and item['detection']['success'] for item in items), message=f"Expected detection to succeed for all choices of image '{image_index}'.")
+    # log_result(result=result)
+
+def test_18_choices_partial_scene_description():
+    structured_choices = 2
+    default_settings = VlmGist().get_settings()
+    client = VlmGist(settings={
+        'scene_description.skip': True,
+        'structured_description.skip': False,
+        'structured_description.chat_completions.endpoint': "OpenAI",
+        'structured_description.chat_completions.model': "gpt-5.6-terra",
+        'structured_description.chat_completions.reasoning_effort': "none",
+        'structured_description.chat_completions.choices': structured_choices,
+        'structured_description.chat_completions.timeout_read': 40,
+        'structured_description.chat_completions.timeout_completion': 40,
+        'structured_description.use_scene_description': True,
+        'structured_description.description_prompt': default_settings['structured_description']['description_prompt'].replace("[y_min, x_min, y_max, x_max]", "[x_min, y_min, x_max, y_max]"),
+        'structured_description.keys_required_types': [item.replace("box_yxyx[int1000]", "box_xyxy[int1000]") for item in default_settings['structured_description']['keys_required_types']],
+        'detection.skip': False,
+        'segmentation.skip': True,
+        'segmentation.track': False,
+        'include_image': False
+    })
+    scene = {
+        'success': True,
+        'logs': ["Manually injected scene description."],
+        'data': "There is a white humanoid robot in an indoor room.",
+        'stamp': datetime.datetime.now().isoformat(),
+        'duration': 0.123,
+        'settings': client.get_settings()['scene_description']
+    }
+    success, message, result = client.run(
+        image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
+        scene_description=scene
+    )
+    assert_log(expression=success, message=message)
+    assert_result(success=success, message=message, result=result, settings=get_target_settings(client))
+    assert_log(expression=result['run']['type'] == "batch", message=f"Expected result type to be 'batch' when using multiple structured description choices but got '{result['run']['type']}'.")
+    assert_log(expression=len(result['batch']) == structured_choices, message=f"Expected key 'batch' in result to contain '{structured_choices}' elements but got '{len(result['batch'])}'.")
+    for i, item in enumerate(result['batch']):
+        assert_log(expression=item['scene_description'] == scene, message=f"Expected choice '{i}' to retain the provided scene description but got '{item['scene_description']}'.")
+        assert_log(expression='structured_description' in item and item['structured_description']['success'], message=f"Expected structured description choice '{i}' to succeed.")
+        assert_log(expression='detection' in item and item['detection']['success'], message=f"Expected detection to succeed for structured description choice '{i}'.")
+    # log_result(result=result)

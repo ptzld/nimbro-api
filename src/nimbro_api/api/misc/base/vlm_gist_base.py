@@ -52,7 +52,6 @@ class VlmGistBase(ClientBase):
         success, message = client.set_settings(settings=copy.deepcopy(settings['scene_description']['chat_completions']), mute=True)
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['scene_description']['chat_completions'] = client.get_settings()
-        assert_type_value(obj=settings['scene_description']['chat_completions']['choices'], type_or_value=1, name="setting 'scene_description.chat_completions.choices'")
 
         # scene_description.system_prompt_role
         assert_type_value(obj=settings['scene_description']['system_prompt_role'], type_or_value=["system", "user"], name="setting 'scene_description.system_prompt_role'")
@@ -90,7 +89,6 @@ class VlmGistBase(ClientBase):
         success, message = client.set_settings(settings=settings['structured_description']['chat_completions'], mute=True)
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['structured_description']['chat_completions'] = client.get_settings()
-        assert_type_value(obj=settings['structured_description']['chat_completions']['choices'], type_or_value=1, name="setting 'structured_description.chat_completions.choices'")
 
         # structured_description.use_scene_description
         assert_type_value(obj=settings['structured_description']['use_scene_description'], type_or_value=bool, name="setting 'structured_description.use_scene_description'")
@@ -571,6 +569,10 @@ class VlmGistBase(ClientBase):
         if isinstance(image, list):
             assert_log(expression=not is_worker, message="Expected a batch worker to receive a single image.")
             return self.batch_orchestrator(image=image, data=data, settings=settings, scene_description=scene_description, structured_description=structured_description, detection=detection, stamp_global=stamp_global)
+        scene_choices = 1 if settings['scene_description']['skip'] or scene_description is not None else settings['scene_description']['chat_completions']['choices']
+        structured_choices = 1 if settings['structured_description']['skip'] or structured_description is not None else settings['structured_description']['chat_completions']['choices']
+        if scene_choices * structured_choices > 1:
+            return self.choices_orchestrator(image=image, data=data, settings=settings, scene_description=scene_description, structured_description=structured_description, detection=detection, scene_choices=scene_choices, structured_choices=structured_choices, is_worker=is_worker, stamp_global=stamp_global)
         if not is_worker:
             data['run']['settings'] = {name: settings[name] for name in ['logger_severity', 'logger_name', 'message_results', 'include_image', 'retry']}
 
@@ -578,11 +580,11 @@ class VlmGistBase(ClientBase):
         if not success:
             return False, message, data
 
-        success, message, data = self.generate_scene_description(data=data, settings=settings, is_worker=is_worker, stamp_global=stamp_global)
+        success, message, data = self.generate_scene_description(data=data, settings=settings, is_worker=is_worker, stamp_global=stamp_global, choices=1)
         if not success:
             return False, message, data
 
-        success, message, data = self.generate_structured_description(data=data, settings=settings, is_worker=is_worker, stamp_global=stamp_global)
+        success, message, data = self.generate_structured_description(data=data, settings=settings, is_worker=is_worker, stamp_global=stamp_global, choices=1)
         if not success:
             return False, message, data
 
@@ -783,14 +785,104 @@ class VlmGistBase(ClientBase):
             f"in '{duration:.3f}s'."
         )
         data['run']['duration'] = duration
-        data['batch'] = [res[2] for res in results]
+        data['batch'] = [item for res in results for item in res[2]]
         return data['run']['success'], data['run']['message'], data
 
     @staticmethod
     def batch_worker(image, scene_description, structured_description, detection, settings):
         from ..client.vlm_gist import VlmGist
         client = VlmGist(settings=settings)
-        return client.run(image=image, scene_description=scene_description, structured_description=structured_description, detection=detection, is_worker=True)
+        success, message, data = client.run(image=image, scene_description=scene_description, structured_description=structured_description, detection=detection, is_worker=True)
+        if not isinstance(data, list):
+            data = [data]
+        return success, message, data
+
+    def choices_orchestrator(self, image, data, settings, scene_description, structured_description, detection, scene_choices, structured_choices, is_worker, stamp_global):
+        # log
+        num_results = scene_choices * structured_choices
+        if scene_choices > 1 and structured_choices > 1:
+            message = f"Processing image with '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results."
+        elif scene_choices > 1:
+            message = f"Processing image with '{scene_choices}' scene description choices producing '{num_results}' results."
+        else:
+            message = f"Processing image with '{structured_choices}' structured description choices producing '{num_results}' results."
+        if settings['message_process']:
+            self._logger.info(message)
+        else:
+            self._logger.debug(message)
+
+        # branches carry parsed arguments while the envelope only retains run metadata
+        branch_base = copy.deepcopy(data)
+        branch_base['run']['type'] = "worker"
+
+        # full settings here instead of individual results
+        if not is_worker:
+            for key in ['image', 'scene_description', 'structured_description', 'detection']:
+                if key in data:
+                    del data[key]
+            data['run']['type'] = "batch"
+            data['run']['settings'] = copy.deepcopy(settings)
+            for key in ['keys_required_types', 'keys_optional_types']:
+                for i, _type in enumerate(settings['structured_description'][key]):
+                    data['run']['settings']['structured_description'][key][i] = _type.replace("[int1000]", "[int]")
+            for arg, name in zip([scene_description, structured_description, detection], ["scene_description", "structured_description", "detection"]):
+                if arg is not None and (not isinstance(arg, dict) or 'settings' not in arg):
+                    del data['run']['settings'][name]
+
+        # execute sequential branches
+        success, message, branch_base = self.read_image(image=image, settings=settings, data=branch_base, stamp_global=stamp_global)
+        if not success:
+            items = [branch_base]
+        else:
+            if scene_choices > 1:
+                success, message, scene_branches = self.generate_scene_description(data=branch_base, settings=settings, is_worker=True, stamp_global=stamp_global, choices=scene_choices)
+            else:
+                success, message, scene_branch = self.generate_scene_description(data=branch_base, settings=settings, is_worker=True, stamp_global=stamp_global, choices=1)
+                scene_branches = [scene_branch]
+            items = []
+            for scene_branch in scene_branches:
+                if scene_branch['run'].get('success') is False:
+                    items.append(scene_branch)
+                    continue
+                if structured_choices > 1:
+                    success, message, structured_branches = self.generate_structured_description(data=scene_branch, settings=settings, is_worker=True, stamp_global=stamp_global, choices=structured_choices)
+                else:
+                    success, message, structured_branch = self.generate_structured_description(data=scene_branch, settings=settings, is_worker=True, stamp_global=stamp_global, choices=1)
+                    structured_branches = [structured_branch]
+                for structured_branch in structured_branches:
+                    if structured_branch['run'].get('success') is False:
+                        items.append(structured_branch)
+                        continue
+                    success, message, structured_branch = self.generate_detection(data=structured_branch, settings=settings, is_worker=True, stamp_global=stamp_global)
+                    if not success:
+                        items.append(structured_branch)
+                        continue
+                    success, message, structured_branch = self.generate_segmentation(data=structured_branch, settings=settings, is_worker=True, stamp_global=stamp_global)
+                    if not success:
+                        items.append(structured_branch)
+                        continue
+                    success, message, structured_branch = self.finalize_result(data=structured_branch, settings=settings, is_worker=True, stamp_global=stamp_global)
+                    items.append(structured_branch)
+
+        # extract batch results
+        successes = [item['run']['success'] for item in items]
+        failures = len(items) - sum(successes)
+        success = failures == 0
+        duration = time.perf_counter() - stamp_global
+
+        if scene_choices > 1 and structured_choices > 1:
+            message = f"Processed image with '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+        elif scene_choices > 1:
+            message = f"Processed image with '{scene_choices}' scene description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+        else:
+            message = f"Processed image with '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+        if is_worker:
+            return success, message, items
+        data['run']['success'] = success
+        data['run']['message'] = message
+        data['run']['duration'] = duration
+        data['batch'] = items
+        return data['run']['success'], data['run']['message'], data
 
     def read_image(self, image, data, settings, stamp_global):
         if 'image' in data:
@@ -833,15 +925,16 @@ class VlmGistBase(ClientBase):
 
         return self.consolidate_error(key='image', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
-    def generate_scene_description(self, data, settings, is_worker, stamp_global):
+    def generate_scene_description(self, data, settings, is_worker, stamp_global, choices):
         if settings['scene_description']['skip']:
             return True, "Skipping scene description.", data
 
         # log
+        log_message = "Generating scene description." if choices == 1 else f"Generating '{choices}' scene descriptions."
         if settings['scene_description']['message_process']:
-            self._logger.info("Generating scene description.")
+            self._logger.info(log_message)
         else:
-            self._logger.debug("Generating scene description.")
+            self._logger.debug(log_message)
 
         stamp_local = time.perf_counter()
         data['scene_description'] = {'stamp': datetime.datetime.now().isoformat()}
@@ -860,6 +953,41 @@ class VlmGistBase(ClientBase):
         if data['scene_description']['success']:
             required_keys = {'text', 'usage', 'logs'}
             reserved_keys = ['stamp', 'settings', 'data', 'duration']
+            if choices > 1:
+                success, message, completions = self.split_completion(completion=completion, choices=choices, name="scene description")
+                if not success:
+                    success, message, data = self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+                    return success, message, [data]
+                del data['scene_description']['completion']
+                branches = [None] * choices
+                num_success = 0
+                for k, choice_completion in enumerate(completions):
+                    branch = copy.deepcopy(data)
+                    branch['scene_description']['completion'] = choice_completion
+                    success, message, branch = self.parse_completion(completion=choice_completion, required_keys=required_keys, reserved_keys=reserved_keys, data=branch, data_key='scene_description', name="scene description")
+                    if success:
+                        success, message, branch = self.parse_scene_description(data=branch, stamp_local=stamp_local)
+                    if success:
+                        num_success += 1
+                    else:
+                        _, _, branch = self.consolidate_error(key='scene_description', message=message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
+                    branches[k] = branch
+                # log
+                failures = choices - num_success
+                if failures == 0:
+                    log_message = f"Generated '{choices}' scene descriptions in '{branches[-1]['scene_description']['duration']:.3f}s'."
+                else:
+                    log_message = f"Failed to generate '{failures}' of '{choices}' scene descriptions in '{branches[-1]['scene_description']['duration']:.3f}s'."
+                if settings['scene_description']['message_process']:
+                    if settings['scene_description']['message_results'] and num_success > 0:
+                        self._logger.info(f"{log_message[:-1]}: '\n{json.dumps([branch['scene_description']['data'] for branch in branches if branch['scene_description']['success']], indent=4)}'")
+                    else:
+                        self._logger.info(log_message)
+                else:
+                    self._logger.debug(log_message)
+                if failures > 0:
+                    message = log_message
+                return failures == 0, message, branches
             success, message, data = self.parse_completion(completion=completion, required_keys=required_keys, reserved_keys=reserved_keys, data=data, data_key='scene_description', name="scene description")
             if not success:
                 return self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
@@ -875,6 +1003,10 @@ class VlmGistBase(ClientBase):
                     self._logger.debug(f"Generated scene description in '{data['scene_description']['duration']:.3f}s'.")
                 return True, message, data
             return self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        if choices > 1:
+            success, message, data = self.consolidate_error(key='scene_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+            return success, message, [data]
 
         return self.consolidate_error(key='scene_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
@@ -915,6 +1047,31 @@ class VlmGistBase(ClientBase):
 
         return True, data[data_key]['logs'][-1], data
 
+    def split_completion(self, completion, choices, name):
+        if not isinstance(completion, dict):
+            return False, f"Expected {name} completion to be of type 'dict' but got '{type(completion).__name__}'.", None
+
+        if 'choices' not in completion:
+            return False, f"Expected {name} completion with '{choices}' choices to contain the key 'choices'.", None
+        if not isinstance(completion['choices'], list):
+            return False, f"Expected value of key 'choices' in {name} completion to be of type 'list' but got '{type(completion['choices']).__name__}'.", None
+        if len(completion['choices']) != choices:
+            return False, f"Expected value of key 'choices' in {name} completion to be a list of length '{choices}' but got '{len(completion['choices'])}'.", None
+
+        completions = [None] * choices
+        for i, choice in enumerate(completion['choices']):
+            if not isinstance(choice, dict):
+                return False, f"Expected choice '{i}' in {name} completion to be of type 'dict' but got '{type(choice).__name__}'.", None
+            item = copy.deepcopy({key: value for key, value in completion.items() if key != 'choices'})
+            for key, value in choice.items():
+                if key == 'logs' and isinstance(value, list) and isinstance(item.get('logs'), list):
+                    item['logs'] = item['logs'] + copy.deepcopy(value)
+                else:
+                    item[key] = copy.deepcopy(value)
+            completions[i] = item
+
+        return True, f"Split {name} completion into '{choices}' completions.", completions
+
     def parse_scene_description(self, data, stamp_local):
         description = copy.deepcopy(data['scene_description']['raw'])
 
@@ -925,8 +1082,8 @@ class VlmGistBase(ClientBase):
 
         if data['scene_description']['raw'] == description:
             del data['scene_description']['raw']
-            data['scene_description']['logs'].append("Removed raw data identical to validated data (scene description).")
-            self._logger.debug(data['scene_description']['logs'][-1])
+            data['scene_description']['logs'].append("Removed raw data identical to validated data.")
+            self._logger.debug(f"{data['scene_description']['logs'][-1]} (scene description)")
         data['scene_description']['data'] = description
         data['scene_description']['logs'].append("Validated scene description.")
         if stamp_local is not None:
@@ -934,15 +1091,16 @@ class VlmGistBase(ClientBase):
 
         return True, data['scene_description']['logs'][-1], data
 
-    def generate_structured_description(self, data, settings, is_worker, stamp_global):
+    def generate_structured_description(self, data, settings, is_worker, stamp_global, choices):
         if settings['structured_description']['skip']:
             return True, "Skipping structured description.", data
 
         # log
+        log_message = "Generating structured description." if choices == 1 else f"Generating '{choices}' structured descriptions."
         if settings['structured_description']['message_process']:
-            self._logger.info("Generating structured description.")
+            self._logger.info(log_message)
         else:
-            self._logger.debug("Generating structured description.")
+            self._logger.debug(log_message)
 
         stamp_local = time.perf_counter()
         data['structured_description'] = {'stamp': datetime.datetime.now().isoformat()}
@@ -964,6 +1122,41 @@ class VlmGistBase(ClientBase):
         if data['structured_description']['success']:
             required_keys = {'text', 'usage', 'logs'}
             reserved_keys = ['stamp', 'settings', 'raw', 'data', 'duration']
+            if choices > 1:
+                success, message, completions = self.split_completion(completion=completion, choices=choices, name="structured description")
+                if not success:
+                    success, message, data = self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+                    return success, message, [data]
+                del data['structured_description']['completion']
+                branches = [None] * choices
+                num_success = 0
+                for k, choice_completion in enumerate(completions):
+                    branch = copy.deepcopy(data)
+                    branch['structured_description']['completion'] = choice_completion
+                    success, message, branch = self.parse_completion(completion=choice_completion, required_keys=required_keys, reserved_keys=reserved_keys, data=branch, data_key='structured_description', name="structured description")
+                    if success:
+                        success, message, branch = self.parse_structured_description(settings=settings, data=branch, stamp_local=stamp_local)
+                    if success:
+                        num_success += 1
+                    else:
+                        _, _, branch = self.consolidate_error(key='structured_description', message=message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
+                    branches[k] = branch
+                # log
+                failures = choices - num_success
+                if failures == 0:
+                    log_message = f"Generated '{choices}' structured descriptions in '{branches[-1]['structured_description']['duration']:.3f}s'."
+                else:
+                    log_message = f"Failed to generate '{failures}' of '{choices}' structured descriptions in '{branches[-1]['structured_description']['duration']:.3f}s'."
+                if settings['structured_description']['message_process']:
+                    if settings['structured_description']['message_results'] and num_success > 0:
+                        self._logger.info(f"{log_message[:-1]}: '\n{json.dumps([branch['structured_description']['data'] for branch in branches if branch['structured_description']['success']], indent=4)}'")
+                    else:
+                        self._logger.info(log_message)
+                else:
+                    self._logger.debug(log_message)
+                if failures > 0:
+                    message = log_message
+                return failures == 0, message, branches
             success, message, data = self.parse_completion(completion=completion, required_keys=required_keys, reserved_keys=reserved_keys, data=data, data_key='structured_description', name="structured description")
             if not success:
                 return self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
@@ -981,6 +1174,10 @@ class VlmGistBase(ClientBase):
                 return True, message, data
             # TODO trigger correction using message
             return self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+
+        if choices > 1:
+            success, message, data = self.consolidate_error(key='structured_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
+            return success, message, [data]
 
         return self.consolidate_error(key='structured_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
@@ -1008,7 +1205,7 @@ class VlmGistBase(ClientBase):
                         except json.JSONDecodeError:
                             pass
                         else:
-                            data['structured_description']['logs'].append("Parsed text response as JSON.")
+                            data['structured_description']['logs'].append("Parsed structured description from data of type 'str' as JSON.")
                             self._logger.debug(data['structured_description']['logs'][-1])
                             break
                     else:
@@ -1016,9 +1213,11 @@ class VlmGistBase(ClientBase):
 
         # extract structured description nested in dictionary
         if isinstance(description, dict) and len(description) == 1:
-            description = description[list(description.keys())[0]]
-            data['structured_description']['logs'].append("Extracted possible structured description from dictionary.")
-            self._logger.warn(data['structured_description']['logs'][-1])
+            candidate = description[list(description.keys())[0]]
+            if isinstance(candidate, list):
+                description = candidate
+                data['structured_description']['logs'].append("Extracted structured description from data of type 'dict' containing '1' item with value of type 'list'.")
+                self._logger.warn(data['structured_description']['logs'][-1])
 
         # structured description must be list
         if not isinstance(description, list):
@@ -1143,7 +1342,8 @@ class VlmGistBase(ClientBase):
                                     x = min(max(int(round(val[1] / 1000 * data['image']['width'])), 0), data['image']['width'])
                                     y = min(max(int(round(val[0] / 1000 * data['image']['height'])), 0), data['image']['height'])
                                     valid_obj[target_key] = [y, x]
-                                self._logger.debug(f"Unnormalized point {val} of object '{i}' to '{valid_obj[target_key]}' according to image width '{data['image']['width']}' and height '{data['image']['height']}'.")
+                                data['structured_description']['logs'].append(f"Unnormalized point {val} of object '{i}' to '{valid_obj[target_key]}' according to image width '{data['image']['width']}' and height '{data['image']['height']}'.")
+                                self._logger.debug(data['structured_description']['logs'][-1])
                                 is_valid = True
 
                         elif expected_type in ["box_xyxy[int]", "box_yxyx[int]"]:
@@ -1172,7 +1372,8 @@ class VlmGistBase(ClientBase):
                                         valid_obj[target_key] = [x_min, y_min, x_max, y_max]
                                     else:
                                         valid_obj[target_key] = [y_min, x_min, y_max, x_max]
-                                    self._logger.debug(f"Unnormalized bounding box {val} of object '{i}' to '{valid_obj[target_key]}' according to image width '{data['image']['width']}' and height '{data['image']['height']}'.")
+                                    data['structured_description']['logs'].append(f"Unnormalized bounding box {val} of object '{i}' to '{valid_obj[target_key]}' according to image width '{data['image']['width']}' and height '{data['image']['height']}'.")
+                                    self._logger.debug(data['structured_description']['logs'][-1])
                                     is_valid = True
 
                         else:
@@ -1205,8 +1406,8 @@ class VlmGistBase(ClientBase):
 
         if data['structured_description']['raw'] == valid_description:
             del data['structured_description']['raw']
-            data['structured_description']['logs'].append("Removed raw data identical to validated data (structured description).")
-            self._logger.debug(data['structured_description']['logs'][-1])
+            data['structured_description']['logs'].append("Removed raw data identical to validated data.")
+            self._logger.debug(f"{data['structured_description']['logs'][-1]} (structured description)")
         data['structured_description']['data'] = valid_description
         data['structured_description']['logs'].append("Validated structured description.")
         if stamp_local is not None:
@@ -1366,8 +1567,8 @@ class VlmGistBase(ClientBase):
 
         if data['detection']['raw'] == detection:
             del data['detection']['raw']
-            data['detection']['logs'].append("Removed raw data identical to validated data (detection).")
-            self._logger.debug(data['detection']['logs'][-1])
+            data['detection']['logs'].append("Removed raw data identical to validated data.")
+            self._logger.debug(f"{data['detection']['logs'][-1]} (detection)")
 
         data['detection']['data'] = detection
         data['detection']['logs'].append("Validated detection.")
@@ -1493,8 +1694,8 @@ class VlmGistBase(ClientBase):
 
         if data['segmentation']['raw'] == segmentation_filtered:
             del data['segmentation']['raw']
-            data['segmentation']['logs'].append("Removed raw data identical to validated data (segmentation).")
-            self._logger.debug(data['segmentation']['logs'][-1])
+            data['segmentation']['logs'].append("Removed raw data identical to validated data.")
+            self._logger.debug(f"{data['segmentation']['logs'][-1]} (segmentation)")
         data['segmentation']['data'] = segmentation_filtered
         data['segmentation']['logs'].append("Validated segmentation.")
         if stamp_local is not None:
