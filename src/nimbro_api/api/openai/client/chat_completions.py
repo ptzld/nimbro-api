@@ -69,7 +69,6 @@ default_settings = {
     'timeout_chunk_first': 10.0,
     'timeout_chunk_next': 5.0,
     'timeout_completion': 30.0,
-    'request_safeguard': False,
     'parser': ["string_strip.py"],
     'retry': 2
 }
@@ -188,8 +187,6 @@ class ChatCompletions(Client):
                 Time in seconds waited until the next response chunk is received when using 'stream', or `None` to wait indefinitely.
             timeout_completion (float | int | None):
                 Time in seconds waited until the complete response is received, or `None` to wait indefinitely.
-            request_safeguard (bool):
-                Wait until the thread posting the API request terminated before terminating prompt().
             parser (list | str):
                 List of parsers executed sequentially:
                 - See template for using or creating parsers: nimbro_api/api/openai/parser/template.py

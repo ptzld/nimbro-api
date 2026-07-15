@@ -210,9 +210,6 @@ class ChatCompletionsBase(ClientBase):
                 message=f"Expected setting 'timeout_completion' to be None or greater zero but got '{settings['timeout_completion']}'."
             )
 
-        # request_safeguard
-        assert_type_value(obj=settings['request_safeguard'], type_or_value=bool, name="setting 'request_safeguard'")
-
         # parsers
         assert_type_value(obj=settings['parser'], type_or_value=[list, str], name="setting 'parser'")
         if isinstance(settings['parser'], str):
@@ -758,6 +755,7 @@ class ChatCompletionsBase(ClientBase):
             request_thread = threading.Thread(target=self.completion_thread, kwargs={'pipe': self.pipe, 'api_key': api_key})
             request_thread.daemon = True
             request_thread.start()
+            interrupt = False
 
             # receive response
             try:
@@ -805,13 +803,7 @@ class ChatCompletionsBase(ClientBase):
                                 logs[-1] = logs[-1][:5000] + "..."
 
                             if chunk['code'] == 'INTERRUPT':
-                                if self._settings['request_safeguard'] and request_thread.is_alive():
-                                    stamp = time.perf_counter()
-                                    self._logger.info("Waiting for completion-thread to terminate before acknowledging interrupt.")
-                                    request_thread.join()
-                                    self._logger.warn(f"Joined completion-thread after waiting '{time.perf_counter() - stamp:.3f}s'.")
-
-                                response = self.post_process_completion(
+                                response = self.post_process_completion( # for restoring context
                                     response_type=response_type,
                                     choices=[],
                                     is_valid=False,
@@ -819,7 +811,7 @@ class ChatCompletionsBase(ClientBase):
                                     usage=usage,
                                     logs=logs
                                 )
-                                raise UnrecoverableError("Interrupted completion.")
+                                interrupt = UnrecoverableError("Interrupted completion.")
                             break
 
                         if chunk['code'] == "COMPLETION":
@@ -906,10 +898,24 @@ class ChatCompletionsBase(ClientBase):
                         logs.append(f"Error while receiving completion: Completion thread unexpectedly died after '{now - stamp_start:.3f}s'.")
                         break
                     else:
-                        time.sleep(0.01)
+                        try:
+                            time.sleep(0.01)
+                        except BaseException as e:
+                            self.pipe[0].send("INTERNAL")
+                            logs.append(f"Received '{e}'.")
+                            response = self.post_process_completion( # for restoring context
+                                response_type=response_type,
+                                choices=[],
+                                is_valid=False,
+                                correction=False,
+                                usage=usage,
+                                logs=logs
+                            )
+                            interrupt = e
+                            break
             finally:
                 # deterministically release pipe FDs and reap the completion thread
-                if request_thread.is_alive():
+                if request_thread.is_alive() and not interrupt:
                     if self.completion_response is not None:
                         try:
                             self.completion_response.close()
@@ -917,11 +923,17 @@ class ChatCompletionsBase(ClientBase):
                             self._logger.warn(f"Failed to close HTTP response to unblock completion thread: {repr(e)}")
                         else:
                             self._logger.debug("Closed HTTP response to unblock completion thread.")
-                    request_thread.join(timeout=5.0)
-                    if request_thread.is_alive():
-                        self._logger.warn("Completion thread did not terminate after closing its HTTP response.")
+                    try:
+                        request_thread.join(timeout=5.0)
+                    except BaseException as e:
+                        interrupt = e
+                    else:
+                        if request_thread.is_alive() and not interrupt:
+                            self._logger.warn("Completion thread did not terminate after closing its HTTP response.")
                 self.pipe[0].close()
                 self.pipe[1].close()
+            if interrupt is not None:
+                raise interrupt
 
             if is_complete:
                 is_valid = True
@@ -951,11 +963,6 @@ class ChatCompletionsBase(ClientBase):
                     assert success, message
                     self._logger.debug(message)
                     self.log_prompt(mode="history", response_type=response_type)
-                    if self._settings['request_safeguard'] and request_thread.is_alive():
-                        stamp = time.perf_counter()
-                        self._logger.warn("Waiting for old completion-thread to terminate before starting correction attempt.")
-                        request_thread.join()
-                        self._logger.info(f"Joined completion-thread after waiting '{time.perf_counter() - stamp:.3f}s'.")
                 else:
                     logs[-1] = f"Completion failed after '{time.perf_counter() - stamp_start:.3f}s': {logs[-1]}"
                     choices_acc = {}
@@ -964,12 +971,6 @@ class ChatCompletionsBase(ClientBase):
                 logs[-1] = f"Completion failed after '{time.perf_counter() - stamp_start:.3f}s': {logs[-1]}"
                 choices_acc = {}
                 break
-
-        if self._settings['request_safeguard'] and request_thread.is_alive():
-            stamp = time.perf_counter()
-            self._logger.info("Waiting for completion-thread to terminate before returning completion.")
-            request_thread.join()
-            self._logger.warn(f"Joined completion-thread after waiting '{time.perf_counter() - stamp:.3f}s'.")
 
         response = self.post_process_completion(
             response_type=response_type,

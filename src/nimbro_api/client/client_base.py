@@ -1,3 +1,4 @@
+import sys
 import copy
 import threading
 import traceback
@@ -288,7 +289,9 @@ class ClientBase:
                     # apply keyword arguments as settings
                     try:
                         success, message = self.set_settings(settings=kwargs, mode="set" if persist else "temp")
-                    except Exception as e:
+                    except BaseException as e:
+                        if not isinstance(e, Exception):
+                            sys.exit(f"{type(e).__name__}")
                         if isinstance(e, UnrecoverableError):
                             if self._initialized:
                                 if attempt == 1:
@@ -362,7 +365,9 @@ class ClientBase:
                     self._logger.debug(f"Executing '{function.__name__}()'.")
                     try:
                         response = function(*args)
-                    except Exception as e:
+                    except BaseException as e:
+                        if not isinstance(e, Exception):
+                            sys.exit(f"{type(e).__name__}")
                         if isinstance(e, UnrecoverableError):
                             if self._initialized:
                                 if attempt == 1:
@@ -469,7 +474,9 @@ class ClientBase:
                     settings = {key: settings[key] for key in kwargs}
                     try:
                         success, message = self.set_settings(settings=settings, mode="revert")
-                    except Exception as e:
+                    except BaseException as e:
+                        if not isinstance(e, Exception):
+                            sys.exit(f"{type(e).__name__}")
                         if isinstance(e, UnrecoverableError):
                             if self._initialized:
                                 if attempt == 1:
