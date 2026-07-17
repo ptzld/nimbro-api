@@ -253,7 +253,6 @@ class VlmGistBase(ClientBase):
         if isinstance(output_dir, str):
             output_dir = os.path.realpath(output_dir)
             assert_log(expression=not os.path.isfile(output_dir), message="Expected argument 'output_dir' to not exist or point to an existing folder but it points to an existing file.")
-            os.makedirs(output_dir, exist_ok=True)
         assert_log(expression=IMPORT_ERROR is None, message=f"Visual utilities are not available due to missing dependencies: {IMPORT_ERROR}")
         if isinstance(result, str):
             success, message, result = read_json(file_path=result, name="result", logger=self._logger)
@@ -264,17 +263,31 @@ class VlmGistBase(ClientBase):
         assert_type_value(obj=result['run'], type_or_value=dict, name="value of key 'run' in argument 'result'")
         assert_keys(obj=result['run'], keys=['type'], mode="required", name="value of key 'run' in argument 'result'")
         assert_type_value(obj=result['run']['type'], type_or_value=["normal", "batch"], name="value of key 'run.type' in argument 'result'")
+        num_choices = 1
         if result['run']['type'] == "batch":
             assert_keys(obj=result['run'], keys=['settings'], mode="required", name="value of key 'run' in argument 'result'")
             assert_type_value(obj=result['run']['settings'], type_or_value=dict, name="value of key 'run.settings' in argument 'result'")
-            assert_keys(obj=result['run']['settings'], keys=['structured_description', 'detection'], mode="required", name="value of key 'run.settings' in argument 'result'")
+            assert_keys(obj=result['run']['settings'], keys=['scene_description', 'structured_description', 'detection'], mode="required", name="value of key 'run.settings' in argument 'result'")
+            assert_type_value(obj=result['run']['settings']['scene_description'], type_or_value=dict, name="value of key 'run.settings.scene_description' in argument 'result'")
             assert_type_value(obj=result['run']['settings']['structured_description'], type_or_value=dict, name="value of key 'run.settings.structured_description' in argument 'result'")
             assert_type_value(obj=result['run']['settings']['detection'], type_or_value=dict, name="value of key 'run.settings.detection' in argument 'result'")
+            scene_description_settings = result['run']['settings']['scene_description']
             structured_description_settings = result['run']['settings']['structured_description']
             detection_settings = result['run']['settings']['detection']
+            for settings_name, settings in [('scene_description', scene_description_settings), ('structured_description', structured_description_settings)]:
+                assert_keys(obj=settings, keys=['skip'], mode="required", name=f"value of key 'run.settings.{settings_name}' in argument 'result'")
+                assert_type_value(obj=settings['skip'], type_or_value=bool, name=f"value of key 'run.settings.{settings_name}.skip' in argument 'result'")
+                if not settings['skip']:
+                    assert_keys(obj=settings, keys=['chat_completions'], mode="required", name=f"value of key 'run.settings.{settings_name}' in argument 'result'")
+                    assert_type_value(obj=settings['chat_completions'], type_or_value=dict, name=f"value of key 'run.settings.{settings_name}.chat_completions' in argument 'result'")
+                    assert_keys(obj=settings['chat_completions'], keys=['choices'], mode="required", name=f"value of key 'run.settings.{settings_name}.chat_completions' in argument 'result'")
+                    assert_type_value(obj=settings['chat_completions']['choices'], type_or_value=int, name=f"value of key 'run.settings.{settings_name}.chat_completions.choices' in argument 'result'")
+                    assert_log(expression=not isinstance(settings['chat_completions']['choices'], bool) and settings['chat_completions']['choices'] > 0, message=f"Expected value of key 'run.settings.{settings_name}.chat_completions.choices' in argument 'result' to be a positive integer but got '{settings['chat_completions']['choices']}'.")
+                    num_choices *= settings['chat_completions']['choices']
             assert_keys(obj=result, keys=['batch'], mode="required", name="argument 'result' of type 'batch'")
             assert_type_value(obj=result['batch'], type_or_value=list, name="value of key 'batch' in argument 'result'")
             batch = result['batch']
+            assert_log(expression=len(batch) % num_choices == 0, message=f"Expected number of batch items '{len(batch)}' to be divisible by number of choices '{num_choices}'.")
         else:
             assert_keys(obj=result, keys=['structured_description', 'detection'], mode="required", name="argument 'result'")
             assert_type_value(obj=result['structured_description'], type_or_value=dict, name="value of key 'structured_description' in argument 'result'")
@@ -323,18 +336,28 @@ class VlmGistBase(ClientBase):
             images = [None] * num_images
         else:
             if isinstance(image, list):
-                assert_log(expression=len(image) == num_images, message=f"Expected argument 'image' provided as list to contain '{num_images}' item{'' if num_images == 1 else 's'} but got '{len(image)}'.")
+                image = list(image)
             elif isinstance(image, (str, os.PathLike)) and os.path.isdir(image):
                 self._logger.debug("Argument 'image' provide as local path.")
                 path = image
                 image = sorted([os.path.join(image, item) for item in os.listdir(path) if os.path.isfile(os.path.join(path, item))])
                 self._logger.debug(f"Files in '{path}': {image}")
-                assert_log(expression=len(image) >= num_images, message=f"Expected argument 'image' provided as path to contain at least '{num_images}' item{'' if num_images == 1 else 's'} but got '{len(image)}'.")
-                if len(image) > num_images:
-                    image = image[:num_images]
             else:
-                assert_log(expression=num_images == 1, message=f"Expected argument 'image' to be provided as list containing '{num_images}' item{'' if num_images == 1 else 's'} but got 'str'.")
                 image = [image]
+
+            if len(image) < num_images:
+                num_input_images = num_images // num_choices
+                if num_choices > 1 and len(image) <= num_input_images:
+                    image_choices = []
+                    for item in image:
+                        for _ in range(num_choices):
+                            image_choices.append(item)
+                    image = image_choices
+                if len(image) < num_images:
+                    image += [None] * (num_images - len(image))
+            elif len(image) > num_images:
+                image = image[:num_images]
+
             images = [None] * num_images
             for i, item in enumerate(image):
                 if item is not None:
@@ -353,8 +376,6 @@ class VlmGistBase(ClientBase):
             # TODO parallelize using batch.size and batch.threading
 
             # validate data
-            if images[i] is None and image is not None:
-                continue
             try:
                 assert_type_value(obj=batch_item, type_or_value=dict, name=f"result '{i + 1}' of '{num_images}'")
                 if images[i] is None:
@@ -535,6 +556,7 @@ class VlmGistBase(ClientBase):
                 if success:
                     visual = visual.tobytes()
                     out_path = os.path.join(output_dir, f"{i}_{datetime.datetime.now().isoformat()[:23].replace('-', '_').replace(':', '_').replace('.', '_')}.png")
+                    os.makedirs(output_dir, exist_ok=True)
                     with open(out_path, "wb") as file:
                         file.write(visual)
                     paths[i] = out_path
@@ -867,15 +889,27 @@ class VlmGistBase(ClientBase):
         # extract batch results
         successes = [item['run']['success'] for item in items]
         failures = len(items) - sum(successes)
+        failure_messages = [item['run']['message'] for item in items if not item['run']['success']]
+        if failures == 1:
+            failure_messages = failure_messages[0]
         success = failures == 0
         duration = time.perf_counter() - stamp_global
 
-        if scene_choices > 1 and structured_choices > 1:
-            message = f"Processed image with '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
-        elif scene_choices > 1:
-            message = f"Processed image with '{scene_choices}' scene description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+        if failures == 0:
+            if scene_choices > 1 and structured_choices > 1:
+                message = f"Processed image with '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+            elif scene_choices > 1:
+                message = f"Processed image with '{scene_choices}' scene description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+            else:
+                message = f"Processed image with '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
         else:
-            message = f"Processed image with '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+            if scene_choices > 1 and structured_choices > 1:
+                message = f"Processed image with '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s': {failure_messages}"
+            elif scene_choices > 1:
+                message = f"Processed image with '{scene_choices}' scene description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s': {failure_messages}"
+            else:
+                message = f"Processed image with '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s': {failure_messages}"
+
         if is_worker:
             return success, message, items
         data['run']['success'] = success
