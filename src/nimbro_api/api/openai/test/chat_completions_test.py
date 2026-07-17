@@ -655,7 +655,7 @@ def _interrupt(**kwargs):
     return interrupt_message
 
 def test_043_interrupt():
-    return "NOT SUPPORTED."
+    return _interrupt(stream=False)
 
 def test_044_interrupt_stream():
     return _interrupt(stream=True)

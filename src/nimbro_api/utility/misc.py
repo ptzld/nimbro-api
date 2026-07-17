@@ -842,7 +842,7 @@ def format_obj(obj, *, cutoff=-1):
     # format object
     try:
         if isinstance(obj, str):
-            if cutoff is not None and len(obj) > cutoff: # TODO expose as core setting
+            if cutoff is not None and len(obj) > cutoff:
                 string = f"<Excessive>(type:'{type(obj).__name__}', str_length:'{len(obj)}')"
             else:
                 string = obj

@@ -1,6 +1,6 @@
 import types
 
-from .api import get_api_key, validate_endpoint, post_request, get_request
+from .api import get_api_key, validate_endpoint, HttpRequestCancelled, post_request, get_request, http_request
 
 from .io import (
     download_file, read_json, write_json, read_as_b64,

@@ -8,6 +8,12 @@ default_settings = {
     'logger_line_length': None,
     'logger_multi_line_prefix': False,
     'logger_object_cutoff': 3000,
+    'http_follow_redirects': False,
+    'http_max_connections': None,
+    'http_max_keepalive_connections': 100,
+    'http_keepalive_expiry': 30.0,
+    'http_timeout_connect': 5.0,
+    'http_timeout_read': 60.0,
     'keys_hide': True,
     'keys_cache': True,
     'defer_delay': 1.0,
@@ -59,6 +65,25 @@ class Core(Client):
                 Maximum number of characters beyond which objects formatted
                 with `nimbro_api.utilities.format_obj()` are replaced by a placeholder.
                 Use `None` to apply no restriction.
+            http_follow_redirects (bool):
+                Follow HTTP redirect responses when sending requests.
+            http_max_connections (int | None):
+                Maximum number of concurrent HTTP connections.
+                Use `None` to apply no restriction.
+            http_max_keepalive_connections (int | None):
+                Maximum number of idle HTTP connections kept alive for reuse.
+                Use `None` to apply no restriction.
+            http_keepalive_expiry (int | float | None):
+                Time in seconds an idle HTTP connection is kept alive before it is closed.
+                Use `None` to keep idle connections alive indefinitely.
+            http_timeout_connect (int | float | None):
+                Default time in seconds to wait for establishing an HTTP connection before timing out.
+                Applies to requests that do not specify a connect timeout explicitly.
+                Use `None` to wait indefinitely.
+            http_timeout_read (int | float | None):
+                Default time in seconds to wait for receiving HTTP response data before timing out.
+                Applies to requests that do not specify a read timeout explicitly.
+                Use `None` to wait indefinitely.
             keys_hide (bool):
                 Do not show values of API keys in logs.
             keys_cache (bool):

@@ -3,8 +3,6 @@ import time
 import json
 import threading
 
-import requests
-
 try:
     import orjson
     ORJSON_AVAILABLE = True
@@ -18,6 +16,7 @@ except ImportError:
     PYBASE64_AVAILABLE = False
 
 import nimbro_api
+from .api import get_request
 from .misc import UnrecoverableError, assert_type_value
 from .string import is_url, is_base64
 
@@ -70,29 +69,31 @@ def download_file(url, *, retry=1, name="file", logger=None):
         logger.debug(message)
     if success:
         data = cache['data']
-        return True, f"Obtained {name} '{url}' from cache.", data
+        return True, f"Obtained {name} from URL '{url}' from cache.", data
 
     # download
-    stamp = time.perf_counter()
     message = None
     while True:
         if logger is not None:
             if message is None:
-                logger.debug(f"Downloading {name} '{url}'.")
+                logger.debug(f"Downloading {name} from URL '{url}'.")
             else:
-                logger.warn(f"Retrying download of {name} '{url}' after failure: {message}")
-        try:
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            response = requests.get(url, headers=headers, timeout=60.0)
-        except Exception as e:
-            message = f"Failed to download {name} from '{url}': {repr(e)}"
+                logger.warn(f"Retrying download of {name} from '{url}' after failure: {message}")
+
+        success, message, response = get_request(
+            api_name=f"{name} URL",
+            api_url=url,
+            headers={'User-Agent': 'Mozilla/5.0'},
+            timeout="default",
+            logger=logger
+        )
+        if not success:
             if isinstance(retry, bool) and retry is True:
                 continue
             if isinstance(retry, int) and retry > 0:
                 retry -= 1
                 continue
             return False, message, None
-        message = f"Downloaded {name} '{url}' in '{time.perf_counter() - stamp:.3f}s'."
         data = response.content
         # cache response
         _success, _message = nimbro_api.update_cache(category="download_file", identifier=url, data=data, mute=True)

@@ -9,6 +9,7 @@ from queue import SimpleQueue, Empty
 
 from ..client import ClientBase
 from ..utility.misc import UnrecoverableError, assert_type_value, assert_log
+from ..utility.api import _http2_available, _reload_httpx_settings
 from ..utility import misc
 
 class CoreBase(ClientBase):
@@ -19,6 +20,10 @@ class CoreBase(ClientBase):
         self._defer_queue = SimpleQueue()
         self._defer_timer = None
         atexit.register(self.execute_deferred_jobs)
+        if _http2_available:
+            self._logger.debug("HTTP/2 is available.")
+        else:
+            self._logger.debug("HTTP/2 is not available. Install 'httpx[http2]' (pip install httpx[http2]) to support HTTP/2.")
         self._logger.debug("Core initialized.")
         self._initialized = True
 
@@ -28,6 +33,8 @@ class CoreBase(ClientBase):
         settings = self._introduce_settings(settings=settings, mode=mode)
 
         # validate settings
+
+        # logger
         assert_type_value(obj=settings['logger_mute'], type_or_value=bool, name="setting 'logger_mute'")
         assert_type_value(obj=settings['logger_line_length'], type_or_value=[int, None], name="setting 'logger_mute'")
         if isinstance(settings['logger_line_length'], int):
@@ -36,6 +43,37 @@ class CoreBase(ClientBase):
         assert_type_value(obj=settings['logger_object_cutoff'], type_or_value=[int, None], name="setting 'logger_mute'")
         if isinstance(settings['logger_object_cutoff'], int):
             assert_log(expression=settings['logger_object_cutoff'] >= 0, message=f"Expected setting 'logger_object_cutoff' to be non-negative but got '{settings['logger_object_cutoff']}'.")
+
+        # http
+        assert_type_value(obj=settings['http_follow_redirects'], type_or_value=bool, name="setting 'http_follow_redirects'")
+        assert_type_value(obj=settings['http_max_connections'], type_or_value=[int, None], name="setting 'http_max_connections'")
+        if isinstance(settings['http_max_connections'], int):
+            assert_log(expression=settings['http_max_connections'] >= 0, message=f"Expected setting 'http_max_connections' to be non-negative but got '{settings['http_max_connections']}'.")
+        assert_type_value(obj=settings['http_max_keepalive_connections'], type_or_value=[int, None], name="setting 'http_max_keepalive_connections'")
+        if isinstance(settings['http_max_keepalive_connections'], int):
+            assert_log(expression=settings['http_max_keepalive_connections'] >= 0, message=f"Expected setting 'http_max_keepalive_connections' to be non-negative but got '{settings['http_max_keepalive_connections']}'.")
+        if settings['http_max_connections'] is not None and settings['http_max_keepalive_connections'] is not None:
+            assert_log(
+                expression=settings['http_max_keepalive_connections'] <= settings['http_max_connections'],
+                message=f"Expected setting 'http_max_keepalive_connections' to be no greater than 'http_max_connections', but got '{settings['http_max_keepalive_connections']}' and '{settings['http_max_connections']}'."
+            )
+        assert_type_value(obj=settings['http_keepalive_expiry'], type_or_value=[int, float, None], name="setting 'http_keepalive_expiry'")
+        if settings['http_keepalive_expiry'] is not None:
+            assert_log(expression=settings['http_keepalive_expiry'] >= 0, message=f"Expected setting 'http_keepalive_expiry' to be non-negative but got '{settings['http_keepalive_expiry']}'.")
+        assert_type_value(obj=settings['http_timeout_connect'], type_or_value=[int, float, None], name="setting 'http_timeout_connect'")
+        if settings['http_timeout_connect'] is not None:
+            assert_log(
+                expression=settings['http_timeout_connect'] > 0.0,
+                message=f"Expected setting 'http_timeout_connect' to be None or greater zero but got '{settings['http_timeout_connect']}'."
+            )
+        assert_type_value(obj=settings['http_timeout_read'], type_or_value=[int, float, None], name="setting 'http_timeout_read'")
+        if settings['http_timeout_read'] is not None:
+            assert_log(
+                expression=settings['http_timeout_read'] > 0.0,
+                message=f"Expected setting 'http_timeout_read' to be None or greater zero but got '{settings['http_timeout_read']}'."
+            )
+
+        # keys
         assert_type_value(obj=settings['keys_hide'], type_or_value=bool, name="setting 'keys_hide'")
         assert_type_value(obj=settings['keys_cache'], type_or_value=bool, name="setting 'keys_cache'")
         assert_type_value(obj=settings['defer_delay'], type_or_value=[int, float], name="setting 'defer_delay'")
@@ -46,6 +84,13 @@ class CoreBase(ClientBase):
         self._logger_settings['logger_mute'] = settings['logger_mute']
         self._logger_settings['logger_line_length'] = settings['logger_line_length']
         self._logger_settings['logger_multi_line_prefix'] = settings['logger_multi_line_prefix']
+        if self._initialized:
+            for name in ['http_follow_redirects', 'http_max_connections', 'http_max_keepalive_connections', 'http_keepalive_expiry']:
+                if self._settings[name] != settings[name]:
+                    self._logger.debug("Reloading httpx client after relevant setting changed.")
+                    _reload_httpx_settings()
+                    self._logger.info("Reloaded httpx client after relevant setting changed.")
+                    break
         return self._apply_settings(settings, mode)
 
     # API keys

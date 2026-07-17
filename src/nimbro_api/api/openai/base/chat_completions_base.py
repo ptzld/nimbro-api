@@ -9,7 +9,6 @@ import threading
 import importlib.util
 import multiprocessing
 
-import requests
 try:
     import jsonschema
     JSONSCHEMA_AVAILABLE = True
@@ -18,7 +17,7 @@ except ImportError:
 
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import download_file, read_as_b64, encode_b64
-from nimbro_api.utility.api import get_api_key, validate_endpoint
+from nimbro_api.utility.api import get_api_key, validate_endpoint, http_request, HttpRequestCancelled
 from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log, escape, format_obj
 from nimbro_api.utility.string import is_url, is_base64, extract_json
 from ..utility import validate_connection, get_models
@@ -35,6 +34,10 @@ class ChatCompletionsBase(ClientBase):
         self.get_models = get_models.__get__(self)
 
         self.is_prompting = False
+        self._completion_cancel = threading.Event()
+        self._completion_interrupt_external = threading.Event()
+        self._completion_finished = threading.Event()
+        self._completion_finished.set()
         self.messages, self.tools = [], []
 
         self._logger.debug(f"Initialized '{type(self).__name__}' object.")
@@ -598,33 +601,42 @@ class ChatCompletionsBase(ClientBase):
 
     # Prompt Pipeline
 
-    def log_prompt(self, mode, response_type):
+    def log_prompt(self, mode, response_type, num_added):
         assert mode in ["history", "reset", "add"], mode
+
         if self._settings['logger_info_prompt'] is not False:
-            if mode != "history":
-                if mode == "reset":
-                    insert_1 = "Cleared context and added request"
-                else:
-                    insert_1 = "Added request to context"
+            if mode == "reset":
+                insert_1 = "Context reset"
+                if num_added > 0:
+                    insert_1 += f" with '{num_added}' new message{'' if num_added == 1 else 's'}"
+            elif mode == "add" and num_added > 0:
+                insert_1 = f"Added '{num_added}' new message{'' if num_added == 1 else 's'} to context"
+            elif mode == "history" and num_added > 0:
+                insert_1 = f"Temporarily added '{num_added}' correction message{'' if num_added == 1 else 's'} to context"
+            else:
+                insert_1 = None
 
-                if response_type == "none":
-                    insert_2 = "without generating a completion"
-                elif response_type == "text":
-                    insert_2 = "before generating a text-completion"
-                elif response_type == "json":
-                    insert_2 = "before generating JSON"
-                elif response_type == "auto":
-                    insert_2 = "before generating a completion"
-                elif response_type == "always":
-                    if self._settings['max_tool_calls'] is None:
-                        insert_2 = "before generating any number of tool-calls"
-                    elif self._settings['max_tool_calls'] == 1:
-                        insert_2 = "before generating a tool-call"
-                    else:
-                        insert_2 = f"before generating up to '{self._settings['max_tool_calls']}' tool-calls"
+            if response_type == "none":
+                insert_2 = "without generating a completion"
+            elif response_type == "text":
+                insert_2 = "before generating a text-completion"
+            elif response_type == "json":
+                insert_2 = "before generating JSON"
+            elif response_type == "auto":
+                insert_2 = "before generating a completion"
+            elif response_type == "always":
+                if self._settings['max_tool_calls'] is None:
+                    insert_2 = "before generating any number of tool-calls"
+                elif self._settings['max_tool_calls'] == 1:
+                    insert_2 = "before generating a tool-call"
                 else:
-                    insert_2 = f"before generating a '{response_type}' tool-call"
+                    insert_2 = f"before generating up to '{self._settings['max_tool_calls']}' tool-calls"
+            else:
+                insert_2 = f"before generating a '{response_type}' tool-call"
 
+            if insert_1 is None:
+                self._logger.info(f"{insert_2.removeprefix('before ').capitalize()}.")
+            else:
                 self._logger.info(f"{insert_1} {insert_2}.")
 
             if self._settings['logger_info_prompt'] != 0 and len(self.messages) > 0:
@@ -729,15 +741,17 @@ class ChatCompletionsBase(ClientBase):
         # retrieve API key
         success, message, api_key = self.get_api_key()
         if not success:
-            self._logger.debug("Restoring original context.")
-            self.messages = self.context_dump
+            if self.messages != self.context_dump:
+                self.messages = self.context_dump
+                self._logger.info("Restored original context after failed API key retrieval.")
             raise UnrecoverableError(message)
 
         # validate connection
         success, message = self.validate_connection(api_key=api_key)
         if not success:
-            self._logger.debug("Restoring original context.")
-            self.messages = self.context_dump
+            if self.messages != self.context_dump:
+                self.messages = self.context_dump
+                self._logger.info("Restored original context after failed model validation.")
             return False, message, None
 
         is_valid, is_correction, logs = False, False, []
@@ -750,8 +764,13 @@ class ChatCompletionsBase(ClientBase):
 
             # start completion thread
             self.completion_response = None
+            if self._completion_interrupt_external.is_set():
+                raise UnrecoverableError("Interrupted prompt via interrupt function.")
+            self._completion_cancel.clear()
+            if self._completion_interrupt_external.is_set():
+                self._completion_cancel.set()
+                raise UnrecoverableError("Interrupted prompt via interrupt function.")
             self.pipe = multiprocessing.Pipe(duplex=True)
-            self.is_prompting = True
             request_thread = threading.Thread(target=self.completion_thread, kwargs={'pipe': self.pipe, 'api_key': api_key})
             request_thread.daemon = True
             request_thread.start()
@@ -763,7 +782,7 @@ class ChatCompletionsBase(ClientBase):
                     now = time.perf_counter()
 
                     if self._settings['timeout_completion'] is not None and now - stamp_start > self._settings['timeout_completion']:
-                        self.pipe[0].send("INTERNAL")
+                        self._completion_cancel.set()
                         usage = self.save_usage(chunk=None, stamp_start=datetime_start)
                         logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_completion']}s' before completion was finished.")
                         break
@@ -771,12 +790,12 @@ class ChatCompletionsBase(ClientBase):
                     if self._settings['stream'] is True:
                         if stamp_last_chunk is None:
                             if self._settings['timeout_chunk_first'] is not None and now - stamp_start > self._settings['timeout_chunk_first']:
-                                self.pipe[0].send("INTERNAL")
+                                self._completion_cancel.set()
                                 usage = self.save_usage(chunk=None, stamp_start=datetime_start)
                                 logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_chunk_first']}s' without receiving the first chunk.")
                                 break
                         elif self._settings['timeout_chunk_next'] is not None and now - stamp_last_chunk > self._settings['timeout_chunk_next']:
-                            self.pipe[0].send("INTERNAL")
+                            self._completion_cancel.set()
                             usage = self.save_usage(chunk=None, stamp_start=datetime_start)
                             logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_chunk_next']}s' without receiving the next chunk.")
                             break
@@ -803,15 +822,7 @@ class ChatCompletionsBase(ClientBase):
                                 logs[-1] = logs[-1][:5000] + "..."
 
                             if chunk['code'] == 'INTERRUPT':
-                                response = self.post_process_completion( # for restoring context
-                                    response_type=response_type,
-                                    choices=[],
-                                    is_valid=False,
-                                    correction=False,
-                                    usage=usage,
-                                    logs=logs
-                                )
-                                interrupt = UnrecoverableError("Interrupted completion.")
+                                interrupt = UnrecoverableError("Interrupted completion via interrupt function.")
                             break
 
                         if chunk['code'] == "COMPLETION":
@@ -898,24 +909,14 @@ class ChatCompletionsBase(ClientBase):
                         logs.append(f"Error while receiving completion: Completion thread unexpectedly died after '{now - stamp_start:.3f}s'.")
                         break
                     else:
-                        try:
-                            time.sleep(0.01)
-                        except BaseException as e:
-                            self.pipe[0].send("INTERNAL")
-                            logs.append(f"Received '{e}'.")
-                            response = self.post_process_completion( # for restoring context
-                                response_type=response_type,
-                                choices=[],
-                                is_valid=False,
-                                correction=False,
-                                usage=usage,
-                                logs=logs
-                            )
-                            interrupt = e
-                            break
+                        time.sleep(0.01)
+            except BaseException as e:
+                self._completion_cancel.set()
+                interrupt = e
             finally:
-                # deterministically release pipe FDs and reap the completion thread
-                if request_thread.is_alive() and not interrupt:
+                # deterministically cancel the request, release pipe FDs and reap the completion thread
+                if request_thread.is_alive():
+                    self._completion_cancel.set()
                     if self.completion_response is not None:
                         try:
                             self.completion_response.close()
@@ -926,10 +927,15 @@ class ChatCompletionsBase(ClientBase):
                     try:
                         request_thread.join(timeout=5.0)
                     except BaseException as e:
-                        interrupt = e
+                        if interrupt is None:
+                            interrupt = e
                     else:
                         if request_thread.is_alive() and interrupt is None:
-                            self._logger.warn("Completion thread did not terminate after closing its HTTP response.")
+                            message = "Completion thread did not terminate after cancelling its HTTP request."
+                            self._logger.warn(message)
+                            logs.append(message)
+                            interrupt = UnrecoverableError(message)
+                self.completion_response = None
                 self.pipe[0].close()
                 self.pipe[1].close()
             if interrupt is not None:
@@ -962,7 +968,7 @@ class ChatCompletionsBase(ClientBase):
                     success, message = self.set_context(mode="insert", messages=correction_messages, index=0, reverse_indexing=True)
                     assert success, message
                     self._logger.debug(message)
-                    self.log_prompt(mode="history", response_type=response_type)
+                    self.log_prompt(mode="history", response_type=response_type, num_added=len(correction_messages))
                 else:
                     logs[-1] = f"Completion failed after '{time.perf_counter() - stamp_start:.3f}s': {logs[-1]}"
                     choices_acc = {}
@@ -1067,7 +1073,7 @@ class ChatCompletionsBase(ClientBase):
     def completion_thread(self, pipe, api_key):
         try:
             self._completion_thread(pipe=pipe, api_key=api_key)
-        except (BrokenPipeError, OSError):
+        except OSError:
             self._logger.debug("Completion thread stopped after its pipe was closed.")
 
     def _completion_thread(self, pipe, api_key):
@@ -1229,8 +1235,19 @@ class ChatCompletionsBase(ClientBase):
                 pipe[1].send({'code': "ERROR", 'content': message})
                 return
 
-            self._logger.debug("Sending POST request.")
-            completion = requests.post(self._endpoint['api_url'], headers=headers, json=data, stream=self._settings['stream'], timeout=(self._settings['timeout_connect'], self._settings['timeout_read']))
+            completion = http_request(
+                "POST",
+                self._endpoint['api_url'],
+                headers=headers,
+                json=data,
+                stream=self._settings['stream'],
+                timeout=(
+                    self._settings['timeout_connect'],
+                    self._settings['timeout_read']
+                ),
+                cancel_event=self._completion_cancel,
+                logger=self._logger
+            )
             self.completion_response = completion
 
             if not self._settings['stream']:
@@ -1318,13 +1335,18 @@ class ChatCompletionsBase(ClientBase):
                 self._logger.debug("Finished completion thread.")
                 return
 
+        except HttpRequestCancelled:
+            if self._completion_interrupt_external.is_set():
+                message = "Interrupted completion."
+                self._logger.debug(message)
+                pipe[1].send({'code': "INTERRUPT", 'content': message})
+            else:
+                self._logger.debug("Cancelled completion after HTTP request was interrupted.")
         except Exception as e:
             message = f"Failed to POST request: {repr(e)}"
             pipe[1].send({'code': "ERROR", 'content': message})
 
         else:
-            self._logger.debug("Sent POST request.")
-
             decoded_buffer = ""
             undecoded_buffer = b""
             error = ""
@@ -1337,17 +1359,6 @@ class ChatCompletionsBase(ClientBase):
                     if early_stop is True:
                         break
                     decoded = False
-
-                    # check if response was canceled from external source
-                    if pipe[1].poll():
-                        code = pipe[1].recv()
-                        if code == "EXTERNAL":
-                            message = "Interrupted completion."
-                            self._logger.debug(message)
-                            pipe[1].send({'code': "INTERRUPT", 'content': message})
-                        else:
-                            self._logger.debug("Completion was interrupted due to request from internal source.")
-                        break
 
                     # attempt to decode chunk
                     if chunk:
@@ -1380,6 +1391,7 @@ class ChatCompletionsBase(ClientBase):
                         # self._logger.debug(f"{"\n" in decoded_buffer}: decoded_buffer: {decoded_buffer.replace("\n", "\\n")}")
                         while '\n' in decoded_buffer:
                             line, decoded_buffer = decoded_buffer.split('\n', 1)
+                            line = line.rstrip('\r')
                             # self._logger.debug(f"line: {line}")
                             if line != "":
                                 if line.find('data:') == 0:
@@ -1481,6 +1493,13 @@ class ChatCompletionsBase(ClientBase):
                     if error != "":
                         message = f"Error while receiving completion: {format_obj(error)}."
                         pipe[1].send({'code': "ERROR", 'content': message})
+            except HttpRequestCancelled:
+                if self._completion_interrupt_external.is_set():
+                    message = "Interrupted completion."
+                    self._logger.debug(message)
+                    pipe[1].send({'code': "INTERRUPT", 'content': message})
+                else:
+                    self._logger.debug("Cancelled completion after HTTP request was interrupted.")
             except Exception as e:
                 message = f"Error while receiving completion: {repr(e)}."
                 pipe[1].send({'code': "ERROR", 'content': message})
@@ -1778,6 +1797,7 @@ class ChatCompletionsBase(ClientBase):
         # add message to context
         if add_to_context:
             self.messages.append(message)
+            self._logger.info("Completion added to context.")
             self._logger.debug(f"Completion added to context: {format_obj(message)}.")
         else:
             self._logger.debug(f"Completion not added to context: {format_obj(message)}.")
@@ -1909,7 +1929,7 @@ class ChatCompletionsBase(ClientBase):
                             logs.append(f"Completion contains a tool-call that violates the JSON Schema: {errors[0].message}")
                             reason = f"Your response contains a tool-call that violates the JSON Schema: {errors[0].message}"
                     else:
-                        self._logger.warn("Tool-call cannot be validated against tool definitions because the 'jsonschema' module is not available.", once=True)
+                        self._logger.warn("Tool-call cannot be validated against tool definitions. Install 'jsonschema' (pip install jsonschema) to support full toll-call validation.", once=True)
 
         if success:
             self._logger.debug("Tool-call is valid.")
@@ -1917,22 +1937,21 @@ class ChatCompletionsBase(ClientBase):
         return success, reason, logs
 
     def post_process_completion(self, response_type, choices, is_valid, correction, usage, logs):
-        assert self.is_prompting
-        self.is_prompting = False
         n = self._settings['choices']
 
         if not is_valid:
             error_log_i = len(logs) - 1
-            self._logger.debug("Restoring original context.")
-            self.messages = self.context_dump
+            if self.messages != self.context_dump:
+                self.messages = self.context_dump
+                self._logger.info("Restored original context after invalid completion.")
         elif correction:
             self._logger.debug("Completion is valid after automatic correction.")
             # current context = original context + (new message) + (invalid completion + correction) * n + valid completion
             num_messages_after_correction = len(self.messages)
             num_removed = len(self.messages) - len(self.new_messages) - 1 if self.reset_context else len(self.messages) - len(self.context_dump) - len(self.new_messages) - 1
-            self._logger.info(f"Removing '{num_removed}' correction-related message{'' if num_removed == 1 else 's'} from context.")
             self.messages = self.new_messages + [self.messages[-1]] if self.reset_context else self.context_dump + self.new_messages + [self.messages[-1]]
             assert len(self.messages) == num_messages_after_correction - num_removed, f"Expected context to contain '{num_messages_after_correction - num_removed}' messages after removing corrections but it contains '{len(self.messages)}'."
+            self._logger.info(f"Removed '{num_removed}' correction-related message{'' if num_removed == 1 else 's'} from context.")
         else:
             num_expected = len(self.new_messages) if self.reset_context else len(self.context_dump) + len(self.new_messages)
             if n == 1:
@@ -1997,21 +2016,25 @@ class ChatCompletionsBase(ClientBase):
 
             if n == 1:
                 for parser in self._settings['parser']:
+                    if self._completion_interrupt_external.is_set():
+                        raise UnrecoverableError("Interrupted prompt via interrupt function.")
                     success, message, completion, allow_retry = self.execute_parser(
                         path_or_name=parser,
                         success=success,
                         message=message,
                         completion=completion
                     )
-                    if not success and not allow_retry:
-                        self._logger.debug("Restoring original context.")
-                        self.messages = self.context_dump
-                        raise UnrecoverableError(message)
-                if not success:
-                    self._logger.debug("Restoring original context.")
-                    self.messages = self.context_dump
+                    if not success:
+                        if self.messages != self.context_dump:
+                            self.messages = self.context_dump
+                            self._logger.info("Restored original context after failed parser.")
+                        if not allow_retry:
+                            raise UnrecoverableError(message)
+                        break
             else:
                 for i, choice in enumerate(completion['choices']):
+                    if self._completion_interrupt_external.is_set():
+                        raise UnrecoverableError("Interrupted prompt via interrupt function.")
                     parsed_choice = copy.deepcopy(choice)
                     parsed_choice.setdefault('logs', [])
                     for parser in self._settings['parser']:
@@ -2021,20 +2044,18 @@ class ChatCompletionsBase(ClientBase):
                             message=message,
                             completion=parsed_choice
                         )
-                        if not success and not allow_retry:
-                            self._logger.debug("Restoring original context.")
-                            self.messages = self.context_dump
-                            raise UnrecoverableError(message)
                         if not success:
+                            if self.messages != self.context_dump:
+                                self.messages = self.context_dump
+                                self._logger.info("Restored original context after failed parser.")
+                            if not allow_retry:
+                                raise UnrecoverableError(message)
                             break
                     if parsed_choice['logs'] == []:
                         del parsed_choice['logs']
                     completion['choices'][i] = parsed_choice
                     if not success:
                         break
-                if not success:
-                    self._logger.debug("Restoring original context.")
-                    self.messages = self.context_dump
         else:
             completion['logs'] = logs
             message = logs[error_log_i]
@@ -2135,17 +2156,31 @@ class ChatCompletionsBase(ClientBase):
     # Callbacks
 
     def prompt(self, text, reset_context, response_type):
-        # parse arguments
-        assert_type_value(obj=text, type_or_value=[str, dict, list, None], name="argument 'text'")
-        assert_type_value(obj=reset_context, type_or_value=bool, name="argument 'reset_context'")
-        response_choices = ["none", "text", "json", "auto"] + (["always"] if len(self.tools) > 0 else []) + [f['function']['name'] for f in self.tools]
-        assert_type_value(obj=response_type, type_or_value=response_choices, name="argument 'response_type'")
-        assert_log(expression=response_type != "none" or reset_context or text is not None, message="A prompt must either alter the context or trigger a chat completion.")
+        self._completion_cancel.clear()
+        self._completion_interrupt_external.clear()
+        self._completion_finished.clear()
+        self.is_prompting = True
+
+        try:
+            # parse arguments
+            assert_type_value(obj=text, type_or_value=[str, dict, list, None], name="argument 'text'")
+            assert_type_value(obj=reset_context, type_or_value=bool, name="argument 'reset_context'")
+            response_choices = ["none", "text", "json", "auto"] + (["always"] if len(self.tools) > 0 else []) + [f['function']['name'] for f in self.tools]
+            assert_type_value(obj=response_type, type_or_value=response_choices, name="argument 'response_type'")
+            assert_log(expression=response_type != "none" or reset_context or text is not None, message="A prompt must either alter the context or trigger a chat completion.")
+        except BaseException:
+            self.is_prompting = False
+            self._completion_finished.set()
+            raise
+
+        if self._completion_interrupt_external.is_set():
+            self.is_prompting = False
+            self._completion_finished.set()
+            raise UnrecoverableError("Interrupted prompt via interrupt function.")
 
         # save context for resetting
-        if response_type != "none":
-            self.context_dump = copy.deepcopy(self.messages)
-            self.reset_context = reset_context
+        self.context_dump = copy.deepcopy(self.messages)
+        self.reset_context = reset_context
 
         # set context
         if reset_context or text is not None:
@@ -2161,9 +2196,9 @@ class ChatCompletionsBase(ClientBase):
                     else:
                         awaited_tools = self.get_awaited_tools()[2]
                         if len(awaited_tools) > 0:
-                            self.new_messages.append({'role': "tool", 'tool_call_id': awaited_tools[0], 'content': text})
+                            self.new_messages.append({'role': "tool", 'tool_call_id': awaited_tools[0], 'content': item})
                         else:
-                            self.new_messages.append({'role': "user", 'content': [{'type': "text", 'text': text}]})
+                            self.new_messages.append({'role': "user", 'content': [{'type': "text", 'text': item}]})
             elif reset_context:
                 self.new_messages = [{'role': "user", 'content': [{'type': "text", 'text': text}]}]
             else:
@@ -2174,42 +2209,73 @@ class ChatCompletionsBase(ClientBase):
                     self.new_messages = [{'role': "user", 'content': [{'type': "text", 'text': text}]}]
             success, message = self.set_context(mode="reset" if reset_context else "insert", messages=self.new_messages, index=0, reverse_indexing=True)
             if success:
+                if self._completion_interrupt_external.is_set():
+                    self.messages = self.context_dump
+                    self.is_prompting = False
+                    self._completion_finished.set()
+                    raise UnrecoverableError("Interrupted prompt via interrupt function.")
                 if response_type == "none":
+                    self.is_prompting = False
+                    self._completion_finished.set()
                     return True, message, None
             else:
+                self.is_prompting = False
+                self._completion_finished.set()
                 raise UnrecoverableError(message)
         else:
             self.new_messages = []
 
-        # prevent completion while a tool response is waited (OpenAI allows this actually)
+        # prevent completion while a tool response is awaited (OpenAI allows this actually)
         awaited_tools = self.get_awaited_tools()[2]
         num_awaited = len(awaited_tools)
         if num_awaited > 0:
-            if reset_context or text is not None:
-                self._logger.debug("Restoring original context.")
+            if self.messages != self.context_dump:
                 self.messages = self.context_dump
+                self._logger.info("Restored original context after attempt to trigger completion with awaited tools.")
             message = f"Cannot trigger completion while '{num_awaited}' tool response{' is' if num_awaited == 1 else 's are'} awaited: {awaited_tools}"
+            self.is_prompting = False
+            self._completion_finished.set()
             raise UnrecoverableError(message)
 
         # prevent completion when context is empty
         if len(self.messages) == 0:
-            if reset_context or text is not None:
-                self._logger.debug("Restoring original context.")
+            if self.messages != self.context_dump:
                 self.messages = self.context_dump
+                self._logger.info("Restored original context after attempt to trigger completion with empty context.")
             message = "Cannot trigger completion when context is empty."
+            self.is_prompting = False
+            self._completion_finished.set()
             raise UnrecoverableError(message)
 
         success, message = self.set_context(mode="reset", messages=self.messages, index=0, reverse_indexing=True)
         if not success:
-            if reset_context or text is not None:
-                self._logger.debug("Restoring original context.")
+            if self.messages != self.context_dump:
                 self.messages = self.context_dump
+                self._logger.info("Restored original context after failed attempt to set context.")
+            self.is_prompting = False
+            self._completion_finished.set()
             # raise UnrecoverableError(message) # failure cause can be syntax error, which is not resolvable via retry
             return False, message, None # failure cause can be failed download, which is resolvable via retry
 
-        self.log_prompt(mode="reset" if reset_context else "add", response_type=response_type)
+        self.log_prompt(mode="reset" if reset_context else "add", response_type=response_type, num_added=len(self.new_messages))
 
-        response = self.generate_completion(response_type)
+        try:
+            response = self.generate_completion(response_type)
+            if self._completion_interrupt_external.is_set():
+                raise UnrecoverableError("Interrupted prompt via interrupt function.")
+        except BaseException as e:
+            self._completion_cancel.set()
+            if self.messages != self.context_dump:
+                self.messages = self.context_dump
+                message = str(e)
+                if len(message) > 0:
+                    self._logger.info(f"Restored original context after receiving '{type(e).__name__}': {message}")
+                else:
+                    self._logger.info(f"Restored original context after receiving '{type(e).__name__}'.")
+            raise
+        finally:
+            self._completion_finished.set()
+            self.is_prompting = False
 
         return response
 
@@ -2219,28 +2285,28 @@ class ChatCompletionsBase(ClientBase):
             self._logger.info(message)
             return True, message
 
-        def send_external():
-            # keep trying until is_prompting is cleared
-            while self.is_prompting:
-                from multiprocessing.connection import wait
-                try:
-                    ready = wait([self.pipe[0]], timeout=0.01)
-                    if ready:
-                        self.pipe[0].send("EXTERNAL")
-                except (BrokenPipeError, OSError):
-                    break  # receiver gone
-                self._logger.debug("Waiting until completion is interrupted.", throttle=1.0, skip_first=True)
-                time.sleep(0.005)
-
         self._logger.info("Interrupting completion.")
 
-        tic = time.perf_counter()
-        thread = threading.Thread(target=send_external, daemon=True)
-        thread.start()
-        thread.join()  # wait until is_prompting becomes False
-        toc = time.perf_counter()
+        stamp = time.perf_counter()
 
-        message = f"Interrupted completion after '{toc - tic:.3f}s'."
+        self._completion_interrupt_external.set()
+        self._completion_cancel.set()
+
+        if self.completion_response is not None:
+            try:
+                self.completion_response.close()
+            except Exception as e:
+                self._logger.warn(f"Failed to close HTTP response while interrupting completion: {repr(e)}")
+
+        while not self._completion_finished.wait(timeout=0.05):
+            self._logger.debug("Waiting until completion is interrupted.", throttle=1.0, skip_first=True)
+            duration = time.perf_counter() - stamp
+            if duration > 5.0:
+                message = f"Failed to interrupt completion after '{duration:.3f}s'."
+                self._logger.error(message)
+                return False, message
+
+        message = f"Interrupted completion after '{time.perf_counter() - stamp:.3f}s'."
         self._logger.info(message)
 
         return True, message
@@ -2262,15 +2328,19 @@ class ChatCompletionsBase(ClientBase):
         assert_type_value(obj=index, type_or_value=int, name="argument 'index'")
         assert_type_value(obj=reverse_indexing, type_or_value=bool, name="argument 'reverse_indexing'")
 
+        num_old_messages = len(self.messages)
+        num_new_messages = len(messages)
+
         if mode == "reset":
-            if len(messages) > 0:
+
+            if num_new_messages > 0:
                 messages_before = copy.deepcopy(self.messages)
-            if len(self.messages) == 0:
+            if num_old_messages == 0:
                 message = "Kept empty context."
             else:
                 self.messages = []
                 message = "Cleared context."
-            if len(messages) == 0:
+            if num_new_messages == 0:
                 success = True
             else:
                 for i, msg in enumerate(messages):
@@ -2279,20 +2349,20 @@ class ChatCompletionsBase(ClientBase):
                         msg = self.encode_files(msg)
                     except CustomException as e:
                         success = False
-                        message = f"Failed to construct context at message {format_obj(msg)} (index '{i}'): {e}"
+                        message = f"Restored original context after failure to construct new context at message {format_obj(msg)} (index '{i}'): {e}"
                         self.messages = messages_before
                         return success, message
                     self.messages.append(msg)
                 success = True
-                message = f"Set new context with '{len(self.messages)}' message{'' if len(self.messages) == 1 else 's'}."
+                message = f"Set new context with '{num_new_messages}' message{'' if num_new_messages == 1 else 's'}."
 
         elif mode == "insert":
-            if len(messages) == 0:
+            if num_new_messages == 0:
                 success = False
                 message = "Cannot insert messages into context without providing one."
                 return success, message
             if reverse_indexing:
-                i = len(self.messages) - index
+                i = num_old_messages - index
             else:
                 i = index
 
@@ -2310,26 +2380,29 @@ class ChatCompletionsBase(ClientBase):
                     return success, message
                 self.messages.append(msg)
             success = True
-            message = f"Inserted '{len(messages)}' message{'' if len(messages) == 1 else 's'} into context."
+            if i == num_old_messages:
+                message = f"Appended '{num_new_messages}' message{'' if num_new_messages == 1 else 's'} to context."
+            else:
+                message = f"Inserted '{num_new_messages}' message{'' if num_new_messages == 1 else 's'} into context."
 
         elif mode == "replace":
-            if len(messages) == 0:
+            if num_new_messages == 0:
                 success = False
                 message = "Cannot replace message in context without providing one."
                 return success, message
             if reverse_indexing:
-                i = len(self.messages) - index - 1
+                i = num_old_messages - index - 1
             else:
                 i = index
-            if i < 0 or i > len(self.messages) - 1:
+            if i < 0 or i > num_old_messages - 1:
                 success = False
-                message = f"Cannot replace message at index '{i}' in context containing '{len(self.messages)}' message{'' if len(self.messages) == 1 else 's'}."
+                message = f"Cannot replace message at index '{i}' in context containing '{num_old_messages}' message{'' if num_old_messages == 1 else 's'}."
                 return success, message
 
             messages_before = copy.deepcopy(self.messages)
 
             self.messages = []
-            for i, msg in enumerate(messages_before[:i] + messages + messages_before[i + len(messages):]):
+            for i, msg in enumerate(messages_before[:i] + messages + messages_before[i + num_new_messages:]):
                 try:
                     self.check_message_validity(msg)
                     msg = self.encode_files(msg)
@@ -2342,18 +2415,18 @@ class ChatCompletionsBase(ClientBase):
             success = True
             added = len(self.messages) - len(messages_before)
             if added == 0:
-                message = f"Replaced '{len(messages)}' message{'' if len(messages) == 1 else 's'} in context."
+                message = f"Replaced '{num_new_messages}' message{'' if num_new_messages == 1 else 's'} in context."
             else:
-                message = f"Replaced '{len(messages) - added}' and added '{added}' message{'' if added == 1 else 's'} to context."
+                message = f"Replaced '{num_new_messages - added}' and added '{added}' message{'' if added == 1 else 's'} to context."
 
         elif mode == "remove":
             if reverse_indexing:
-                i = len(self.messages) - index - 1
+                i = num_old_messages - index - 1
             else:
                 i = index
-            if i < 0 or i > len(self.messages) - 1:
+            if i < 0 or i > num_old_messages - 1:
                 success = False
-                message = f"Cannot remove message '{i}' from context containing '{len(self.messages)}' message{'' if len(self.messages) == 1 else 's'}."
+                message = f"Cannot remove message '{i}' from context containing '{num_old_messages}' message{'' if num_old_messages == 1 else 's'}."
                 return success, message
 
             messages_before = copy.deepcopy(self.messages)

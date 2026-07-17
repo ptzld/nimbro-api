@@ -11,7 +11,7 @@ license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 requires-python = ">=3.9"
 dependencies = [
-    "requests>=2.31.0",
+    "httpx>=0.23.0,<1",
 ]
 
 authors = [
@@ -44,6 +44,7 @@ classifiers = [
 
 [project.optional-dependencies]
 fast = [
+    "httpx[http2]>=0.23.0,<1",
     "orjson",
     "pybase64",
 ]
@@ -53,6 +54,7 @@ visual = [
     "opencv-python",
 ]
 full = [
+    "httpx[http2]>=0.23.0,<1",
     "orjson",
     "pybase64",
     "numpy",
