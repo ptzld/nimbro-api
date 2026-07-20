@@ -8,6 +8,7 @@ default_settings = {
     'logger_line_length': None,
     'logger_multi_line_prefix': False,
     'logger_object_cutoff': 3000,
+    'http_use_http2': False,
     'http_follow_redirects': False,
     'http_max_connections': None,
     'http_max_keepalive_connections': 100,
@@ -65,6 +66,8 @@ class Core(Client):
                 Maximum number of characters beyond which objects formatted
                 with `nimbro_api.utilities.format_obj()` are replaced by a placeholder.
                 Use `None` to apply no restriction.
+            http_use_http2 (bool):
+                Use HTTP/2 if the required dependencies are available and if the server supports it.
             http_follow_redirects (bool):
                 Follow HTTP redirect responses when sending requests.
             http_max_connections (int | None):

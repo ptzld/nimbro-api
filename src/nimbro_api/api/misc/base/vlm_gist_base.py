@@ -889,7 +889,7 @@ class VlmGistBase(ClientBase):
         # extract batch results
         successes = [item['run']['success'] for item in items]
         failures = len(items) - sum(successes)
-        failure_messages = [item['run']['message'] for item in items if not item['run']['success']]
+        failure_messages = [f"Failed in choice '{i + 1}' of '{num_results}' after '{item['run']['duration']:.3f}s': {item['run']['message']}" for i, item in enumerate(items) if not item['run']['success']]
         if failures == 1:
             failure_messages = failure_messages[0]
         success = failures == 0

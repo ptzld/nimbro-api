@@ -9,7 +9,7 @@ from queue import SimpleQueue, Empty
 
 from ..client import ClientBase
 from ..utility.misc import UnrecoverableError, assert_type_value, assert_log
-from ..utility.api import _http2_available, _reload_httpx_settings
+from ..utility.api import _HTTP2_AVAILABLE, _reload_httpx_settings
 from ..utility import misc
 
 class CoreBase(ClientBase):
@@ -20,10 +20,6 @@ class CoreBase(ClientBase):
         self._defer_queue = SimpleQueue()
         self._defer_timer = None
         atexit.register(self.execute_deferred_jobs)
-        if _http2_available:
-            self._logger.debug("HTTP/2 is available.")
-        else:
-            self._logger.debug("HTTP/2 is not available. Install 'httpx[http2]' (pip install httpx[http2]) to support HTTP/2.")
         self._logger.debug("Core initialized.")
         self._initialized = True
 
@@ -45,6 +41,7 @@ class CoreBase(ClientBase):
             assert_log(expression=settings['logger_object_cutoff'] >= 0, message=f"Expected setting 'logger_object_cutoff' to be non-negative but got '{settings['logger_object_cutoff']}'.")
 
         # http
+        assert_type_value(obj=settings['http_use_http2'], type_or_value=bool, name="setting 'http_use_http2'")
         assert_type_value(obj=settings['http_follow_redirects'], type_or_value=bool, name="setting 'http_follow_redirects'")
         assert_type_value(obj=settings['http_max_connections'], type_or_value=[int, None], name="setting 'http_max_connections'")
         if isinstance(settings['http_max_connections'], int):
@@ -84,8 +81,18 @@ class CoreBase(ClientBase):
         self._logger_settings['logger_mute'] = settings['logger_mute']
         self._logger_settings['logger_line_length'] = settings['logger_line_length']
         self._logger_settings['logger_multi_line_prefix'] = settings['logger_multi_line_prefix']
+
+        # govern http2
+        if settings['http_use_http2']:
+            if _HTTP2_AVAILABLE:
+                self._logger.debug("HTTP/2 is available.")
+            else:
+                settings['http_use_http2'] = False
+                self._logger.warn("HTTP/2 is not available. Install 'httpx[http2]' (pip install httpx[http2]) to support HTTP/2.")
+
+        # reload httpx client
         if self._initialized:
-            for name in ['http_follow_redirects', 'http_max_connections', 'http_max_keepalive_connections', 'http_keepalive_expiry']:
+            for name in ['http_use_http2', 'http_follow_redirects', 'http_max_connections', 'http_max_keepalive_connections', 'http_keepalive_expiry']:
                 if self._settings[name] != settings[name]:
                     self._logger.debug("Reloading httpx client after relevant setting changed.")
                     _reload_httpx_settings()

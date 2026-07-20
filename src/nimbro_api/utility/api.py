@@ -13,7 +13,7 @@ from .misc import UnrecoverableError, assert_type_value, assert_keys, assert_log
 
 # internal
 
-_http2_available = importlib.util.find_spec("h2") is not None
+_HTTP2_AVAILABLE = importlib.util.find_spec("h2") is not None
 
 class _HttpxStreamResponse:
     """
@@ -49,7 +49,7 @@ class _HttpxStreamResponse:
         if self._iterator is None:
             self._iterator = self._response.aiter_bytes()
 
-        return await self._iterator.__anext__()
+        return await anext(self._iterator)
 
     def _next(self):
         with self._lock:
@@ -67,9 +67,9 @@ class _HttpxStreamResponse:
                 future,
                 cancel_event=self._cancel_event
             )
-        except StopAsyncIteration:
+        except StopAsyncIteration as exc:
             self._finished = True
-            raise StopIteration
+            raise StopIteration from exc
         finally:
             with self._lock:
                 if self._future is future:
@@ -167,7 +167,7 @@ class _HttpxRunner:
             settings = nimbro_api.get_settings()
             self._client = httpx.AsyncClient(
                 follow_redirects=settings['http_follow_redirects'],
-                http2=_http2_available,
+                http2=settings['http_use_http2'],
                 limits=httpx.Limits(
                     max_connections=settings['http_max_connections'],
                     max_keepalive_connections=settings['http_max_keepalive_connections'],
@@ -189,11 +189,9 @@ class _HttpxRunner:
                     continue
                 try:
                     return future.result()
-                except concurrent.futures.CancelledError:
+                except concurrent.futures.CancelledError as exc:
                     if cancel_event is not None and cancel_event.is_set():
-                        raise HttpRequestCancelled(
-                            "HTTP request was cancelled."
-                        )
+                        raise HttpRequestCancelled("HTTP request was cancelled.") from exc
                     raise
         except BaseException:
             if not future.cancel():
@@ -394,30 +392,30 @@ class _HttpxRunner:
             except Exception:
                 pass
 
-_httpx_runner = None
-_httpx_runner_lock = threading.Lock()
+_HTTPX_RUNNER = None
+_HTTPX_RUNNER_LOCK = threading.Lock()
 
 def _get_httpx_runner():
-    global _httpx_runner
+    global _HTTPX_RUNNER
 
     pid = os.getpid()
 
-    with _httpx_runner_lock:
-        if _httpx_runner is None or _httpx_runner._pid != pid:
-            _httpx_runner = _HttpxRunner()
+    with _HTTPX_RUNNER_LOCK:
+        if _HTTPX_RUNNER is None or _HTTPX_RUNNER._pid != pid:
+            _HTTPX_RUNNER = _HttpxRunner()
 
-    return _httpx_runner
+    return _HTTPX_RUNNER
 
 def _close_httpx_runner():
-    global _httpx_runner
+    global _HTTPX_RUNNER
 
-    if _httpx_runner is not None and _httpx_runner._pid == os.getpid():
-        _httpx_runner.close()
-        _httpx_runner = None
+    if _HTTPX_RUNNER is not None and _HTTPX_RUNNER._pid == os.getpid():
+        _HTTPX_RUNNER.close()
+        _HTTPX_RUNNER = None
 
 def _reload_httpx_settings():
-    with _httpx_runner_lock:
-        runner = _httpx_runner
+    with _HTTPX_RUNNER_LOCK:
+        runner = _HTTPX_RUNNER
     if runner is not None and runner._pid == os.getpid():
         runner.reload_client()
 
