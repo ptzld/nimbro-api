@@ -1343,7 +1343,11 @@ class ChatCompletionsBase(ClientBase):
             else:
                 self._logger.debug("Cancelled completion after HTTP request was interrupted.")
         except Exception as e:
-            message = f"Failed to POST request: {repr(e)}"
+            message = str(e)
+            if len(message) == 0:
+                message = f"Failed to POST request: {type(e).__name__}."
+            else:
+                message = f"Failed to POST request: {repr(e)}."
             pipe[1].send({'code': "ERROR", 'content': message})
 
         else:
@@ -1501,7 +1505,11 @@ class ChatCompletionsBase(ClientBase):
                 else:
                     self._logger.debug("Cancelled completion after HTTP request was interrupted.")
             except Exception as e:
-                message = f"Error while receiving completion: {repr(e)}."
+                message = str(e)
+                if len(message) == 0:
+                    message = f"Error while receiving completion: {type(e).__name__}."
+                else:
+                    message = f"Error while receiving completion: {repr(e)}."
                 pipe[1].send({'code': "ERROR", 'content': message})
             finally:
                 completion.close()
