@@ -854,7 +854,7 @@ class VlmGistBase(ClientBase):
         # execute sequential branches
         success, message, branch_base = self.read_image(image=image, settings=settings, data=branch_base, stamp_global=stamp_global)
         if not success:
-            items = [branch_base]
+            items = [copy.deepcopy(branch_base) for _ in range(num_results)]
         else:
             if scene_choices > 1:
                 success, message, scene_branches = self.generate_scene_description(data=branch_base, settings=settings, is_worker=True, stamp_global=stamp_global, choices=scene_choices)
@@ -864,7 +864,10 @@ class VlmGistBase(ClientBase):
             items = []
             for scene_branch in scene_branches:
                 if scene_branch['run'].get('success') is False:
-                    items.append(scene_branch)
+                    items.extend(
+                        copy.deepcopy(scene_branch)
+                        for _ in range(structured_choices)
+                    )
                     continue
                 if structured_choices > 1:
                     success, message, structured_branches = self.generate_structured_description(data=scene_branch, settings=settings, is_worker=True, stamp_global=stamp_global, choices=structured_choices)
@@ -991,7 +994,7 @@ class VlmGistBase(ClientBase):
                 success, message, completions = self.split_completion(completion=completion, choices=choices, name="scene description")
                 if not success:
                     success, message, data = self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-                    return success, message, [data]
+                    return success, message, [copy.deepcopy(data) for _ in range(choices)]
                 del data['scene_description']['completion']
                 branches = [None] * choices
                 num_success = 0
@@ -1040,7 +1043,7 @@ class VlmGistBase(ClientBase):
 
         if choices > 1:
             success, message, data = self.consolidate_error(key='scene_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-            return success, message, [data]
+            return success, message, [copy.deepcopy(data) for _ in range(choices)]
 
         return self.consolidate_error(key='scene_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
@@ -1160,7 +1163,7 @@ class VlmGistBase(ClientBase):
                 success, message, completions = self.split_completion(completion=completion, choices=choices, name="structured description")
                 if not success:
                     success, message, data = self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-                    return success, message, [data]
+                    return success, message, [copy.deepcopy(data) for _ in range(choices)]
                 del data['structured_description']['completion']
                 branches = [None] * choices
                 num_success = 0
@@ -1211,7 +1214,7 @@ class VlmGistBase(ClientBase):
 
         if choices > 1:
             success, message, data = self.consolidate_error(key='structured_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-            return success, message, [data]
+            return success, message, [copy.deepcopy(data) for _ in range(choices)]
 
         return self.consolidate_error(key='structured_description', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
 
