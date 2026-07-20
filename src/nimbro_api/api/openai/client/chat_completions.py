@@ -83,7 +83,7 @@ class ChatCompletions(Client):
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing OpenAI's v1 Chat Completions API (https://platform.openai.com/docs/api-reference/chat).
+        Create a client implementing OpenAI's v1 Chat Completions API (https://platform.openai.com/docs/api-reference/chat).
 
         Args:
             settings (dict | None, optional):
@@ -236,7 +236,7 @@ class ChatCompletions(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -257,10 +257,10 @@ class ChatCompletions(Client):
         Args:
             age (float | int | None, optional):
                 The time in seconds permitted for cached responses to this request being reused instead of sending a new one.
-                Use `None` to always reuse cached responses regardless of age, or 0 to force a new request. Defaults to 0,
+                Use `None` to always reuse cached responses regardless of age, or 0 to force a new request. Defaults to 0.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -303,7 +303,7 @@ class ChatCompletions(Client):
                 Defaults to `auto`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -326,15 +326,6 @@ class ChatCompletions(Client):
         """
         Interrupt an ongoing assistant response.
 
-        Args:
-            **kwargs:
-                All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
-                    persist (bool):
-                        If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
-                    mute (bool):
-                        If `True`, all logs emitted by this function are muted. Defaults to `False`.
-
         Returns:
             tuple[bool, str]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
@@ -349,7 +340,7 @@ class ChatCompletions(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -374,7 +365,7 @@ class ChatCompletions(Client):
             mode (str, optional):
                 Determines how the context is edited:
                 - "reset": Clear the entire context and replace it by `messages`, if provided.
-                - "insert": Insert `messages` at the specified `index`. Use `index` 0 with `indexing_last_to_first` to append.
+                - "insert": Insert `messages` at the specified `index`. Use `index` 0 with `reverse_indexing` to append.
                 - "replace": Replace context message(s) starting at `index` by `messages`, where exceeding messages are appended.
                 - "remove": Remove context message at `index` from context.
                 Defaults to `reset`.
@@ -386,14 +377,14 @@ class ChatCompletions(Client):
                 Specifies whether `index` 0 points to the last (newest) or first (oldest) message in context.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
                         If `True`, all logs emitted by this function are muted. Defaults to `False`.
 
         Returns:
-            tuple[bool, str, list[str] | None]: A tuple containing:
+            tuple[bool, str]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
 
@@ -419,7 +410,7 @@ class ChatCompletions(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -447,7 +438,7 @@ class ChatCompletions(Client):
                 Passing `None` is interpreted as passing an empty `list`. Defaults to `None`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -484,7 +475,7 @@ class ChatCompletions(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):

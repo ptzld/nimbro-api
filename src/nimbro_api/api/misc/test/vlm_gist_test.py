@@ -172,7 +172,7 @@ def assert_result(success, message, result, settings):
                     if settings[key]['track']:
                         assert_log(expression='duration_init' in result[key], message="Expected key 'duration_init' in key 'segmentation' in result because setting 'track' is 'True'.")
                         assert_type_value(obj=result[key]['duration_init'], type_or_value=float, name="key 'duration_init' in key 'segmentation' in result")
-                        assert_log(expression=result[key]['duration_init'] > 0, message=f"Expected key 'duration_init' in key 'segmentation' in result to be greater zero but got '{result[key]['duration_init']}'.")
+                        assert_log(expression=result[key]['duration_init'] > 0, message=f"Expected key 'duration_init' in key 'segmentation' in result to be greater than zero but got '{result[key]['duration_init']}'.")
                     else:
                         assert_log(expression='duration_init' not in result[key], message="Expected key 'duration_init' not in key 'segmentation' in result because setting 'track' is 'False'.")
                     for i, item in enumerate(result[key]['data']):

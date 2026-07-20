@@ -101,7 +101,7 @@ class SpeechBase(ClientBase):
         if settings['timeout_connect'] is not None:
             assert_log(
                 expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater zero but got '{settings['timeout_connect']}'."
+                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
@@ -109,7 +109,7 @@ class SpeechBase(ClientBase):
         if settings['timeout_read'] is not None:
             assert_log(
                 expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater zero but got '{settings['timeout_read']}'."
+                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
             )
 
         # cache_folder
@@ -244,7 +244,7 @@ class SpeechBase(ClientBase):
                                     raise NotImplementedError(f"Unknown encoding '{self._settings['return_encoding']}'.")
         return None
 
-    def cache_speech(self, job):
+    def cache_speech(self, **job):
         # validate job
         try:
             assert_keys(obj=job, keys=['type', 'folder', 'index', 'file', 'endpoint', 'model', 'voice', 'instructions', 'speed', 'text', 'speech'], mode="match", name="job")
@@ -310,7 +310,7 @@ class SpeechBase(ClientBase):
         # add data to cache-index
         if success:
             try:
-                assert_type_value(obj=cache, type_or_value=dict, name="cache-index'")
+                assert_type_value(obj=cache, type_or_value=dict, name="cache-index")
 
                 if job['endpoint'] in cache:
                     assert_type_value(obj=cache[job['endpoint']], type_or_value=dict, name=f"value of cache-index key '{job['endpoint']}'")

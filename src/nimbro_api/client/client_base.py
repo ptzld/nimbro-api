@@ -485,9 +485,8 @@ class ClientBase:
                                 else:
                                     message = f"Unrecoverable error while reverting settings after '{function.__name__}()' after attempt '{attempt}': {e}"
                                 self._logger.error(message)
-                                # response = False, message, *[None] * responses
-                                response[0] = False
-                                response[1] = message
+                                # Preserve the function payloads; only the response status and message change.
+                                response = False, message, *response[2:]
                             else:
                                 if attempt == 1:
                                     message = f"Unrecoverable error while reverting settings after '{function.__name__}()' during initialization: {e}"
@@ -502,9 +501,8 @@ class ClientBase:
                                 else:
                                     message = f"Unexpected error while reverting settings after '{function.__name__}()' after attempt '{attempt}':\n{traceback.format_exc()}"
                                 self._logger.fatal(message)
-                                # response = False, message, *[None] * responses
-                                response[0] = False
-                                response[1] = message
+                                # Preserve the function payloads; only the response status and message change.
+                                response = False, message, *response[2:]
                             else:
                                 if attempt == 1:
                                     message = f"Unexpected error while reverting settings after '{function.__name__}()' during initialization:\n{traceback.format_exc()}"
@@ -548,9 +546,8 @@ class ClientBase:
                                 else:
                                     message = f"Failed to revert settings after '{function.__name__}()' after attempt '{attempt}': {message}"
                                 self._logger.error(message)
-                                # response = False, message, *[None] * responses
-                                response[0] = False
-                                response[1] = message
+                                # Preserve the function payloads; only the response status and message change.
+                                response = False, message, *response[2:]
                             else:
                                 if attempt == 1:
                                     message = f"Failed to revert settings after '{function.__name__}()' during initialization: {message}"
@@ -575,7 +572,7 @@ class ClientBase:
         return response
 
     def get_settings(self, name):
-        """f
+        """
         Retrieve all current settings or a specific one.
 
         Args:
@@ -625,9 +622,6 @@ class ClientBase:
             mode (str):
                 Signals where this function is used and configures the logging messages it emits.
                 Must be in `["set", "temp", "revert", "reset"]`. Defaults to "set".
-            **kwargs:
-                All settings (see `get_settings()`) can also be configured via keyword arguments.
-                When doing so, 'settings' must be `None` or an empty `dict`.
 
         Returns:
             tuple[bool, str]: A tuple containing:

@@ -681,7 +681,7 @@ class VlmGistBase(ClientBase):
                     for i, item in enumerate(data[name]['logs']):
                         assert_type_value(obj=item, type_or_value=str, name=f"log '{i}' in '{name}'")
                 if 'duration' in data[name]:
-                    assert_log(expression=data[name]['duration'] > 0, message=f"Expected value of key 'duration' in argument '{name}' provided as 'dict' to be greater zero but got '{data[name]['duration']}s'.")
+                    assert_log(expression=data[name]['duration'] > 0, message=f"Expected value of key 'duration' in argument '{name}' provided as 'dict' to be greater than zero but got '{data[name]['duration']}'.")
             else:
                 data[name] = {'success': None, 'logs': ["Provided from argument without metadata."], 'data': arg}
 
@@ -932,11 +932,11 @@ class VlmGistBase(ClientBase):
             width = image.get('width', 1)
             assert_type_value(obj=width, type_or_value=int, name="key 'width' in image provided as 'dict'")
             assert_log(expression=not isinstance(width, bool), message="Expected value of key 'width' in image provided as 'dict' to be of type 'int' but got 'bool'.")
-            assert_log(expression=width > 0, message=f"Expected value of key 'width' in image provided as 'dict' to greater zero but got '{width}'.")
+            assert_log(expression=width > 0, message=f"Expected value of key 'width' in image provided as 'dict' to be greater than zero but got '{width}'.")
             height = image.get('height', 1)
             assert_type_value(obj=height, type_or_value=int, name="key 'height' in image provided as 'dict'")
             assert_log(expression=not isinstance(height, bool), message="Expected value of key 'height' in image provided as 'dict' to be of type 'int' but got 'bool'.")
-            assert_log(expression=height > 0, message=f"Expected value of key 'height' in image provided as 'dict' to greater zero but got '{height}'.")
+            assert_log(expression=height > 0, message=f"Expected value of key 'height' in image provided as 'dict' to be greater than zero but got '{height}'.")
             metadata = copy.deepcopy(image)
             image = metadata.pop('data')
         else:
@@ -1203,7 +1203,7 @@ class VlmGistBase(ClientBase):
                 num_described = len(data['structured_description']['data'])
                 if settings['structured_description']['message_process']:
                     if settings['structured_description']['message_results'] and num_described > 0:
-                        self._logger.info(f"Generated structured description with '{num_described}' object{'' if num_described == 1 else 's'}in '{data['structured_description']['duration']:.3f}s': '\n{json.dumps(data['structured_description']['data'], indent=4)}'")
+                        self._logger.info(f"Generated structured description with '{num_described}' object{'' if num_described == 1 else 's'} in '{data['structured_description']['duration']:.3f}s': '\n{json.dumps(data['structured_description']['data'], indent=4)}'.")
                     else:
                         self._logger.info(f"Generated structured description with '{num_described}' object{'' if num_described == 1 else 's'} in '{data['structured_description']['duration']:.3f}s'.")
                 else:

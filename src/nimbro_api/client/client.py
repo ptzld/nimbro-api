@@ -32,7 +32,7 @@ class Client:
             UnrecoverableError: If 'client_base' is not a subclass of `ClientBase` or if initializing it fails.
         """
         assert_type_value(obj=client_base, type_or_value=type, name="argument 'client_base'")
-        assert_log(expression=issubclass(client_base, ClientBase), message="Expected value of argument 'ClientBase' to be a subclass of 'ClientBase'.")
+        assert_log(expression=issubclass(client_base, ClientBase), message="Expected value of argument 'client_base' to be a subclass of 'ClientBase'.")
         if default_settings is None:
             default_settings = {
                 'logger_severity': None,
@@ -104,7 +104,7 @@ class Client:
     #             A non-negative number sent to the API.
     #         **kwargs:
     #             All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-    #             Additionally, special keyword arguments can be passes to `wrap()`:
+    #             Additionally, special keyword arguments can be passed to `wrap()`:
     #                 persist (bool):
     #                     If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
     #                 mute (bool):

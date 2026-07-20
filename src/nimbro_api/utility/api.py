@@ -529,7 +529,9 @@ def validate_endpoint(endpoint, *, flavors, require_key, require_name, setting_n
         UnrecoverableError: If input arguments are invalid or if 'endpoint' violates any constraint.
 
     Notes:
-        - Required keys always include "api_url", "key_type", and "key_value".
+        - The required key is always "api_url".
+        - "key_type" and "key_value" are required when argument 'require_key' is `True`.
+        - "name" is required when argument 'require_name' is `True`.
         - If argument 'flavors' is provided and non-empty, "api_flavor" is also required and it's value must be in 'flavors'.
         - The only permitted optional key is "models_url".
         - All keys and values in 'endpoint' must be non-empty strings, except the value of key "key_value", which can be an empty string.
@@ -662,7 +664,7 @@ def post_request(api_name, api_url, *, headers, data, files=None, timeout="defau
     except Exception as e:
         duration = time.perf_counter() - tic
         success = False
-        message = f"Failed to receive response from {api_name} '{api_url}' after '{duration:.3f}s': {repr(e)}"
+        message = f"Failed to receive response from {api_name} '{api_url}' after '{duration:.3f}s': {repr(e)}."
         response = None
     else:
         duration = time.perf_counter() - tic
@@ -729,7 +731,7 @@ def get_request(api_name, api_url, *, headers, timeout="default", logger=None):
     except Exception as e:
         duration = time.perf_counter() - tic
         success = False
-        message = f"Failed to receive response from {api_name} '{api_url}' after '{duration:.3f}s': {repr(e)}"
+        message = f"Failed to receive response from {api_name} '{api_url}' after '{duration:.3f}s': {repr(e)}."
         response = None
     else:
         duration = time.perf_counter() - tic
@@ -828,7 +830,7 @@ def http_request(method, api_url, *, headers, json=None, data=None, files=None, 
     except BaseException as e:
         duration = time.perf_counter() - tic
         if logger is not None:
-            logger.debug(f"Failed to receive {method} response from '{api_url}' after '{duration:.3f}s': {repr(e)}")
+            logger.debug(f"Failed to receive {method} response from '{api_url}' after '{duration:.3f}s': {repr(e)}.")
         raise
 
     duration = time.perf_counter() - tic

@@ -27,7 +27,7 @@ class No(Client):
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing the no-as-a-service API (https://github.com/hotheadhacker/no-as-a-service).
+        Create a client implementing the no-as-a-service API (https://github.com/hotheadhacker/no-as-a-service).
 
         Args:
             settings (dict | None, optional):
@@ -110,14 +110,14 @@ class No(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
                         If `True`, all logs emitted by this function are muted. Defaults to `False`.
 
         Returns:
-            tuple[bool, str, list[str] | None]: A tuple containing:
+            tuple[bool, str, str | None]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
                 - str | None: A no response (`str`), or `None` if not successful.

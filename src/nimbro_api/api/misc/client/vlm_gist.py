@@ -50,7 +50,7 @@ default_settings = {
             "Explicitly include each object instance without exception as an individual list element. "
             "Never group multiple instances that are clearly distinct from one another. "
             "Each list element must be a dictionary with the fields label, description, and box_2d. "
-            "The key label must specify the general object category or class (one or two words), so that similar objects across multiple images can be grouped by it."
+            "The key label must specify the general object category or class (one or two words), so that similar objects across multiple images can be grouped by it. "
             "The key description must contain an analysis of the object comprising at least ten and no more than twenty sentences that describe its properties (type, brand, model, state, function, etc.), appearance (material, design, color, texture, wear, labels, writing, etc.), and relation to other objects (position, orientation, attachment, proximity, etc.) in great detail. This description must be self-contained and not refer to any of the other descriptions, so that finding the corresponding object in the image is possible purely from reading it. "
             "The key box_2d must contain a bounding box of the object in [y_min, x_min, y_max, x_max] format normalized to pixel coordinates from 0 to 1000. "
             "Make sure to not ignore any object, do not forget any of the required keys, and follow the per-key instructions exactly. "
@@ -107,7 +107,7 @@ class VlmGist(Client):
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing VLM-GIST (https://arxiv.org/abs/2503.16538).
+        Create a client implementing VLM-GIST (https://arxiv.org/abs/2503.16538).
 
         Args:
             settings (dict | None, optional):
@@ -190,7 +190,7 @@ class VlmGist(Client):
                 Settings for the instance segmentation step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
                 - message_process (bool): Emit an info log before and after a segmentation step.
-                - message_re sults (bool): Include results in the logs emitted after a segmentation step.
+                - message_results (bool): Include results in the logs emitted after a segmentation step.
                 - track (bool): After initializing SAM2 with detections, run a second inference pass on the same image to obtain tracked masks. Must be `False` when 'skip' is `True`.
                 - sam2_realtime (dict): Settings forwarded to `Sam2Realtime`. See its `get_settings()`.
                 - allow_incomplete (bool): If `False`, returns an error or triggers a retry unless every detection is segmented.
@@ -257,6 +257,13 @@ class VlmGist(Client):
                 If `None`, visualizations are only returned and not written to disk. Defaults to `None`.
             vis_args (dict | None):
                 If provided, a dictionary with keyword arguments forwarded to `nimbro_api.utility.visual.visualize_detections`. Defaults to `None`.
+            **kwargs:
+                All settings (see `get_settings()`) can also be configured via keyword arguments from here.
+                Additionally, special keyword arguments can be passed to `wrap()`:
+                    persist (bool):
+                        If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
+                    mute (bool):
+                        If `True`, all logs emitted by this function are muted. Defaults to `False`.
 
         Raises:
             UnrecoverableError: If the visual dependencies (`cv2`, `numpy`) are not available.
@@ -281,7 +288,7 @@ class VlmGist(Client):
         Run VLM-GIST on an image.
 
         Args:
-            image (str | bytes | dict | list[str] | list[bytes], list[dict]):
+            image (str | bytes | dict | list[str] | list[bytes] | list[dict]):
                 The image file to be processed as a local path, URL, Base64 encoding (all `str`), raw `bytes`, or `list` thereof.
                 Images (`str` or `bytes`) can be embedded in a dictionary (`dict` or `list[dict]`), using the key 'data', allowing all other items to be included in the result.
             scene_description (str | dict | None, optional):
@@ -289,24 +296,23 @@ class VlmGist(Client):
                 If provided, requires generation of this step to be skipped (setting 'scene_description.skip'). Defaults to `None`.
             structured_description (list[dict] | dict | None, optional):
                 If provided, continues a partial result from a previous call to `run()`.
-                If provided, reequires generation of this step to be skipped (setting 'structured_description.skip'). Defaults to `None`.
+                If provided, requires generation of this step to be skipped (setting 'structured_description.skip'). Defaults to `None`.
             detection (list[dict] | dict | None, optional):
                 If provided, continues a partial result from a previous call to `run()`.
                 If provided, requires generation of this step to be skipped (setting 'detection.skip'). Defaults to `None`.
-
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
                         If `True`, all logs emitted by this function are muted. Defaults to `False`.
 
         Returns:
-            tuple[bool, str, list[str] | None]: A tuple containing:
+            tuple[bool, str, dict | None]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
-                - dict[str] | None: A dictionary (`dict`) containing the results, or `None` if not successful.
+                - dict | None: A dictionary (`dict`) containing the results, or `None` if not successful.
 
         Notes:
             - Structure of resulting dictionary:

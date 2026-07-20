@@ -102,7 +102,7 @@ def download_file(url, *, retry=1, name="file", logger=None):
                 logger.debug(_message)
             else:
                 logger.warn(_message)
-            return True, message, data
+        return True, message, data
 
 def read_json(file_path, *, bypass_orjson=False, name="file", logger=None):
     """
@@ -288,7 +288,7 @@ def read_as_b64(file_path, *, name="file", logger=None):
         tuple[bool, str, str | None]: A tuple containing:
             - bool: `True` if the operation succeeded, `False` otherwise.
             - str: A descriptive message about the operation result.
-            - str | None: Image encoded as Base64 string, or `None` if not successful.
+            - str | None: File encoded as a Base64 string, or `None` if not successful.
     """
     # parse arguments
     from nimbro_api.utility.logger import Logger
@@ -448,10 +448,10 @@ def parse_image_b64(image, *, logger=None):
         UnrecoverableError: If input arguments are invalid.
 
     Returns:
-        tuple[bool, str, str, str | None]: A tuple containing:
+            tuple[bool, str, str | None, str | None]: A tuple containing:
             - bool: `True` if the operation succeeded, `False` otherwise.
             - str: A descriptive message about the operation result.
-            - str: Image as Base64 encoded ASCII string, or `None` if not successful.
+            - str | None: Image as a Base64 encoded ASCII string, or `None` if not successful.
             - str | None: Original path or URL of the image if applicable and successful, otherwise `None`.
     """
     # parse arguments

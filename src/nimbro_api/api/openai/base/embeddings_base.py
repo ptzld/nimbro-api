@@ -31,7 +31,7 @@ class EmbeddingsBase(ClientBase):
 
         # logger_info_cutoff
         assert_type_value(obj=settings['logger_info_cutoff'], type_or_value=int, name="setting 'logger_info_cutoff'")
-        assert_log(expression=settings['logger_info_cutoff'] > 0, message=f"Expected setting 'logger_info_cutoff' to be greater zero but got '{settings['logger_info_cutoff']}'.")
+        assert_log(expression=settings['logger_info_cutoff'] > 0, message=f"Expected setting 'logger_info_cutoff' to be greater than zero but got '{settings['logger_info_cutoff']}'.")
 
         # endpoints
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
@@ -63,17 +63,18 @@ class EmbeddingsBase(ClientBase):
 
         # max_batch_size
         assert_type_value(obj=settings['max_batch_size'], type_or_value=[int, None], name="setting 'max_batch_size'")
-        assert_log(
-            expression=settings['max_batch_size'] > 0,
-            message=f"Expected setting 'max_batch_size' to be greater zero but got '{settings['max_batch_size']}'."
-        )
+        if isinstance(settings['max_batch_size'], int):
+            assert_log(
+                expression=settings['max_batch_size'] > 0,
+                message=f"Expected setting 'max_batch_size' to be greater than zero but got '{settings['max_batch_size']}'."
+            )
 
         # timeout_connect
         assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
         if settings['timeout_connect'] is not None:
             assert_log(
                 expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater zero but got '{settings['timeout_connect']}'."
+                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
@@ -81,7 +82,7 @@ class EmbeddingsBase(ClientBase):
         if settings['timeout_read'] is not None:
             assert_log(
                 expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater zero but got '{settings['timeout_read']}'."
+                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
             )
 
         # cache_folder
@@ -227,7 +228,7 @@ class EmbeddingsBase(ClientBase):
                             return embeddings
         return [None] * len(texts)
 
-    def cache_embeddings(self, job):
+    def cache_embeddings(self, **job):
         # validate job
         try:
             assert_keys(obj=job, keys=['type', 'folder', 'index', 'endpoint', 'model', 'texts', 'embeddings'], mode="match", name="job")
@@ -290,7 +291,7 @@ class EmbeddingsBase(ClientBase):
             max_embeddings_per_file = 200
 
             try:
-                assert_type_value(obj=cache, type_or_value=dict, name="cache-index'")
+                assert_type_value(obj=cache, type_or_value=dict, name="cache-index")
 
                 # extend incomplete structure of cache-index
                 if 'texts' in cache:

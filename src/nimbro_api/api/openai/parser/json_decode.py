@@ -9,7 +9,7 @@ def parse(self, success, message, completion):
     if 'text' in completion:
         if isinstance(completion['text'], str):
             json_obj = extract_json(completion['text'], first_over_longest=False)
-            if json_obj:
+            if json_obj is not None:
                 completion['text'] = json_obj
                 completion['logs'].append(f"Successfully decoded text-completion {format_obj(json_obj)} as JSON.")
                 self._logger.info(f"Successfully decoded text-completion as JSON: {format_obj(json_obj)}.")

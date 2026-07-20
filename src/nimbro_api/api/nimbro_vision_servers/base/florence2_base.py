@@ -96,7 +96,7 @@ class Florence2Base(ClientBase):
         if settings['timeout_connect'] is not None:
             assert_log(
                 expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater zero but got '{settings['timeout_connect']}'."
+                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
@@ -104,7 +104,7 @@ class Florence2Base(ClientBase):
         if settings['timeout_read'] is not None:
             assert_log(
                 expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater zero but got '{settings['timeout_read']}'."
+                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
             )
 
         # timeout_read_load
@@ -112,7 +112,7 @@ class Florence2Base(ClientBase):
         if settings['timeout_read_load'] is not None:
             assert_log(
                 expression=settings['timeout_read_load'] > 0.0,
-                message=f"Expected setting 'timeout_read_load' to be None or greater zero but got '{settings['timeout_read_load']}'."
+                message=f"Expected setting 'timeout_read_load' to be None or greater than zero but got '{settings['timeout_read_load']}'."
             )
 
         # timeout_read_infer
@@ -120,7 +120,7 @@ class Florence2Base(ClientBase):
         if settings['timeout_read_infer'] is not None:
             assert_log(
                 expression=settings['timeout_read_infer'] > 0.0,
-                message=f"Expected setting 'timeout_read_infer' to be None or greater zero but got '{settings['timeout_read_infer']}'."
+                message=f"Expected setting 'timeout_read_infer' to be None or greater than zero but got '{settings['timeout_read_infer']}'."
             )
 
         # apply settings

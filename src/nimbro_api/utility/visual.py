@@ -474,7 +474,7 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
     assert_log(expression=len(kwargs) == 0, message=f"Unexpected keyword argument{'' if len(kwargs) == 1 else 's'} '{list(kwargs.keys())[0] if len(kwargs) == 1 else list(kwargs.keys())}'.")
 
     assert_type_value(obj=alpha, type_or_value=float, name="argument 'alpha'")
-    assert_log(expression=alpha > 0, message=f"Expected value of argument 'alpha' to be greater zero but got '{alpha}'.")
+    assert_log(expression=alpha > 0, message=f"Expected value of argument 'alpha' to be greater than zero but got '{alpha}'.")
     assert_log(expression=alpha <= 1, message=f"Expected value of argument 'alpha' to be one or less but got '{alpha}'.")
     assert_type_value(obj=colors, type_or_value=["auto", "auto_class", list, tuple, dict, None], name="argument 'colors'")
     if isinstance(colors, (list, tuple)):
@@ -501,10 +501,10 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
     assert_type_value(obj=draw_order, type_or_value=["size", "input"], name="argument 'draw_order'")
 
     assert_type_value(obj=box_alpha, type_or_value=float, name="argument 'box_alpha'")
-    assert_log(expression=box_alpha >= 0, message=f"Expected value of argument 'box_alpha' to be zero or greater but got '{box_alpha}'.")
+    assert_log(expression=box_alpha >= 0, message=f"Expected value of argument 'box_alpha' to be non-negative but got '{box_alpha}'.")
     assert_log(expression=box_alpha <= 1, message=f"Expected value of argument 'box_alpha' to be one or less but got '{box_alpha}'.")
     assert_type_value(obj=box_thickness, type_or_value=float, name="argument 'box_thickness'")
-    assert_log(expression=box_thickness > 0, message=f"Expected value of argument 'box_thickness' to be greater zero but got '{box_thickness}'.")
+    assert_log(expression=box_thickness > 0, message=f"Expected value of argument 'box_thickness' to be greater than zero but got '{box_thickness}'.")
     assert_log(expression=box_thickness <= 1, message=f"Expected value of argument 'box_thickness' to be one or less but got '{box_thickness}'.")
     assert_type_value(obj=box_format, type_or_value=["xyxy_normalized", "xyxy_absolute", "xywh_normalized", "xywh_absolute"], name="argument 'box_format'")
     if box_format in ["xyxy_normalized", "xywh_normalized"]:
@@ -515,7 +515,7 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             assert_log(expression=len(box) == 4, message=f"Expected item '{i}' in argument 'boxes' to contain '4' values but got '{len(box)}'.")
             for j, value in enumerate(box):
                 assert_type_value(obj=value, type_or_value=float, name=f"item '{j}' in box '{i}' argument 'boxes'")
-                assert_log(expression=value >= 0.0 and value <= 1.0, message=f"{value}")
+                assert_log(expression=0.0 <= value <= 1.0, message=f"Expected item '{j}' in box '{i}' in argument 'boxes' to be between 0.0 and 1.0 (inclusive) but got '{value}'.")
     else:
         for i, box in enumerate(boxes):
             if box is None:
@@ -524,7 +524,7 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             assert_log(expression=len(box) == 4, message=f"Expected item '{i}' in argument 'boxes' to contain '4' values but got '{len(box)}'.")
             for j, value in enumerate(box):
                 assert_type_value(obj=value, type_or_value=int, name=f"item '{j}' in box '{i}' argument 'boxes'")
-                assert_log(expression=value >= 0, message=f"{value}")
+                assert_log(expression=value >= 0, message=f"Expected item '{j}' in box '{i}' in argument 'boxes' to be non-negative but got '{value}'.")
             assert_log(expression=box[0] >= 0, message=f"Expected value in argument 'boxes' for x0 '{box[0]}' >= 0.")
             assert_log(expression=box[1] >= 0, message=f"Expected value in argument 'boxes' for y0 '{box[1]}' >= 0.")
             assert_log(expression=box[2] > 0, message=f"Expected value in argument 'boxes' for x1/w '{box[2]}' > 0.")
@@ -538,7 +538,7 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
                 assert_log(expression=box[0] + box[2] <= image.shape[1], message=f"Expected value in argument 'boxes' for x0 '{box[0]}' + width '{box[2]}' <= image width '{image.shape[1]}'.")
                 assert_log(expression=box[1] + box[3] <= image.shape[0], message=f"Expected value in argument 'boxes' for y0 '{box[1]}' + height '{box[3]}' <= image height '{image.shape[0]}'.")
     assert_type_value(obj=fill_alpha, type_or_value=float, name="argument 'fill_alpha'")
-    assert_log(expression=fill_alpha >= 0, message=f"Expected value of argument 'fill_alpha' to be zero or greater but got '{fill_alpha}'.")
+    assert_log(expression=fill_alpha >= 0, message=f"Expected value of argument 'fill_alpha' to be non-negative but got '{fill_alpha}'.")
     assert_log(expression=fill_alpha <= 1, message=f"Expected value of argument 'fill_alpha' to be one or less but got '{fill_alpha}'.")
 
     assert_type_value(obj=mask_color, type_or_value=["auto", list, tuple, None], name="argument 'mask_color'")
@@ -549,11 +549,11 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'mask_color'")
             assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'mask_color' to be 8-bit values but got '{value}'.")
     assert_type_value(obj=mask_alpha, type_or_value=float, name="argument 'mask_alpha'")
-    assert_log(expression=mask_alpha >= 0, message=f"Expected value of argument 'mask_alpha' to be zero or greater but got '{mask_alpha}'.")
+    assert_log(expression=mask_alpha >= 0, message=f"Expected value of argument 'mask_alpha' to be non-negative but got '{mask_alpha}'.")
     assert_log(expression=mask_alpha <= 1, message=f"Expected value of argument 'mask_alpha' to be one or less but got '{mask_alpha}'.")
     assert_type_value(obj=mask_format, type_or_value=["box_local", "full_image"], name="argument 'mask_format'")
     assert_type_value(obj=contour_thickness, type_or_value=float, name="argument 'contour_thickness'")
-    assert_log(expression=contour_thickness >= 0, message=f"Expected value of argument 'contour_thickness' to be zero or greater but got '{contour_thickness}'.")
+    assert_log(expression=contour_thickness >= 0, message=f"Expected value of argument 'contour_thickness' to be non-negative but got '{contour_thickness}'.")
     assert_log(expression=contour_thickness <= 1, message=f"Expected value of argument 'contour_thickness' to be one or less but got '{contour_thickness}'.")
     assert_type_value(obj=contour_color, type_or_value=["auto", list, tuple, None], name="argument 'contour_color'")
     if isinstance(contour_color, (list, tuple)):
@@ -563,11 +563,11 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'contour_color'")
             assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'contour_color' to be 8-bit values but got '{value}'.")
     assert_type_value(obj=contour_alpha, type_or_value=float, name="argument 'contour_alpha'")
-    assert_log(expression=contour_alpha >= 0, message=f"Expected value of argument 'contour_alpha' to be zero or greater but got '{contour_alpha}'.")
+    assert_log(expression=contour_alpha >= 0, message=f"Expected value of argument 'contour_alpha' to be non-negative but got '{contour_alpha}'.")
     assert_log(expression=contour_alpha <= 1, message=f"Expected value of argument 'contour_alpha' to be one or less but got '{contour_alpha}'.")
 
     assert_type_value(obj=point_radius, type_or_value=float, name="argument 'point_radius'")
-    assert_log(expression=point_radius > 0, message=f"Expected value of argument 'point_radius' to be greater zero but got '{point_radius}'.")
+    assert_log(expression=point_radius > 0, message=f"Expected value of argument 'point_radius' to be greater than zero but got '{point_radius}'.")
     assert_log(expression=point_radius <= 1, message=f"Expected value of argument 'point_radius' to be one or less but got '{point_radius}'.")
     assert_type_value(obj=point_color, type_or_value=["auto", list, tuple, None], name="argument 'point_color'")
     if isinstance(point_color, (list, tuple)):
@@ -576,10 +576,10 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'point_color'")
             assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'point_color' to be 8-bit values but got '{value}'.")
     assert_type_value(obj=point_alpha, type_or_value=float, name="argument 'point_alpha'")
-    assert_log(expression=point_alpha >= 0, message=f"Expected value of argument 'point_alpha' to be zero or greater but got '{point_alpha}'.")
+    assert_log(expression=point_alpha >= 0, message=f"Expected value of argument 'point_alpha' to be non-negative but got '{point_alpha}'.")
     assert_log(expression=point_alpha <= 1, message=f"Expected value of argument 'point_alpha' to be one or less but got '{point_alpha}'.")
     assert_type_value(obj=point_outline_thickness, type_or_value=float, name="argument 'point_outline_thickness'")
-    assert_log(expression=point_outline_thickness >= 0, message=f"Expected value of argument 'point_outline_thickness' to be zero or greater but got '{point_outline_thickness}'.")
+    assert_log(expression=point_outline_thickness >= 0, message=f"Expected value of argument 'point_outline_thickness' to be non-negative but got '{point_outline_thickness}'.")
     assert_log(expression=point_outline_thickness <= 1, message=f"Expected value of argument 'point_outline_thickness' to be one or less but got '{point_outline_thickness}'.")
     assert_type_value(obj=point_outline_color, type_or_value=["auto", list, tuple, None], name="argument 'point_outline_color'")
     if isinstance(point_outline_color, (list, tuple)):
@@ -588,7 +588,7 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'point_outline_color'")
             assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'point_outline_color' to be 8-bit values but got '{value}'.")
     assert_type_value(obj=point_outline_alpha, type_or_value=float, name="argument 'point_outline_alpha'")
-    assert_log(expression=point_outline_alpha >= 0, message=f"Expected value of argument 'point_outline_alpha' to be zero or greater but got '{point_outline_alpha}'.")
+    assert_log(expression=point_outline_alpha >= 0, message=f"Expected value of argument 'point_outline_alpha' to be non-negative but got '{point_outline_alpha}'.")
     assert_log(expression=point_outline_alpha <= 1, message=f"Expected value of argument 'point_outline_alpha' to be one or less but got '{point_outline_alpha}'.")
     assert_type_value(obj=point_format, type_or_value=["xy_normalized", "xy_absolute"], name="argument 'point_format'")
     if point_format == "xy_normalized":
@@ -613,11 +613,11 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             assert_log(expression=point[1] < image.shape[0], message=f"Expected value in argument 'points' for y '{point[1]}' < image height '{image.shape[0]}'.")
 
     assert_type_value(obj=label_font_size, type_or_value=float, name="argument 'label_font_size'")
-    assert_log(expression=label_font_size > 0, message=f"Expected value of argument 'label_font_size' to be greater zero but got '{label_font_size}'.")
+    assert_log(expression=label_font_size > 0, message=f"Expected value of argument 'label_font_size' to be greater than zero but got '{label_font_size}'.")
     assert_log(expression=label_font_size <= 1, message=f"Expected value of argument 'label_font_size' to be one or less but got '{label_font_size}'.")
     assert_type_value(obj=label_font_path, type_or_value=str, name="argument 'label_font_path'")
     assert_type_value(obj=label_padding, type_or_value=float, name="argument 'label_padding'")
-    assert_log(expression=label_padding >= 0, message=f"Expected value of argument 'label_padding' to be zero or greater but got '{label_padding}'.")
+    assert_log(expression=label_padding >= 0, message=f"Expected value of argument 'label_padding' to be non-negative but got '{label_padding}'.")
     assert_log(expression=label_padding <= 1, message=f"Expected value of argument 'label_padding' to be one or less but got '{label_padding}'.")
     assert_type_value(obj=label_text_color, type_or_value=["auto", list, tuple, None], name="argument 'label_text_color'")
     if isinstance(label_text_color, (list, tuple)):
@@ -634,10 +634,10 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'label_background_color'")
             assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'label_background_color' to be 8-bit values but got '{value}'.")
     assert_type_value(obj=label_text_alpha, type_or_value=float, name="argument 'label_text_alpha'")
-    assert_log(expression=label_text_alpha >= 0, message=f"Expected value of argument 'label_text_alpha' to be zero or greater but got '{label_text_alpha}'.")
+    assert_log(expression=label_text_alpha >= 0, message=f"Expected value of argument 'label_text_alpha' to be non-negative but got '{label_text_alpha}'.")
     assert_log(expression=label_text_alpha <= 1, message=f"Expected value of argument 'label_text_alpha' to be one or less but got '{label_text_alpha}'.")
     assert_type_value(obj=label_background_alpha, type_or_value=float, name="argument 'label_background_alpha'")
-    assert_log(expression=label_background_alpha >= 0, message=f"Expected value of argument 'label_background_alpha' to be zero or greater but got '{label_background_alpha}'.")
+    assert_log(expression=label_background_alpha >= 0, message=f"Expected value of argument 'label_background_alpha' to be non-negative but got '{label_background_alpha}'.")
     assert_log(expression=label_background_alpha <= 1, message=f"Expected value of argument 'label_background_alpha' to be one or less but got '{label_background_alpha}'.")
 
     # convert to BGR
@@ -733,19 +733,19 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
         if isinstance(masks[i], (list, tuple)):
             masks[i] = np.asarray(masks[i])
         if masks[i] is not None:
-            assert_log(expression=masks[i].dtype == np.bool_, message=f"{masks[i].dtype}")
+            assert_log(expression=masks[i].dtype == np.bool_, message=f"Expected item '{i}' in argument 'masks' to have dtype 'bool' but got '{masks[i].dtype}'.")
 
             if mask_format == "box_local":
                 assert_log(expression=boxes[i] is not None, message=f"Expected a box for detection '{i}' because a box-local mask was provided.")
                 x0, y0, x1, y1 = boxes[i]
                 expected_shape = (y1 - y0, x1 - x0)
-                assert_log(expression=masks[i].shape == expected_shape, message=f"{masks[i].shape} {expected_shape}")
+                assert_log(expression=masks[i].shape == expected_shape, message=f"Expected item '{i}' in argument 'masks' to have shape '{expected_shape}' but got '{masks[i].shape}'.")
 
                 full_mask = np.zeros(image.shape[:2], dtype=bool)
                 full_mask[y0:y1, x0:x1] = masks[i]
                 masks[i] = full_mask
             else:
-                assert_log(expression=masks[i].shape == image.shape[:2], message=f"{masks[i].shape} {image.shape[:2]}")
+                assert_log(expression=masks[i].shape == image.shape[:2], message=f"Expected item '{i}' in argument 'masks' to have image shape '{image.shape[:2]}' but got '{masks[i].shape}'.")
 
     # draw boxes and labels
     if draw_order == "size":
@@ -965,9 +965,9 @@ def draw_rectangle(image, box, *, box_format="xyxy_normalized", is_rgb=False, **
         assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'color'")
         assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'color' to be 8-bit values but got '{value}'.")
     assert_type_value(obj=thickness, type_or_value=int, name="argument 'thickness'")
-    assert_log(expression=thickness > 0, message=f"Expected value of argument 'thickness' to be greater zero but got '{thickness}'.")
+    assert_log(expression=thickness > 0, message=f"Expected value of argument 'thickness' to be greater than zero but got '{thickness}'.")
     assert_type_value(obj=alpha, type_or_value=float, name="argument 'alpha'")
-    assert_log(expression=alpha >= 0, message=f"Expected value of argument 'alpha' to be zero or greater but got '{alpha}'.")
+    assert_log(expression=alpha >= 0, message=f"Expected value of argument 'alpha' to be non-negative but got '{alpha}'.")
     assert_log(expression=alpha <= 1, message=f"Expected value of argument 'alpha' to be one or less but got '{alpha}'.")
 
     # convert to BGR
@@ -1097,7 +1097,7 @@ def draw_text(image, text, *, anchor=(0, 0), is_rgb=False, **kwargs):
     assert_log(expression=len(kwargs) == 0, message=f"Unexpected keyword argument{'' if len(kwargs) == 1 else 's'} '{list(kwargs.keys())[0] if len(kwargs) == 1 else list(kwargs.keys())}'.")
     assert_type_value(obj=font_path, type_or_value=str, name="argument 'font_path'")
     assert_type_value(obj=font_size, type_or_value=int, name="argument 'font_size'")
-    assert_log(expression=font_size > 0, message=f"Expected 'font_size' to be greater zero but got '{font_size}'.")
+    assert_log(expression=font_size > 0, message=f"Expected 'font_size' to be greater than zero but got '{font_size}'.")
     assert_type_value(obj=text_color, type_or_value=[list, tuple], name="argument 'text_color'")
     assert_log(expression=len(text_color) == 3, message=f"Expected argument 'text_color' to contain '3' values but got '{len(text_color)}'.")
     for i, value in enumerate(text_color):
@@ -1110,9 +1110,9 @@ def draw_text(image, text, *, anchor=(0, 0), is_rgb=False, **kwargs):
             assert_type_value(obj=value, type_or_value=int, name=f"item '{i}' in argument 'background_color'")
             assert_log(expression=0 <= value <= 255, message=f"Expected item '{i}' in argument 'background_color' to be 8-bit values but got '{value}'.")
     assert_type_value(obj=padding, type_or_value=int, name="argument 'padding'")
-    assert_log(expression=padding >= 0, message=f"Expected 'padding' to be zero or greater but got '{padding}'.")
+    assert_log(expression=padding >= 0, message=f"Expected 'padding' to be non-negative but got '{padding}'.")
     assert_type_value(obj=line_gap, type_or_value=int, name="argument 'line_gap'")
-    assert_log(expression=line_gap >= 0, message=f"Expected 'line_gap' to be zero or greater but got '{line_gap}'.")
+    assert_log(expression=line_gap >= 0, message=f"Expected 'line_gap' to be non-negative but got '{line_gap}'.")
     assert_type_value(obj=text_alpha, type_or_value=float, name="argument 'text_alpha'")
     assert_log(expression=0.0 <= text_alpha <= 1.0, message=f"Expected 'text_alpha' to be in [0.0, 1.0] but got '{text_alpha}'.")
     assert_type_value(obj=background_alpha, type_or_value=float, name="argument 'background_alpha'")

@@ -40,7 +40,7 @@ class MmGroundingDino(Client):
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing the NimbRo Vision Servers API for MM-Grounding-DINO and LLMDet (https://github.com/AIS-Bonn/nimbro_vision_servers/tree/main/models/mmgroundingdino).
+        Create a client implementing the NimbRo Vision Servers API for MM-Grounding-DINO and LLMDet (https://github.com/AIS-Bonn/nimbro_vision_servers/tree/main/models/mmgroundingdino).
 
         Args:
             settings (dict | None, optional):
@@ -72,7 +72,7 @@ class MmGroundingDino(Client):
                 Include results in successful response messages when using `get_detections()`.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
-                - Each endpoint must be a dictionary (`dict`), with the required keys 'api_flavor', 'api_url', 'key_type', and 'key_value'.
+                - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url', 'key_type', and 'key_value'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
@@ -151,7 +151,7 @@ class MmGroundingDino(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -172,10 +172,10 @@ class MmGroundingDino(Client):
         Args:
             age (float | int | None, optional):
                 The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0,
+                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -196,10 +196,10 @@ class MmGroundingDino(Client):
         Args:
             age (float | int | None, optional):
                 The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0,
+                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -220,10 +220,10 @@ class MmGroundingDino(Client):
         Args:
             age (float | int | None, optional):
                 The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0,
+                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -244,7 +244,7 @@ class MmGroundingDino(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -264,7 +264,7 @@ class MmGroundingDino(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -288,7 +288,7 @@ class MmGroundingDino(Client):
                 A list (possibly duplicate) prompts to be detected in the 'image'.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):

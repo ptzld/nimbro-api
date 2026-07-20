@@ -51,11 +51,11 @@ class ChatCompletionsBase(ClientBase):
 
         # logger_info_prompt_threshold
         assert_type_value(obj=settings['logger_info_prompt_threshold'], type_or_value=int, name="setting 'logger_info_prompt_threshold'")
-        assert_log(expression=settings['logger_info_prompt_threshold'] > 0, message=f"Expected setting 'logger_info_prompt_threshold' to be greater zero but got '{settings['logger_info_prompt_threshold']}'.")
+        assert_log(expression=settings['logger_info_prompt_threshold'] > 0, message=f"Expected setting 'logger_info_prompt_threshold' to be greater than zero but got '{settings['logger_info_prompt_threshold']}'.")
 
         # logger_info_prompt_cutoff
         assert_type_value(obj=settings['logger_info_prompt_cutoff'], type_or_value=int, name="setting 'logger_info_prompt_cutoff'")
-        assert_log(expression=settings['logger_info_prompt_cutoff'] >= 0, message=f"Expected setting 'logger_info_prompt_cutoff' to be zero or greater but got '{settings['logger_info_prompt_cutoff']}'.")
+        assert_log(expression=settings['logger_info_prompt_cutoff'] >= 0, message=f"Expected setting 'logger_info_prompt_cutoff' to be non-negative but got '{settings['logger_info_prompt_cutoff']}'.")
 
         # logger_info_completion
         assert_type_value(obj=settings['logger_info_completion'], type_or_value=bool, name="setting 'logger_info_completion'")
@@ -120,7 +120,7 @@ class ChatCompletionsBase(ClientBase):
         assert_type_value(obj=settings['max_tokens'], type_or_value=int, name="setting 'max_tokens'")
         assert_log(
             expression=settings['max_tokens'] > 0,
-            message=f"Expected setting 'max_tokens' to be greater zero but got '{settings['max_tokens']}'."
+            message=f"Expected setting 'max_tokens' to be greater than zero but got '{settings['max_tokens']}'."
         )
 
         # presence_penalty
@@ -167,7 +167,7 @@ class ChatCompletionsBase(ClientBase):
         if isinstance(settings['max_tool_calls'], int):
             assert_log(
                 expression=settings['max_tool_calls'] > 0,
-                message=f"Expected setting 'max_tool_calls' to be None or greater zero but got '{settings['max_tool_calls']}'."
+                message=f"Expected setting 'max_tool_calls' to be None or greater than zero but got '{settings['max_tool_calls']}'."
             )
 
         # correction
@@ -178,7 +178,7 @@ class ChatCompletionsBase(ClientBase):
         if settings['timeout_connect'] is not None:
             assert_log(
                 expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater zero but got '{settings['timeout_connect']}'."
+                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
@@ -186,7 +186,7 @@ class ChatCompletionsBase(ClientBase):
         if settings['timeout_read'] is not None:
             assert_log(
                 expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater zero but got '{settings['timeout_read']}'."
+                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
             )
 
         # timeout_chunk_first
@@ -194,7 +194,7 @@ class ChatCompletionsBase(ClientBase):
         if settings['timeout_chunk_first'] is not None:
             assert_log(
                 expression=settings['timeout_chunk_first'] > 0.0,
-                message=f"Expected setting 'timeout_chunk_first' to be None or greater zero but got '{settings['timeout_chunk_first']}'."
+                message=f"Expected setting 'timeout_chunk_first' to be None or greater than zero but got '{settings['timeout_chunk_first']}'."
             )
 
         # timeout_chunk_next
@@ -202,7 +202,7 @@ class ChatCompletionsBase(ClientBase):
         if settings['timeout_chunk_next'] is not None:
             assert_log(
                 expression=settings['timeout_chunk_next'] > 0.0,
-                message=f"Expected setting 'timeout_chunk_next' to be None or greater zero but got '{settings['timeout_chunk_next']}'."
+                message=f"Expected setting 'timeout_chunk_next' to be None or greater than zero but got '{settings['timeout_chunk_next']}'."
             )
 
         # timeout_completion
@@ -210,7 +210,7 @@ class ChatCompletionsBase(ClientBase):
         if settings['timeout_completion'] is not None:
             assert_log(
                 expression=settings['timeout_completion'] > 0.0,
-                message=f"Expected setting 'timeout_completion' to be None or greater zero but got '{settings['timeout_completion']}'."
+                message=f"Expected setting 'timeout_completion' to be None or greater than zero but got '{settings['timeout_completion']}'."
             )
 
         # parsers

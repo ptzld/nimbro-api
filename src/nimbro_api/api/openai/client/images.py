@@ -41,7 +41,7 @@ class Images(Client):
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing OpenAI's v1 Images API (https://developers.openai.com/api/reference/resources/images/methods/generate).
+        Create a client implementing OpenAI's v1 Images API (https://developers.openai.com/api/reference/resources/images/methods/generate).
 
         Args:
             settings (dict | None, optional):
@@ -71,8 +71,8 @@ class Images(Client):
                 Logger name shown in each log identifying this object.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
-                - Each endpoint must be a dictionary (`dict`), with the required keys 'api_flavor',
-                  'api_url', 'key_type', and 'key_value', and the optional key 'models_url'.
+                - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url',
+                  'key_type', and 'key_value', and the optional key 'models_url'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
@@ -153,7 +153,7 @@ class Images(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -174,10 +174,10 @@ class Images(Client):
         Args:
             age (float | int | None, optional):
                 The time in seconds permitted for cached responses to this request being reused instead of sending a new one.
-                Use `None` to always reuse cached responses regardless of age, or 0 to force a new request. Defaults to 0,
+                Use `None` to always reuse cached responses regardless of age, or 0 to force a new request. Defaults to 0.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -204,7 +204,7 @@ class Images(Client):
                 The prompt describing the desired image.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):

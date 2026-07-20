@@ -76,7 +76,7 @@ class MmGroundingDinoBase(ClientBase):
         if settings['timeout_connect'] is not None:
             assert_log(
                 expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater zero but got '{settings['timeout_connect']}'."
+                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
@@ -84,7 +84,7 @@ class MmGroundingDinoBase(ClientBase):
         if settings['timeout_read'] is not None:
             assert_log(
                 expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater zero but got '{settings['timeout_read']}'."
+                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
             )
 
         # timeout_read_load
@@ -92,7 +92,7 @@ class MmGroundingDinoBase(ClientBase):
         if settings['timeout_read_load'] is not None:
             assert_log(
                 expression=settings['timeout_read_load'] > 0.0,
-                message=f"Expected setting 'timeout_read_load' to be None or greater zero but got '{settings['timeout_read_load']}'."
+                message=f"Expected setting 'timeout_read_load' to be None or greater than zero but got '{settings['timeout_read_load']}'."
             )
 
         # timeout_read_infer
@@ -100,7 +100,7 @@ class MmGroundingDinoBase(ClientBase):
         if settings['timeout_read_infer'] is not None:
             assert_log(
                 expression=settings['timeout_read_infer'] > 0.0,
-                message=f"Expected setting 'timeout_read_infer' to be None or greater zero but got '{settings['timeout_read_infer']}'."
+                message=f"Expected setting 'timeout_read_infer' to be None or greater than zero but got '{settings['timeout_read_infer']}'."
             )
 
         # apply settings
@@ -224,7 +224,7 @@ class MmGroundingDinoBase(ClientBase):
                 message = f"Generated '{len(response)}' detection{'' if len(response) == 1 else 's'}{suffix} in '{time.perf_counter() - stamp:.3f}s'"
                 if self._settings['message_results']:
                     if len(response) > 0:
-                        message = f"{message}: {[item['prompt'] for item in response]}"
+                        message = f"{message}: {[item['prompt'] for item in response]}."
                     else:
                         message = f"{message}."
                 else:

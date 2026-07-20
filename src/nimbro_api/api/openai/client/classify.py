@@ -50,7 +50,7 @@ class Classify(Client):
 
     def __init__(self, settings=None, **kwargs):
         """
-        Create an Client implementing vLLM's Classify API (https://docs.vllm.ai/en/latest/models/pooling_models/classify).
+        Create a client implementing vLLM's Classify API (https://docs.vllm.ai/en/latest/models/pooling_models/classify).
 
         Args:
             settings (dict | None, optional):
@@ -80,8 +80,8 @@ class Classify(Client):
                 Logger name shown in each log identifying this object.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
-                - Each endpoint must be a dictionary (`dict`), with the required keys 'api_flavor',
-                  'api_url', 'key_type', and 'key_value', and the optional key 'models_url'.
+                - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url',
+                  'key_type', and 'key_value', and the optional key 'models_url'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
@@ -93,7 +93,7 @@ class Classify(Client):
             model (str, None):
                 Name of the model used (see `get_models()`). If not provided, server-side model selection applies.
             validate_model (float | int | bool):
-                Validate the set 'model' is available with the Models API of the set 'endpoint' when using `get_transcription()`:
+                Validate the set 'model' is available with the Models API of the set 'endpoint' when using `classify()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
                 Only applicable when 'model' is provided.
@@ -180,7 +180,7 @@ class Classify(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -201,10 +201,10 @@ class Classify(Client):
         Args:
             age (float | int | None, optional):
                 The time in seconds permitted for cached responses to this request being reused instead of sending a new one.
-                Use `None` to always reuse cached responses regardless of age, or 0 to force a new request. Defaults to 0,
+                Use `None` to always reuse cached responses regardless of age, or 0 to force a new request. Defaults to 0.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -233,7 +233,7 @@ class Classify(Client):
                 - Input must be either a single text string (`str`), a list of strings strings (`list[str]`), a token-ID sequence (`list[int]`), or a list of token-ID sequences (`list[list[int]]`).
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):

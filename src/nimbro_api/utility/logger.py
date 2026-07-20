@@ -204,7 +204,7 @@ class Logger:
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
         Settings: See the global dictionary for defaults.
-            severity (int | None):
+            severity (str | int | None):
                 Logger severity in ["off", "debug", "info", "warn", "error", "fatal"] (str)
                 or `None` to adopt global process-wide severity.
             name (str | None):

@@ -56,15 +56,15 @@ class Core(Client):
                 Logger name shown in each log identifying this object.
             logger_mute (bool):
                 Mute all logs emitted within this process regardless of any individual 'logger_severity' setting.
-            logger_line_length (int, None):
+            logger_line_length (int | None):
                 Total number of characters before line-wrapping for all logs emitted within this process.
                 Use `None` to obtain line length automatically based on the terminal size.
                 Use zero or below to deactivate line-wrapping.
             logger_multi_line_prefix (bool):
                 Fully prefix multi-line logs instead of indenting with whitespace only.
-            logger_object_cutoff (int, None):
+            logger_object_cutoff (int | None):
                 Maximum number of characters beyond which objects formatted
-                with `nimbro_api.utilities.format_obj()` are replaced by a placeholder.
+                with `nimbro_api.utility.format_obj()` are replaced by a placeholder.
                 Use `None` to apply no restriction.
             http_use_http2 (bool):
                 Use HTTP/2 if the required dependencies are available and if the server supports it.
@@ -134,13 +134,13 @@ class Core(Client):
         Retrieve all cached API keys or a specific (un-/cached) one.
 
         Args:
-            name (str, optional):
+            name (str | None, optional):
                 Name of the API key to be retrieved.
                 If the API key is not cached, it is read from environment variables.
                 Use `None` to retrieve all cached API keys. Defaults to `None`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -166,7 +166,7 @@ class Core(Client):
                 The actual (non-empty) API key.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -198,7 +198,7 @@ class Core(Client):
                 Must be `None` if 'identifier' is `None`. Defaults to `None`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -225,7 +225,7 @@ class Core(Client):
                 The serializable data to be cached.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -254,7 +254,7 @@ class Core(Client):
                 Use `None` to consider deleting data regardless of age. Defaults to `None`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -265,22 +265,22 @@ class Core(Client):
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
         """
-        return self._base.wrap(0, self._base.query_cache, category, identifier, age, **kwargs)
+        return self._base.wrap(0, self._base.clear_cache, category, identifier, age, **kwargs)
 
     # deferred jobs
 
     def register_deferred_job(self, job, **kwargs):
         """
         Register a job to be executed after a number of seconds defined by the 'defer_delay' setting.
-        All pending cache jobs that were registered but not yet executed get deferred further alongside the new job.
+        All pending deferred jobs that were registered but not yet executed get deferred further alongside the new job.
 
         Args:
             job (tuple | list):
-                The job to be executed as a tuple containing a `callable` function (first element)
-                and a `dict` containing the keyword arguments to be passed to the function (second element).
+                The job to be executed as a tuple containing a callable function (first element)
+                and a dictionary of keyword arguments passed to the function (second element).
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):
@@ -300,7 +300,7 @@ class Core(Client):
         Args:
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
-                Additionally, special keyword arguments can be passes to `wrap()`:
+                Additionally, special keyword arguments can be passed to `wrap()`:
                     persist (bool):
                         If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
                     mute (bool):

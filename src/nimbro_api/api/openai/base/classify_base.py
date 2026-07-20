@@ -54,7 +54,12 @@ class ClassifyBase(ClientBase):
             )
 
         # truncate_prompt_tokens
-        assert_type_value(obj=settings['truncate_prompt_tokens'], type_or_value=[str, None], name="setting 'truncate_prompt_tokens'")
+        assert_type_value(obj=settings['truncate_prompt_tokens'], type_or_value=[int, None], name="setting 'truncate_prompt_tokens'")
+        if isinstance(settings['truncate_prompt_tokens'], int):
+            assert_log(
+                expression=settings['truncate_prompt_tokens'] >= -1,
+                message=f"Expected setting 'truncate_prompt_tokens' to be -1 or greater but got '{settings['truncate_prompt_tokens']}'."
+            )
 
         # truncation_side
         assert_type_value(obj=settings['truncation_side'], type_or_value=[str, None], name="setting 'truncation_side'")
@@ -64,7 +69,7 @@ class ClassifyBase(ClientBase):
 
         # priority
         assert_type_value(obj=settings['priority'], type_or_value=int, name="setting 'priority'")
-        assert_log(expression=settings['priority'] >= 0, message=f"Expected setting 'validate_model' to be non-negative but got '{settings['priority']}'.")
+        assert_log(expression=settings['priority'] >= 0, message=f"Expected setting 'priority' to be non-negative but got '{settings['priority']}'.")
 
         # mm_processor_kwargs
         assert_type_value(obj=settings['mm_processor_kwargs'], type_or_value=[dict, None], name="setting 'mm_processor_kwargs'")
@@ -98,7 +103,7 @@ class ClassifyBase(ClientBase):
         if settings['timeout_connect'] is not None:
             assert_log(
                 expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater zero but got '{settings['timeout_connect']}'."
+                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
@@ -106,7 +111,7 @@ class ClassifyBase(ClientBase):
         if settings['timeout_read'] is not None:
             assert_log(
                 expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater zero but got '{settings['timeout_read']}'."
+                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
             )
 
         # apply settings

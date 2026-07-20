@@ -32,11 +32,9 @@ class CoreBase(ClientBase):
 
         # logger
         assert_type_value(obj=settings['logger_mute'], type_or_value=bool, name="setting 'logger_mute'")
-        assert_type_value(obj=settings['logger_line_length'], type_or_value=[int, None], name="setting 'logger_mute'")
-        if isinstance(settings['logger_line_length'], int):
-            assert_log(expression=settings['logger_line_length'] > 0, message=f"Expected setting 'logger_line_length' to be non-negative but got '{settings['logger_line_length']}'.")
+        assert_type_value(obj=settings['logger_line_length'], type_or_value=[int, None], name="setting 'logger_line_length'")
         assert_type_value(obj=settings['logger_multi_line_prefix'], type_or_value=bool, name="setting 'logger_multi_line_prefix'")
-        assert_type_value(obj=settings['logger_object_cutoff'], type_or_value=[int, None], name="setting 'logger_mute'")
+        assert_type_value(obj=settings['logger_object_cutoff'], type_or_value=[int, None], name="setting 'logger_object_cutoff'")
         if isinstance(settings['logger_object_cutoff'], int):
             assert_log(expression=settings['logger_object_cutoff'] >= 0, message=f"Expected setting 'logger_object_cutoff' to be non-negative but got '{settings['logger_object_cutoff']}'.")
 
@@ -61,13 +59,13 @@ class CoreBase(ClientBase):
         if settings['http_timeout_connect'] is not None:
             assert_log(
                 expression=settings['http_timeout_connect'] > 0.0,
-                message=f"Expected setting 'http_timeout_connect' to be None or greater zero but got '{settings['http_timeout_connect']}'."
+                message=f"Expected setting 'http_timeout_connect' to be None or greater than zero but got '{settings['http_timeout_connect']}'."
             )
         assert_type_value(obj=settings['http_timeout_read'], type_or_value=[int, float, None], name="setting 'http_timeout_read'")
         if settings['http_timeout_read'] is not None:
             assert_log(
                 expression=settings['http_timeout_read'] > 0.0,
-                message=f"Expected setting 'http_timeout_read' to be None or greater zero but got '{settings['http_timeout_read']}'."
+                message=f"Expected setting 'http_timeout_read' to be None or greater than zero but got '{settings['http_timeout_read']}'."
             )
 
         # keys
@@ -344,17 +342,18 @@ class CoreBase(ClientBase):
                 break
             # execute job
             stamp_job = time.perf_counter()
-            self._logger.debug(f"Executing deferred job '{job[0].__name__}'.")
+            job_name = getattr(job[0], "__name__", type(job[0]).__name__)
+            self._logger.debug(f"Executing deferred job '{job_name}'.")
             try:
-                job[0](job[1])
+                job[0](**job[1])
             except Exception as e:
                 errors += 1
                 if isinstance(e, UnrecoverableError):
-                    self._logger.error(f"Deferred job '{job[0].__name__}' failed after '{time.perf_counter() - stamp_job:.3f}s': {e}")
+                    self._logger.error(f"Deferred job '{job_name}' failed after '{time.perf_counter() - stamp_job:.3f}s': {e}")
                 else:
-                    self._logger.fatal(f"Deferred job '{job[0].__name__}' failed after '{time.perf_counter() - stamp_job:.3f}s':\n{traceback.format_exc()}")
+                    self._logger.fatal(f"Deferred job '{job_name}' failed after '{time.perf_counter() - stamp_job:.3f}s':\n{traceback.format_exc()}")
             else:
-                self._logger.debug(f"Deferred job '{job[0].__name__}' finished after '{time.perf_counter() - stamp_job:.3f}s'.")
+                self._logger.debug(f"Deferred job '{job_name}' finished after '{time.perf_counter() - stamp_job:.3f}s'.")
             jobs += 1
         duration = f"'{time.perf_counter() - stamp_thread:.3f}s'"
         self._logger.debug(f"Deferred thread finished '{jobs}' job{'' if jobs == 1 else 's'} with '{errors}' failure{'' if errors == 1 else 's'} in {duration}.")
@@ -363,7 +362,7 @@ class CoreBase(ClientBase):
     def register_deferred_job(self, job):
         # parse arguments
         assert_type_value(obj=job, type_or_value=[tuple, list], name="argument 'job'")
-        assert_log(expression=len(job), message=f"Expected argument 'job' to be a tuple or list that contains exactly '2' elements but got '{len(job)}'.")
+        assert_log(expression=len(job) == 2, message=f"Expected argument 'job' to be a tuple or list that contains exactly '2' elements but got '{len(job)}'.")
         assert_log(expression=callable(job[0]), message=f"Expected first element in argument 'job' to be callable but got '{type(job[0]).__name__}'.")
         assert_type_value(obj=job[1], type_or_value=dict, name="second element in argument 'job'")
 
