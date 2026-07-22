@@ -67,6 +67,9 @@ full = [
 Homepage = "https://www.ais.uni-bonn.de/index.html"
 Repository = "https://github.com/ptzld/nimbro-api"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.setuptools.package-data]
 nimbro_api = ["**/*.json", "fonts/*", "test/assets/*"]
 
