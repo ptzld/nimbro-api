@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nimbro-api"
-version = "0.2.3"
+version = "0.2.4"
 description = "A robust and flexible framework for API clients in Python"
 readme = "README.md"
 license = "BSD-3-Clause"
