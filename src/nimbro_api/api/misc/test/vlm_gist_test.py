@@ -68,6 +68,14 @@ def assert_result(success, message, result, settings):
         if result[key]['success']:
             if key == 'image':
                 assert_keys(obj=result[key], keys=['stamp', 'success', 'logs', 'duration', 'path'], mode="required", name="key 'image' in result")
+                assert_log(expression='width' in result[key], message="Expected key 'width' in key 'image' in result.")
+                assert_type_value(obj=result[key]['width'], type_or_value=int, name="key 'width' in key 'image' in result")
+                assert_log(expression=not isinstance(result[key]['width'], bool), message="Expected value of key 'width' in key 'image' in result to be of type 'int' but got 'bool'.")
+                assert_log(expression=result[key]['width'] > 0, message=f"Expected value of key 'width' in key 'image' in result to be greater than zero but got '{result[key]['width']}'.")
+                assert_log(expression='height' in result[key], message="Expected key 'height' in key 'image' in result.")
+                assert_type_value(obj=result[key]['height'], type_or_value=int, name="key 'height' in key 'image' in result")
+                assert_log(expression=not isinstance(result[key]['height'], bool), message="Expected value of key 'height' in key 'image' in result to be of type 'int' but got 'bool'.")
+                assert_log(expression=result[key]['height'] > 0, message=f"Expected value of key 'height' in key 'image' in result to be greater than zero but got '{result[key]['height']}'.")
                 if settings['include_image']:
                     assert_log(expression='data' in result[key], message="Expected key 'data' in key 'image' because setting 'include_image' is 'True'.")
                     assert_type_value(obj=result[key]['data'], type_or_value=str, name="key 'data' in key 'image' in result")
@@ -113,7 +121,7 @@ def assert_result(success, message, result, settings):
                                 ok = isinstance(val, int) and not isinstance(val, bool)
                             elif t == "likert5":
                                 ok = isinstance(val, int) and not isinstance(val, bool) and val in [1, 2, 3, 4, 5]
-                            elif t == "likert6":
+                            elif t == "likert7":
                                 ok = isinstance(val, int) and not isinstance(val, bool) and val in [1, 2, 3, 4, 5, 6, 7]
                             elif t == "float":
                                 ok = isinstance(val, float)
@@ -513,22 +521,7 @@ def test_12_structured_description_bbox():
         'scene_description.skip': True,
         'structured_description.skip': False,
         'structured_description.use_scene_description': False,
-        'structured_description.chat_completions.endpoint': "OpenRouter",
-        'structured_description.chat_completions.model': "~google/gemini-flash-latest",
         # 'structured_description.chat_completions.logger_severity': "info",
-        'structured_description.description_prompt':
-            "Provide a list in JSON format that contains each object (including furniture, persons, and animals) visible in the image above. "
-            "Explicitly include each object instance as an individual list element, and never group multiple instances that are clearly distinct from one another. "
-            "Each list element must be a dictionary with the fields label and description. "
-            "The label of all humans must be person."
-            "The description must be a single short sentence (max. 10 words, starting with 'A' or 'An'), "
-            "that differs from the other descriptions and summarizes the most important information about the type, color, and appearance of the object, "
-            "allowing for a visual identification of the object without knowing any of the descriptions generated for the other objects. "
-            "In addition, also provided the key box_2d containing a bounding box if the object in [y_min, x_min, y_max, x_max] format.",
-        'structured_description.keys_required': ['label', 'description', 'box_2d'],
-        'structured_description.keys_required_types': ['str', 'str', 'box_yxyx[int1000]'],
-        'structured_description.keys_optional': [],
-        'structured_description.keys_optional_types': [],
         'detection.skip': False,
         'detection.extract_from_description': True,
         'detection.prompt_key': 'label',
@@ -546,22 +539,7 @@ def test_13_structured_description_bbox_as_detection():
         'scene_description.skip': True,
         'structured_description.skip': False,
         'structured_description.use_scene_description': False,
-        'structured_description.chat_completions.endpoint': "OpenRouter",
-        'structured_description.chat_completions.model': "~google/gemini-flash-latest",
         # 'structured_description.chat_completions.logger_severity': "info",
-        'structured_description.description_prompt':
-            "Provide a list in JSON format that contains each object (including furniture, persons, and animals) visible in the image above. "
-            "Explicitly include each object instance as an individual list element, and never group multiple instances that are clearly distinct from one another. "
-            "Each list element must be a dictionary with the fields label and description. "
-            "The label of all humans must be person."
-            "The description must be a single short sentence (max. 10 words, starting with 'A' or 'An'), "
-            "that differs from the other descriptions and summarizes the most important information about the type, color, and appearance of the object, "
-            "allowing for a visual identification of the object without knowing any of the descriptions generated for the other objects. "
-            "In addition, also provided the key box_2d containing a bounding box if the object in [y_min, x_min, y_max, x_max] format.",
-        'structured_description.keys_required': ['label', 'description', 'box_2d'],
-        'structured_description.keys_required_types': ['str', 'str', 'box_yxyx[int1000]'],
-        'structured_description.keys_optional': [],
-        'structured_description.keys_optional_types': [],
         'detection.skip': False,
         'detection.extract_from_description': True,
         'detection.prompt_key': 'label',

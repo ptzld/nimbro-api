@@ -14,9 +14,9 @@ default_settings = {
         'chat_completions': {
             'logger_severity': "warn",
             'endpoint': "OpenRouter",
-            'model': "google/gemini-3.1-flash-lite",
+            'model': "~google/gemini-flash-latest",
             'choices': 1,
-            'reasoning_effort': "none",
+            'reasoning_effort': "minimal",
         },
         'system_prompt_role': "system",
         'system_prompt': "You are a visual perception system that identifies and analyzes objects and other visible features in an image.",
@@ -35,9 +35,9 @@ default_settings = {
         'chat_completions': {
             'logger_severity': "warn",
             'endpoint': "OpenRouter",
-            'model': "google/gemini-3.1-flash-lite",
+            'model': "~google/gemini-flash-latest",
             'choices': 1,
-            'reasoning_effort': "none"
+            'reasoning_effort': "minimal",
         },
         'use_scene_description': False,
         'system_prompt_role': "system",

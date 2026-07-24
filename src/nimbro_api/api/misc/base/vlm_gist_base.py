@@ -953,6 +953,21 @@ class VlmGistBase(ClientBase):
             data['image']['data'] = image_data
             data['image']['path'] = image_path
             data['image']['duration'] = time.perf_counter() - stamp_local
+            if 'width' in data['image'] and 'height' in data['image']:
+                width = data['image']['width']
+                height = data['image']['height']
+                assert_type_value(obj=width, type_or_value=int, name="key 'width' in image")
+                assert_log(expression=not isinstance(width, bool), message="Expected value of key 'width' in image to be of type 'int' but got 'bool'.")
+                assert_log(expression=width > 0, message=f"Expected value of key 'width' in image to be greater than zero but got '{width}'.")
+                assert_type_value(obj=height, type_or_value=int, name="key 'height' in image")
+                assert_log(expression=not isinstance(height, bool), message="Expected value of key 'height' in image to be of type 'int' but got 'bool'.")
+                assert_log(expression=height > 0, message=f"Expected value of key 'height' in image to be greater than zero but got '{height}'.")
+            else:
+                success_dim, message_dim, dimensions = get_image_dimensions(image=data['image']['data'], logger=self._logger)
+                if not success_dim:
+                    raise UnrecoverableError(message_dim)
+                data['image']['width'] = dimensions[0]
+                data['image']['height'] = dimensions[1]
             if settings['message_process']:
                 if data['image']['path'] is not None:
                     self._logger.info(f"Processing image '{data['image']['path']}'.")
@@ -1262,22 +1277,6 @@ class VlmGistBase(ClientBase):
                 return False, f"Expected structured description to be of type 'list' but got '{type(description).__name__}': {description}", data
             except Exception:
                 return False, f"Expected structured description to be of type 'list' but got '{type(description).__name__}'.", data
-
-        # obtain image dimensions if required
-        dimensions = None
-        for key in ["point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int1000]", "box_yxyx[int1000]"]:
-            for setting in ['keys_required_types', 'keys_optional_types']:
-                if key in settings['structured_description'][setting]:
-                    if 'width' in data['image'] and 'height' in data['image']:
-                        break
-                    success, message, dimensions = get_image_dimensions(image=data['image']['data'], logger=self._logger)
-                    if success:
-                        data['image']['width'] = dimensions[0]
-                        data['image']['height'] = dimensions[1]
-                        break
-                    raise UnrecoverableError(message)
-            if dimensions is not None:
-                break
 
         # validate objects
 
