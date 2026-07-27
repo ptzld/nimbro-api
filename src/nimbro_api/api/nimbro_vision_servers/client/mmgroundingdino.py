@@ -298,7 +298,7 @@ class MmGroundingDino(Client):
             tuple[bool, str, list[dict] | None]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
-                - list[dict] | None: The resulting detection as a a list (`list`) of dictionaries (`dict`) with the keys
-                  'box_xyxy' (`list[int]`), 'confidence' (`float`), and 'prompt' (`str`), or `None` if not successful.
+                - list[dict] | None: The resulting detections as a list (`list`) of dictionaries (`dict`) with the keys 'box_xyxy' containing four absolute integer
+                  pixel coordinates (`list[int]`) with exclusive upper bounds with format (x0, y0, x1, y1), 'confidence' (`float`), and 'prompt' (`str`), or `None` if not successful.
         """
         return self._base.wrap(1, self._base.get_detections, image, prompts, **kwargs)

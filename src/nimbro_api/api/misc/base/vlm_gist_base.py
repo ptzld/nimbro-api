@@ -378,19 +378,35 @@ class VlmGistBase(ClientBase):
             # validate data
             try:
                 assert_type_value(obj=batch_item, type_or_value=dict, name=f"result '{i + 1}' of '{num_images}'")
+                metadata_dimensions = None
+                if isinstance(batch_item.get('image'), dict) and 'width' in batch_item['image'] and 'height' in batch_item['image']:
+                    width = batch_item['image']['width']
+                    height = batch_item['image']['height']
+                    assert_log(expression=isinstance(width, int) and not isinstance(width, bool) and width > 0, message=f"Expected image width in result '{i + 1}' of '{num_images}' to be a positive integer but got '{width}'.")
+                    assert_log(expression=isinstance(height, int) and not isinstance(height, bool) and height > 0, message=f"Expected image height in result '{i + 1}' of '{num_images}' to be a positive integer but got '{height}'.")
+                    metadata_dimensions = (width, height)
                 if images[i] is None:
                     assert_keys(obj=batch_item, keys=['image'], mode="required", name=f"result '{i + 1}' of '{num_images}'")
                     assert_type_value(obj=batch_item['image'], type_or_value=dict, name=f"value of key 'image' in result '{i + 1}' of '{num_images}'")
                     assert_keys(obj=batch_item['image'], keys=['data'], mode="required", name=f"value of key 'image' in result '{i + 1}' of '{num_images}'")
                     assert_type_value(obj=batch_item['image']['data'], type_or_value=str, name=f"value of key 'image.data' in result '{i + 1}' of '{num_images}'")
                     images[i] = copy.deepcopy(batch_item['image']['data'])
+                success, message, image_dimensions = get_image_dimensions(image=images[i], logger=self._logger)
+                assert_log(expression=success, message=message)
+                if metadata_dimensions is not None:
+                    assert_log(expression=metadata_dimensions == image_dimensions, message=f"Expected image dimensions {metadata_dimensions} in result '{i + 1}' of '{num_images}' to match the rendered image dimensions {image_dimensions}.")
 
                 # validate structured description structure
                 if len(point_attributes) > 0:
                     assert_keys(obj=batch_item, keys=['structured_description'], mode="required", name=f"result '{i + 1}' of '{num_images}'")
                     assert_type_value(obj=batch_item['structured_description'], type_or_value=dict, name=f"value of key 'structured_description' in result '{i + 1}' of '{num_images}'")
                     assert_keys(obj=batch_item['structured_description'], keys=['success'], mode="required", name=f"value of key 'structured_description' in result '{i + 1}' of '{num_images}'")
-                    assert_type_value(obj=batch_item['structured_description']['success'], type_or_value=True, name=f"value of key 'structured_description.success' in result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=batch_item['structured_description']['success'], type_or_value=bool, name=f"value of key 'structured_description.success' in result '{i + 1}' of '{num_images}'")
+                    if not batch_item['structured_description']['success']:
+                        assert_keys(obj=batch_item['structured_description'], keys=['logs'], mode="required", name=f"value of key 'structured_description' in result '{i + 1}' of '{num_images}'")
+                        assert_type_value(obj=batch_item['structured_description']['logs'], type_or_value=list, name=f"value of key 'structured_description.logs' in result '{i + 1}' of '{num_images}'")
+                        assert_log(expression=len(batch_item['structured_description']['logs']) > 0, message=f"Expected value of key 'structured_description.logs' in result '{i + 1}' of '{num_images}' to be non-empty.")
+                        assert_log(expression=False, message=batch_item['structured_description']['logs'][-1])
                     assert_keys(obj=batch_item['structured_description'], keys=['data'], mode="required", name=f"value of key 'structured_description' in result '{i + 1}' of '{num_images}'")
                     assert_type_value(obj=batch_item['structured_description']['data'], type_or_value=list, name=f"value of key 'structured_description.data' in result '{i + 1}' of '{num_images}'")
                     for k, item in enumerate(batch_item['structured_description']['data']):
@@ -402,6 +418,11 @@ class VlmGistBase(ClientBase):
                                 assert_type_value(obj=item[attribute_name], type_or_value=list, name=f"value of point attribute '{attribute_name}' in item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}'")
                                 assert_log(expression=len(item[attribute_name]) == 2, message=f"Expected value of point attribute '{attribute_name}' in item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}' to be a list of length '2' but got '{len(item[attribute_name])}'.")
                                 assert_log(expression=all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in item[attribute_name]), message=f"Expected all elements of point attribute '{attribute_name}' in item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}' to be non-negative integers.")
+                                if attribute_type.endswith('[int1000]'):
+                                    assert_log(expression=all(value <= 1000 for value in item[attribute_name]), message=f"Expected all elements of normalized point attribute '{attribute_name}' in item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}' to be at most 1000.")
+                                elif image_dimensions is not None:
+                                    x, y = item[attribute_name] if attribute_type.startswith('point_xy') else reversed(item[attribute_name])
+                                    assert_log(expression=x < image_dimensions[0] and y < image_dimensions[1], message=f"Expected point attribute '{attribute_name}' in item '{k + 1}' of value of key 'structured_description.data' in result '{i + 1}' of '{num_images}' to lie within image dimensions {image_dimensions} but got '{item[attribute_name]}'.")
 
                 # validate detection structure
                 assert_keys(obj=batch_item, keys=['detection'], mode="required", name=f"result '{i + 1}' of '{num_images}'")
@@ -423,6 +444,8 @@ class VlmGistBase(ClientBase):
                         assert_log(expression=len(item['box_xyxy']) == 4, message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be a list of length '4' but got '{len(item['box_xyxy'])}'.")
                         assert_log(expression=all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in item['box_xyxy']), message=f"Expected all elements of value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be non-negative integers.")
                         assert_log(expression=item['box_xyxy'][2] > item['box_xyxy'][0] and item['box_xyxy'][3] > item['box_xyxy'][1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be a valid bounding box but got '{item['box_xyxy']}'.")
+                        if image_dimensions is not None:
+                            assert_log(expression=item['box_xyxy'][2] <= image_dimensions[0] and item['box_xyxy'][3] <= image_dimensions[1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to lie within image dimensions {image_dimensions} but got '{item['box_xyxy']}'.")
 
                 # validate segmentation structure (only if present)
                 if 'segmentation' in batch_item:
@@ -446,6 +469,8 @@ class VlmGistBase(ClientBase):
                             assert_log(expression=len(item['box_xyxy']) == 4, message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}' to be a list of length '4' but got '{len(item['box_xyxy'])}'.")
                             assert_log(expression=all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in item['box_xyxy']), message=f"Expected all elements of value of key 'box_xyxy' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}' to be non-negative integers.")
                             assert_log(expression=item['box_xyxy'][2] > item['box_xyxy'][0] and item['box_xyxy'][3] > item['box_xyxy'][1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}' to be a valid bounding box but got '{item['box_xyxy']}'.")
+                            if image_dimensions is not None:
+                                assert_log(expression=item['box_xyxy'][2] <= image_dimensions[0] and item['box_xyxy'][3] <= image_dimensions[1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}' to lie within image dimensions {image_dimensions} but got '{item['box_xyxy']}'.")
                             assert_type_value(obj=item['mask'], type_or_value=str, name=f"value of key 'mask' in item '{k + 1}' of value of key 'segmentation.data' in result '{i + 1}' of '{num_images}'")
 
             except UnrecoverableError as e:
@@ -469,6 +494,10 @@ class VlmGistBase(ClientBase):
 
             detection_cursor_by_label = {}
 
+            point_dimensions = None
+            if any(attribute_type.endswith('[int1000]') for _, attribute_type in point_attributes):
+                point_dimensions = image_dimensions
+
             if len(point_attributes) > 0:
                 for item_index, item in enumerate(batch_item['structured_description']['data']):
                     if prompt_key not in item:
@@ -485,14 +514,17 @@ class VlmGistBase(ClientBase):
                     detection_index = detection_indices[detection_cursor]
                     detection_cursor_by_label[label] = (detection_cursor + 1) % len(detection_indices)
 
-                    for key in item:
-                        for attribute in point_attributes:
-                            if key == attribute[0]:
-                                if "xy" in attribute[1]:
-                                    detection_points[detection_index] = (item[key][0], item[key][1])
-                                else:
-                                    detection_points[detection_index] = (item[key][1], item[key][0])
-                                break
+                    for attribute_name, attribute_type in point_attributes:
+                        if attribute_name not in item:
+                            continue
+                        if attribute_type.startswith('point_xy'):
+                            x, y = item[attribute_name]
+                        else:
+                            y, x = item[attribute_name]
+                        if attribute_type.endswith('[int1000]'):
+                            x = round(x / 1000 * (point_dimensions[0] - 1))
+                            y = round(y / 1000 * (point_dimensions[1] - 1))
+                        detection_points[detection_index] = (x, y)
                         if detection_points[detection_index] is not None:
                             break
 
@@ -732,6 +764,8 @@ class VlmGistBase(ClientBase):
             elif name == "detection":
                 prompts = [item[settings['detection']['prompt_key']] for item in data['structured_description']['data']]
                 dummy_data['structured_description'] = {'data': data['structured_description']['data']}
+                if 'image' in data:
+                    dummy_data['image'] = data['image']
                 success, message, dummy_data = self.parse_detection(data=dummy_data, settings=settings, prompts=prompts, stamp_local=None)
                 if success:
                     if isinstance(arg, dict):
@@ -929,14 +963,6 @@ class VlmGistBase(ClientBase):
         if isinstance(image, dict):
             assert_keys(obj=image, keys=['stamp', 'success', 'logs', 'path', 'duration'], mode="blacklist", name="image provided as 'dict'")
             assert_keys(obj=image, keys=['data'], mode="required", name="image provided as 'dict'")
-            width = image.get('width', 1)
-            assert_type_value(obj=width, type_or_value=int, name="key 'width' in image provided as 'dict'")
-            assert_log(expression=not isinstance(width, bool), message="Expected value of key 'width' in image provided as 'dict' to be of type 'int' but got 'bool'.")
-            assert_log(expression=width > 0, message=f"Expected value of key 'width' in image provided as 'dict' to be greater than zero but got '{width}'.")
-            height = image.get('height', 1)
-            assert_type_value(obj=height, type_or_value=int, name="key 'height' in image provided as 'dict'")
-            assert_log(expression=not isinstance(height, bool), message="Expected value of key 'height' in image provided as 'dict' to be of type 'int' but got 'bool'.")
-            assert_log(expression=height > 0, message=f"Expected value of key 'height' in image provided as 'dict' to be greater than zero but got '{height}'.")
             metadata = copy.deepcopy(image)
             image = metadata.pop('data')
         else:
@@ -953,21 +979,20 @@ class VlmGistBase(ClientBase):
             data['image']['data'] = image_data
             data['image']['path'] = image_path
             data['image']['duration'] = time.perf_counter() - stamp_local
-            if 'width' in data['image'] and 'height' in data['image']:
-                width = data['image']['width']
-                height = data['image']['height']
-                assert_type_value(obj=width, type_or_value=int, name="key 'width' in image")
-                assert_log(expression=not isinstance(width, bool), message="Expected value of key 'width' in image to be of type 'int' but got 'bool'.")
-                assert_log(expression=width > 0, message=f"Expected value of key 'width' in image to be greater than zero but got '{width}'.")
-                assert_type_value(obj=height, type_or_value=int, name="key 'height' in image")
-                assert_log(expression=not isinstance(height, bool), message="Expected value of key 'height' in image to be of type 'int' but got 'bool'.")
-                assert_log(expression=height > 0, message=f"Expected value of key 'height' in image to be greater than zero but got '{height}'.")
-            else:
-                success_dim, message_dim, dimensions = get_image_dimensions(image=data['image']['data'], logger=self._logger)
-                if not success_dim:
-                    raise UnrecoverableError(message_dim)
-                data['image']['width'] = dimensions[0]
-                data['image']['height'] = dimensions[1]
+
+            dimensions = None
+            for i, key in enumerate(['width', 'height']):
+                if key in data['image']:
+                    assert_type_value(obj=data['image'][key], type_or_value=int, name=f"key '{key}' in image provided as 'dict'")
+                    assert_log(expression=not isinstance(data['image'][key], bool), message=f"Expected value of key '{key}' in image provided as 'dict' to be of type 'int' but got 'bool'.")
+                    assert_log(expression=data['image'][key] > 0, message=f"Expected value of key '{key}' in image provided as 'dict' to be greater than zero but got '{data['image'][key]}'.")
+                else:
+                    if dimensions is None:
+                        success_dim, message_dim, dimensions = get_image_dimensions(image=data['image']['data'], logger=self._logger)
+                        if not success_dim:
+                            raise UnrecoverableError(message_dim)
+                    data['image'][key] = dimensions[i]
+
             if settings['message_process']:
                 if data['image']['path'] is not None:
                     self._logger.info(f"Processing image '{data['image']['path']}'.")
@@ -1363,20 +1388,22 @@ class VlmGistBase(ClientBase):
                             if isinstance(val, list) and len(val) == 1:
                                 val = val[0]
                             if isinstance(val, list) and len(val) == 2 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in val):
-                                valid_obj[target_key] = val
-                                is_valid = True
+                                x, y = val if expected_type == "point_xy[int]" else reversed(val)
+                                if x < data['image']['width'] and y < data['image']['height']:
+                                    valid_obj[target_key] = val
+                                    is_valid = True
 
                         elif expected_type in ["point_xy[int1000]", "point_yx[int1000]"]:
                             if isinstance(val, list) and len(val) == 1:
                                 val = val[0]
                             if isinstance(val, list) and len(val) == 2 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 and x <= 1000 for x in val):
                                 if expected_type == "point_xy[int1000]":
-                                    x = min(max(int(round(val[0] / 1000 * data['image']['width'])), 0), data['image']['width'])
-                                    y = min(max(int(round(val[1] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                    x = round(val[0] / 1000 * (data['image']['width'] - 1))
+                                    y = round(val[1] / 1000 * (data['image']['height'] - 1))
                                     valid_obj[target_key] = [x, y]
                                 else:
-                                    x = min(max(int(round(val[1] / 1000 * data['image']['width'])), 0), data['image']['width'])
-                                    y = min(max(int(round(val[0] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                    x = round(val[1] / 1000 * (data['image']['width'] - 1))
+                                    y = round(val[0] / 1000 * (data['image']['height'] - 1))
                                     valid_obj[target_key] = [y, x]
                                 data['structured_description']['logs'].append(f"Unnormalized point {val} of object '{i}' to '{valid_obj[target_key]}' according to image width '{data['image']['width']}' and height '{data['image']['height']}'.")
                                 self._logger.debug(data['structured_description']['logs'][-1])
@@ -1386,23 +1413,27 @@ class VlmGistBase(ClientBase):
                             if isinstance(val, list) and len(val) == 1:
                                 val = val[0]
                             if isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in val) and val[2] > val[0] and val[3] > val[1]:
-                                valid_obj[target_key] = val
-                                is_valid = True
-
+                                if expected_type == "box_xyxy[int]":
+                                    width_i, height_i = 2, 3
+                                else:
+                                    width_i, height_i = 3, 2
+                                if val[width_i] <= data['image']['width'] and val[height_i] <= data['image']['height']:
+                                    valid_obj[target_key] = val
+                                    is_valid = True
                         elif expected_type in ["box_xyxy[int1000]", "box_yxyx[int1000]"]:
                             if isinstance(val, list) and len(val) == 1:
                                 val = val[0]
                             if isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 and x <= 1000 for x in val) and val[2] > val[0] and val[3] > val[1]:
                                 if expected_type == "box_xyxy[int1000]":
-                                    x_min = min(max(int(round(val[0] / 1000 * data['image']['width'])), 0), data['image']['width'])
-                                    y_min = min(max(int(round(val[1] / 1000 * data['image']['height'])), 0), data['image']['height'])
-                                    x_max = min(max(int(round(val[2] / 1000 * data['image']['width'])), 0), data['image']['width'])
-                                    y_max = min(max(int(round(val[3] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                    x_min = val[0] * data['image']['width'] // 1000
+                                    y_min = val[1] * data['image']['height'] // 1000
+                                    x_max = (val[2] * data['image']['width'] + 999) // 1000
+                                    y_max = (val[3] * data['image']['height'] + 999) // 1000
                                 else:
-                                    x_min = min(max(int(round(val[1] / 1000 * data['image']['width'])), 0), data['image']['width'])
-                                    y_min = min(max(int(round(val[0] / 1000 * data['image']['height'])), 0), data['image']['height'])
-                                    x_max = min(max(int(round(val[3] / 1000 * data['image']['width'])), 0), data['image']['width'])
-                                    y_max = min(max(int(round(val[2] / 1000 * data['image']['height'])), 0), data['image']['height'])
+                                    x_min = val[1] * data['image']['width'] // 1000
+                                    y_min = val[0] * data['image']['height'] // 1000
+                                    x_max = (val[3] * data['image']['width'] + 999) // 1000
+                                    y_max = (val[2] * data['image']['height'] + 999) // 1000
                                 if x_min < x_max and y_min < y_max:
                                     if expected_type == "box_xyxy[int1000]":
                                         valid_obj[target_key] = [x_min, y_min, x_max, y_max]
@@ -1544,6 +1575,8 @@ class VlmGistBase(ClientBase):
                     return False, f"Expected element '{j}' in value of key 'box_xyxy' in detection '{i}' to be a non-negative integer but got '{sub_item}'.", data
             if item['box_xyxy'][2] <= item['box_xyxy'][0] or item['box_xyxy'][3] <= item['box_xyxy'][1]:
                 return False, f"Expected value of key 'box_xyxy' in detection '{i}' to be a valid bounding box (x0, y0, x1, y1) but got '{item['box_xyxy']}'.", data
+            if item['box_xyxy'][2] > data['image']['width'] or item['box_xyxy'][3] > data['image']['height']:
+                return False, f"Expected value of key 'box_xyxy' in detection '{i}' to lie within image dimensions '{(data['image']['width'], data['image']['height'])}' but got '{item['box_xyxy']}'.", data
 
         prompt_counts_initial = count_duplicates(iterable=prompts, include_unique=True)
 
@@ -1689,6 +1722,8 @@ class VlmGistBase(ClientBase):
                     return False, f"Expected element '{j}' in value of key 'box_xyxy' in segmentation '{i}' to be a non-negative integer but got '{sub_item}'.", data
             if item['box_xyxy'][2] <= item['box_xyxy'][0] or item['box_xyxy'][3] <= item['box_xyxy'][1]:
                 return False, f"Expected value of key 'box_xyxy' in segmentation '{i}' to be a valid bounding box (x0, y0, x1, y1) but got '{item['box_xyxy']}'.", data
+            if item['box_xyxy'][2] > data['image']['width'] or item['box_xyxy'][3] > data['image']['height']:
+                return False, f"Expected value of key 'box_xyxy' in segmentation '{i}' to lie within image dimensions '{(data['image']['width'], data['image']['height'])}' but got '{item['box_xyxy']}'.", data
             track_ids_grouped.setdefault(item['track_id'], []).append(item)
 
         segmentation_filtered = []

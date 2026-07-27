@@ -1,11 +1,31 @@
 # Some VLMs are capable of object grounding by pointing or 2D/3D bounding boxes.
 # This completion parser extracts grounding content from the text-completion of Molmo-style models and copies it to the grounding-completion.
 # This way its possible to conveniently use the model as an open vocabulary detector.
+# Molmo 1 coordinates use [0, 100] and Molmo 2 coordinates use [0, 1000].
+# Both are normalized to [0, 1] with inclusive bounds.
 # Here, each grounded object has the form {'x': float, 'y': float, 'label': str, 'type': "point_2d_normalized"}
 
 import re
+import math
+
+def _normalized(value, scale):
+    """Convert a Molmo coordinate to the inclusive normalized range [0, 1]."""
+    if isinstance(value, bool):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(value) or not 0 <= value <= scale:
+        return None
+    return value / scale
 
 def extract_points(text):
+    """Extract Molmo points as normalized coordinates in inclusive range [0, 1].
+
+    Both endpoints are valid and map to the first and final image pixels.
+    Malformed and out-of-range points are ignored.
+    """
     pattern = re.compile(
         r'<point\s+([^>]*)>([^<]+)</point>'
         r'|<points\s+([^>]*)>([^<]+)</points>',
@@ -22,15 +42,15 @@ def extract_points(text):
         if m.group(1):
             attrs, label = m.group(1), clean_label(m.group(2))
 
-            x = re.search(r'\bx\s*=\s*"([\d.]+)"', attrs)
-            y = re.search(r'\by\s*=\s*"([\d.]+)"', attrs)
+            x = re.search(r'\bx\s*=\s*"([^"]*)"', attrs)
+            y = re.search(r'\by\s*=\s*"([^"]*)"', attrs)
 
             if x and y:
-                xv, yv = float(x.group(1)), float(y.group(1))
-                if 0 <= xv <= 100 and 0 <= yv <= 100:
+                xv, yv = _normalized(x.group(1), 100), _normalized(y.group(1), 100)
+                if xv is not None and yv is not None:
                     results.append({
-                        'x': xv / 100.,
-                        'y': yv / 100.,
+                        'x': xv,
+                        'y': yv,
                         'label': label,
                         'type': 'point_2d_normalized'
                     })
@@ -39,19 +59,25 @@ def extract_points(text):
             attrs, label = m.group(3), clean_label(m.group(4))
 
             # Molmo 1 multi-point format (x1=..., y1=...)
-            xs = {int(i): float(v) for i, v in re.findall(r'\bx(\d+)\s*=\s*"([\d.]+)"', attrs)}
-            ys = {int(i): float(v) for i, v in re.findall(r'\by(\d+)\s*=\s*"([\d.]+)"', attrs)}
+            xs = {}
+            for i, v in re.findall(r'\bx(\d+)\s*=\s*"([^"]*)"', attrs):
+                value = _normalized(v, 100)
+                if value is not None:
+                    xs[int(i)] = value
+            ys = {}
+            for i, v in re.findall(r'\by(\d+)\s*=\s*"([^"]*)"', attrs):
+                value = _normalized(v, 100)
+                if value is not None:
+                    ys[int(i)] = value
 
             if xs and ys:
                 for i in sorted(set(xs) & set(ys)):
-                    xv, yv = xs[i], ys[i]
-                    if 0 <= xv <= 100 and 0 <= yv <= 100:
-                        results.append({
-                            'x': xv / 100.,
-                            'y': yv / 100.,
-                            'label': label,
-                            'type': 'point_2d_normalized'
-                        })
+                    results.append({
+                        'x': xs[i],
+                        'y': ys[i],
+                        'label': label,
+                        'type': 'point_2d_normalized'
+                    })
                 continue
 
             # Molmo 2 format: coords="i x y i x y ..."
@@ -74,10 +100,11 @@ def extract_points(text):
             for i in range(offset, len(vals) - 2, 3):
                 _, xv, yv = vals[i:i + 3]
 
-                if 0 <= xv <= 1000 and 0 <= yv <= 1000:
+                xv, yv = _normalized(xv, 1000), _normalized(yv, 1000)
+                if xv is not None and yv is not None:
                     results.append({
-                        'x': xv / 1000.,
-                        'y': yv / 1000.,
+                        'x': xv,
+                        'y': yv,
                         'label': label,
                         'type': 'point_2d_normalized'
                     })
@@ -86,10 +113,11 @@ def extract_points(text):
             # fallback: only if nothing parsed
             if not parsed_any and len(vals) >= 2:
                 xv, yv = vals[-2], vals[-1]
-                if 0 <= xv <= 1000 and 0 <= yv <= 1000:
+                xv, yv = _normalized(xv, 1000), _normalized(yv, 1000)
+                if xv is not None and yv is not None:
                     results.append({
-                        'x': xv / 1000.,
-                        'y': yv / 1000.,
+                        'x': xv,
+                        'y': yv,
                         'label': label,
                         'type': 'point_2d_normalized'
                     })

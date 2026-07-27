@@ -3,7 +3,7 @@ import time
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import parse_image_b64
 from nimbro_api.utility.api import get_api_key, validate_endpoint, post_request
-from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log
 from ..utility import get_status, get_health, get_flavors, load, unload
 
 class MmGroundingDinoBase(ClientBase):
@@ -220,6 +220,19 @@ class MmGroundingDinoBase(ClientBase):
                 response = None
             else:
                 response = response['detections'][0]
+                assert_type_value(obj=response, type_or_value=list, name="response detections")
+                for i, item in enumerate(response):
+                    assert_type_value(obj=item, type_or_value=dict, name=f"detection '{i}' in response")
+                    assert_keys(obj=item, keys=['box_xyxy'], mode="required", name=f"detection '{i}' in response")
+                    assert_type_value(obj=item['box_xyxy'], type_or_value=list, name=f"key 'box_xyxy' of detection '{i}' in response")
+                    assert_log(expression=len(item['box_xyxy']) == 4, message=f"Expected key 'box_xyxy' of detection '{i}' in response to be a list of length '4' but got '{len(item['box_xyxy'])}'.")
+                    for j, value in enumerate(item['box_xyxy']):
+                        assert_type_value(obj=value, type_or_value=int, name=f"element '{j}' of key 'box_xyxy' of detection '{i}' in response")
+                        assert_log(expression=value >= 0, message=f"Expected element '{j}' of key 'box_xyxy' of detection '{i}' in response to be non-negative but got '{value}'.")
+                    assert_log(
+                        expression=item['box_xyxy'][2] > item['box_xyxy'][0] and item['box_xyxy'][3] > item['box_xyxy'][1],
+                        message=f"Expected key 'box_xyxy' of detection '{i}' in response to be a non-empty box (x0, y0, x1, y1) but got '{item['box_xyxy']}'."
+                    )
                 suffix = "" if image_path is None else f" for image '{image_path}'"
                 message = f"Generated '{len(response)}' detection{'' if len(response) == 1 else 's'}{suffix} in '{time.perf_counter() - stamp:.3f}s'"
                 if self._settings['message_results']:

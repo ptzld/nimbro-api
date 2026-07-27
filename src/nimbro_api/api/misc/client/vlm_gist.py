@@ -170,11 +170,13 @@ class VlmGist(Client):
                 - keys_required (list[str]): Non-empty list of required keys expected in each object of the structured description.
                 - keys_required_types (list[str]): Types for each required key, parallel to 'keys_required'.
                   Each element must be one of ["str", "bool", "int", "likert5", "likert7", "float", "unit", "list", "point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"].
-                  Note that all 'int1000' types are unnormalized to the absolute image dimensions automatically, which is reflected in the settings returned with the result, stating the regular 'int' version of the type instead of the set 'int1000' type.
+                  Point conventions (inclusive): Absolute points use x in 0..W-1 and y in 0..H-1, while normalized points ('int1000') use integers 0..1000, with 1000 mapping to W-1/H-1.
+                  Box conventions (exclusive): Absolute boxes use exclusive maxima bounded by W/H, while normalized boxes ('int1000') use integers 0..1000, with 1000 mapping to W/H.
+                  All 'int1000' values are converted to absolute coordinates, and result settings report the corresponding 'int' type.
                 - keys_optional (list[str]): List of optional keys that may appear in each object of the structured description.
                 - keys_optional_types (list[str]): Types for each optional key, parallel to 'keys_optional'.
                   Each element must be one of ["str", "bool", "int", "likert5", "likert7", "float", "unit", "list", "point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"].
-                  Note that all 'int1000' types are unnormalized to the absolute image dimensions automatically, which is reflected in the settings returned with the result, stating the regular 'int' version of the type instead of the set 'int1000' type.
+                  Uses the same point/box conventions and result conversion described for 'keys_required_types'.
             detection (dict):
                 Settings for the object detection step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
@@ -279,7 +281,7 @@ class VlmGist(Client):
             - Results without a successful detection step are discarded.
             - When a valid segmentation is present, both boxes and masks are drawn.
             - Labels are taken from the 'prompt' key of each detection item.
-            - The first point attribute of each item in the structured description is visualized as well.
+            - The first available point attribute (required preferred over optional) of each item in the structured description is visualized.
         """
         return self._base.wrap(2, self._base.visualize, result, image, output_dir, vis_args, **kwargs)
 
@@ -317,11 +319,11 @@ class VlmGist(Client):
         Notes:
             - Structure of resulting dictionary:
                 - run: stamp (ISO 8601 at start): str, type (normal/batch/worker): str, settings: dict, success (depending on type): bool, message: str, duration (seconds): float
-                - image: stamp (ISO 8601 at start): str, success: bool, logs: list[str], data (base64): str, path: str, duration (seconds): float
+                - image: stamp (ISO 8601 at start): str, success: bool, logs: list[str], data (base64, only when requested): str, path: str, width: int, height: int, preserved metadata, duration (seconds): float
                 - scene_description: stamp (ISO 8601 at start): str, hash: str, settings: dict, success: bool, logs: list[str], usage: dict, raw (deleted when matching data): str, data: str, duration (seconds): float
-                - structured_description: stamp (ISO 8601 at start): str, hash: str, settings: dict, logs: list[str], success: bool, usage: dict, raw (deleted when matching data): list[dict], data: list[dict], duration (seconds): float
-                - detection: stamp (ISO 8601 at start): str, settings: dict, hash: str, success: bool, logs: list[str], raw (deleted when matching data): list[dict], data: list[dict], duration (seconds): float
-                - segmentation: stamp (ISO 8601 at start): str, settings: dict, hash: str, success: bool, logs: list[str], raw (deleted when matching data): list[dict], data: list[dict], duration_init (initialization in seconds when also tracking): float, duration (seconds): float
+                - structured_description: stamp (ISO 8601 at start): str, hash: str, settings: dict, logs: list[str], success: bool, usage: dict, raw (deleted when matching data): list[dict], data: list[dict] (with configured coordinates converted to absolute conventions), duration (seconds): float
+                - detection: stamp (ISO 8601 at start): str, settings: dict, hash: str, success: bool, logs: list[str], raw (deleted when matching data): list[dict], data: list[dict] containing prompt and absolute exclusive box_xyxy (maxima <= W/H), duration (seconds): float
+                - segmentation: stamp (ISO 8601 at start): str, settings: dict, hash: str, success: bool, logs: list[str], raw (deleted when matching data): list[dict], data: list[dict] containing track_id, absolute exclusive box_xyxy, and mask, duration_init (initialization in seconds when also tracking): float, duration (seconds): float
                 - batch: list[dict]
             - Key 'prompt' in 'detection' corresponds to the key selected via 'prompt_key' in 'structured_description'.
             - Key 'track_id' in 'segmentation' correspond to the 'detection' index.

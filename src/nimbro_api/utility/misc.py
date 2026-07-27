@@ -500,12 +500,19 @@ def get_image_dimensions(image, *, logger=None):
             success = False
             message = "Failed to extract dimensions from image without PNG or JPEG signatures."
 
+        if success:
+            for i, dim in enumerate(['width', 'height']):
+                assert_type_value(obj=dimensions[i], type_or_value=int, name=f"obtained image {dim}")
+                assert_log(expression=not isinstance(dimensions[i], bool), message=f"Expected obtained image {dim} to be of type 'int' but got 'bool'.")
+                assert_log(expression=dimensions[i] > 0, message=f"Expected obtained image {dim} to be greater than zero but got '{dimensions[i]}'.")
+
     except struct.error as e:
         success = False
         message = f"Failed to extract dimensions from structurally malformed image block: {e}"
     except Exception as e:
         success = False
         message = f"Failed to extract image dimensions: {e}"
+        dimensions = None
 
     return success, message, dimensions
 

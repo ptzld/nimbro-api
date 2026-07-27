@@ -4,7 +4,8 @@ import copy
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import parse_image_b64
 from nimbro_api.utility.api import get_api_key, validate_endpoint, post_request
-from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log
+from nimbro_api.utility.string import is_base64
 from ..utility import get_status, get_health, get_flavors, load, unload
 
 class Sam2RealtimeBase(ClientBase):
@@ -114,31 +115,26 @@ class Sam2RealtimeBase(ClientBase):
                 keys_item = set(item.keys())
                 keys_box = {'object_id', 'bbox'}
                 keys_point = {'object_id', 'points', 'labels'}
-                assert_log(
-                    expression=keys_item in (keys_box, keys_point),
-                    message=f"Expected keys of element '{i}' in argument 'prompts' to be either {keys_box} or {keys_point} but got {keys_item}."
-                )
+                assert_log(expression=keys_item in (keys_box, keys_point), message=f"Expected keys of element '{i}' in argument 'prompts' to be either {keys_box} or {keys_point} but got {keys_item}.")
                 assert_type_value(obj=item['object_id'], type_or_value=int, name=f"key 'object_id' of element '{i}' in argument 'prompts'")
                 if keys_item == keys_box:
                     assert_type_value(obj=item['bbox'], type_or_value=list, name=f"key 'bbox' of element '{i}' in argument 'prompts'")
                     assert_log(expression=len(item['bbox']) == 4, message=f"Expected value of key 'bbox' of element '{i}' in argument 'prompts' to be a list of length '4' but got '{len(item['bbox'])}'.")
                     for j, value in enumerate(item['bbox']):
-                        assert_type_value(obj=value, type_or_value=[float, int], name=f"element '{j}' of value of key 'bbox' of element '{i}' in argument 'prompts'")
+                        assert_type_value(obj=value, type_or_value=int, name=f"element '{j}' of value of key 'bbox' of element '{i}' in argument 'prompts'")
+                        assert_log(expression=value >= 0, message=f"Expected element '{j}' of value of key 'bbox' of element '{i}' in argument 'prompts' to be non-negative but got '{value}'.")
+                    assert_log(expression=item['bbox'][2] > item['bbox'][0] and item['bbox'][3] > item['bbox'][1], message=f"Expected value of key 'bbox' of element '{i}' in argument 'prompts' to be a non-empty box (x0, y0, x1, y1) but got '{item['bbox']}'.")
                 else:
                     assert_type_value(obj=item['points'], type_or_value=list, name=f"key 'points' of element '{i}' in argument 'prompts'")
                     assert_type_value(obj=item['labels'], type_or_value=list, name=f"key 'labels' of element '{i}' in argument 'prompts'")
-                    assert_log(
-                        expression=len(item['points']) == len(item['labels']),
-                        message=f"Expected values of keys 'points' and 'labels' of element '{i}' in argument 'prompts' to be a lists with matching size but got '{len(item['points'])}' and '{len(item['labels'])}'."
-                    )
+                    assert_log(expression=len(item['points']) > 0, message=f"Expected value of key 'points' of element '{i}' in argument 'prompts' to be non-empty.")
+                    assert_log(expression=len(item['points']) == len(item['labels']), message=f"Expected values of keys 'points' and 'labels' of element '{i}' in argument 'prompts' to be a lists with matching size but got '{len(item['points'])}' and '{len(item['labels'])}'.")
                     for j, point in enumerate(item['points']):
                         assert_type_value(obj=point, type_or_value=list, name=f"element '{j}' in value of key 'points' of element '{i}' in argument 'prompts'")
-                        assert_log(
-                            expression=len(point) == 2,
-                            message=f"Expected element '{j}' of value of key 'points' of element '{i}' in argument 'prompts' to be a list of length '2' but got '{len(point)}'."
-                        )
-                        assert_type_value(obj=point[0], type_or_value=[float, int], name=f"element '0' of element '{j}' in value of key 'points' of element '{i}' in argument 'prompts'")
-                        assert_type_value(obj=point[1], type_or_value=[float, int], name=f"element '1' of element '{j}' in value of key 'points' of element '{i}' in argument 'prompts'")
+                        assert_log(expression=len(point) == 2, message=f"Expected element '{j}' of value of key 'points' of element '{i}' in argument 'prompts' to be a list of length '2' but got '{len(point)}'.")
+                        for k, value in enumerate(point):
+                            assert_type_value(obj=value, type_or_value=int, name=f"element '{k}' of element '{j}' in value of key 'points' of element '{i}' in argument 'prompts'")
+                            assert_log(expression=value >= 0, message=f"Expected element '{k}' of element '{j}' in value of key 'points' of element '{i}' in argument 'prompts' to be non-negative but got '{value}'.")
                     for j, label in enumerate(item['labels']):
                         assert_type_value(obj=label, type_or_value=[0, 1], name=f"element '{j}' in value of key 'labels' of element '{i}' in argument 'prompts'")
             prompts = copy.deepcopy(prompts)
@@ -234,6 +230,20 @@ class Sam2RealtimeBase(ClientBase):
                 response = None
             else:
                 response = response['tracks'][0]
+                assert_type_value(obj=response, type_or_value=list, name="response tracks")
+                for i, item in enumerate(response):
+                    assert_type_value(obj=item, type_or_value=dict, name=f"track '{i}' in response")
+                    assert_keys(obj=item, keys=['box_xyxy', 'mask'], mode="required", name=f"track '{i}' in response")
+                    assert_type_value(obj=item['box_xyxy'], type_or_value=list, name=f"key 'box_xyxy' of track '{i}' in response")
+                    assert_log(expression=len(item['box_xyxy']) == 4, message=f"Expected key 'box_xyxy' of track '{i}' in response to be a list of length '4' but got '{len(item['box_xyxy'])}'.")
+                    for j, value in enumerate(item['box_xyxy']):
+                        assert_type_value(obj=value, type_or_value=int, name=f"element '{j}' of key 'box_xyxy' of track '{i}' in response")
+                        assert_log(expression=value >= 0, message=f"Expected element '{j}' of key 'box_xyxy' of track '{i}' in response to be non-negative but got '{value}'.")
+                    assert_log(
+                        expression=item['box_xyxy'][2] > item['box_xyxy'][0] and item['box_xyxy'][3] > item['box_xyxy'][1],
+                        message=f"Expected key 'box_xyxy' of track '{i}' in response to be a non-empty box (x0, y0, x1, y1) but got '{item['box_xyxy']}'."
+                    )
+                    assert_log(expression=is_base64(string=item['mask']), message=f"Expected key 'mask' of track '{i}' in response to be Base64 encoded.")
                 suffix = "" if image_path is None else f" from image '{image_path}'"
                 if prompts is None:
                     message = f"Obtained '{len(response)}' track{'' if len(response) == 1 else 's'}{suffix} in '{time.perf_counter() - stamp:.3f}s'."

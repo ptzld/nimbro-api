@@ -275,7 +275,8 @@ class Sam2Realtime(Client):
                 A list (`list`) of prompts (`dict`) with either a bounding box or a points:
                 - point: {'object_id': int, 'points': [[x, y], [p, q], ...], 'labels': [1, 0, ...]}
                 - bounding box: {'object_id': int, 'bbox': [x0, y0, x1, y1]}
-                - Values of 'points' and 'bbox' are integer pixel coordinates (`int`).
+                - Values of 'points' and 'bbox' are absolute integer pixel coordinates (`int`).
+                  Bounding boxes use format (x0, y0, x1, y1) with exclusive upper bounds and must be non-empty.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -288,7 +289,8 @@ class Sam2Realtime(Client):
             tuple[bool, str, list[dict] | None]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
-                - list[dict] | None: The resulting masks as a a list (`list`) of dictionaries (`dict`) with the keys 'box_xyxy' (`list[int]`),
-                  'mask' as Base64 encoded boolean image (`str`), and 'track_id' corresponding to 'object_id' (`int`), or `None` if not successful.
+                - list[dict] | None: The resulting masks as a list (`list`) of dictionaries (`dict`) with the keys 'box_xyxy' containing four absolute integer
+                  pixel coordinates (`list[int]`) with exclusive upper bounds with format (x0, y0, x1, y1), 'mask' as a Base64 encoded boolean image (`str`), and
+                  'track_id' corresponding to 'object_id' (`int`), or `None` if not successful.
         """
         return self._base.wrap(1, self._base.get_response, image, prompts, **kwargs)

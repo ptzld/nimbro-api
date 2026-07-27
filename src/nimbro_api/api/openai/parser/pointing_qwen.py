@@ -1,14 +1,28 @@
 # Some VLMs are capable of object grounding by pointing or 2D/3D bounding boxes.
 # This completion parser extracts grounding content from the text-completion of Qwen3-VL-style models and copies it to the grounding-completion.
 # This way its possible to conveniently use the model as an open vocabulary detector.
+# Qwen 2D coordinates use [0, 1000] and are normalized to [0, 1] with inclusive bounds.
 # Each grounded object has one of the following forms:
 # {'x': float, 'y': float, 'label': str, 'type': "point_2d_normalized"}
 # {'x1': float, 'y1': float, 'x2': float, 'y2': float, 'label': str, 'type': "bbox_2d_normalized"}
 # {'center_x': float, 'center_y': float, 'center_z': float, 'size_x': float, 'size_y': float, 'size_z': float, 'roll': float, 'pitch': float, 'yaw': float, 'label': str, 'type': "bbox_3d_in_camera"}
-# Any additional key found for a grounded object is forwarded as well.
+# Any additional key found for a grounded object is forwarded.
 
 import re
 import json
+import math
+
+def _normalized(value):
+    """Convert one Qwen coordinate to the inclusive normalized range [0, 1]."""
+    if isinstance(value, bool):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(value) or not 0 <= value <= 1000:
+        return None
+    return value / 1000.0
 
 def _iter_json_arrays(text):
     """Yield JSON arrays found in fenced ```json blocks"""
@@ -35,15 +49,27 @@ def _iter_json_arrays(text):
                 pass
 
 def extract_grounding(text):
-    """Extract XML <points ...>...</points> and JSON point/bbox arrays. Normalize according to Qwen3-VL convention."""
+    """Extract Qwen grounding, normalizing [0, 1000] coordinates to [0, 1].
+
+    Normalized point endpoints are inclusive. Box minima are inclusive and
+    maxima exclusive, and boxes must have positive width and height.
+    """
     results = []
 
     # XML points2d
     pattern = re.compile(r'<points\s+([^>]*)>([^<]+)</points>', re.I | re.S)
     for attrs, label in pattern.findall(text):
         label = label.replace("_", " ").replace(".", "")
-        xs = {int(i): float(v) / 1000. for i, v in re.findall(r'\bx(\d+)\s*=\s*"([\d.]+)"', attrs)}
-        ys = {int(i): float(v) / 1000. for i, v in re.findall(r'\by(\d+)\s*=\s*"([\d.]+)"', attrs)}
+        xs = {}
+        for i, v in re.findall(r'\bx(\d+)\s*=\s*"([^"]*)"', attrs):
+            value = _normalized(v)
+            if value is not None:
+                xs[int(i)] = value
+        ys = {}
+        for i, v in re.findall(r'\by(\d+)\s*=\s*"([^"]*)"', attrs):
+            value = _normalized(v)
+            if value is not None:
+                ys[int(i)] = value
         for i in sorted(xs.keys() & ys.keys()):
             results.append({
                 'x': xs[i], 'y': ys[i],
@@ -58,36 +84,41 @@ def extract_grounding(text):
                 continue
             # point_2d
             if 'point_2d' in obj and isinstance(obj['point_2d'], (list, tuple)) and len(obj['point_2d']) >= 2:
-                x, y = obj['point_2d'][:2]
-                item = {
-                    'x': float(x) / 1000.0,
-                    'y': float(y) / 1000.0,
-                    'label': obj.get('label', ''),
-                    'type': 'point_2d_normalized',
-                }
-                # forward extra attributes
-                for k, v in obj.items():
-                    if k != 'point_2d':
-                        item[k] = v
-                results.append(item)
+                x, y = (_normalized(value) for value in obj['point_2d'][:2])
+                if x is not None and y is not None:
+                    item = {
+                        'x': x,
+                        'y': y,
+                        'label': obj.get('label', ''),
+                        'type': 'point_2d_normalized',
+                    }
+                    # forward extra attributes
+                    for k, v in obj.items():
+                        if k not in {'point_2d', 'x', 'y', 'label', 'type'}:
+                            item[k] = v
+                    results.append(item)
 
             # bbox_2d
             if 'bbox_2d' in obj and isinstance(obj['bbox_2d'], (list, tuple)) and len(obj['bbox_2d']) >= 4:
-                x1, y1, x2, y2 = obj['bbox_2d'][:4]
-                item = {
-                    'x1': float(x1) / 1000.0, 'y1': float(y1) / 1000.0,
-                    'x2': float(x2) / 1000.0, 'y2': float(y2) / 1000.0,
-                    'label': obj.get('label', ''),
-                    'type': 'bbox_2d_normalized',
-                }
-                for k, v in obj.items():
-                    if k != 'bbox_2d':
-                        item[k] = v
-                results.append(item)
+                x1, y1, x2, y2 = (_normalized(value) for value in obj['bbox_2d'][:4])
+                if None not in (x1, y1, x2, y2) and x1 < x2 and y1 < y2:
+                    item = {
+                        'x1': x1, 'y1': y1,
+                        'x2': x2, 'y2': y2,
+                        'label': obj.get('label', ''),
+                        'type': 'bbox_2d_normalized',
+                    }
+                    for k, v in obj.items():
+                        if k not in {'bbox_2d', 'x1', 'y1', 'x2', 'y2', 'label', 'type'}:
+                            item[k] = v
+                    results.append(item)
 
             # bbox_3d
             if 'bbox_3d' in obj and isinstance(obj['bbox_3d'], (list, tuple)) and len(obj['bbox_3d']) >= 9:
-                cx, cy, cz, sx, sy, sz, roll, pitch, yaw = map(float, obj['bbox_3d'][:9])
+                try:
+                    cx, cy, cz, sx, sy, sz, roll, pitch, yaw = map(float, obj['bbox_3d'][:9])
+                except (TypeError, ValueError, OverflowError):
+                    continue
                 item = {
                     'center_x': cx, 'center_y': cy, 'center_z': cz,
                     'size_x': sx, 'size_y': sy, 'size_z': sz,
@@ -96,7 +127,7 @@ def extract_grounding(text):
                     'type': 'bbox_3d_in_camera',
                 }
                 for k, v in obj.items():
-                    if k != 'bbox_3d':
+                    if k not in item and k != 'bbox_3d':
                         item[k] = v
                 results.append(item)
 
@@ -128,7 +159,6 @@ def parse(self, success, message, completion):
         completion['logs'].append("Cannot extract grounding without text-completion.")
 
     return success, message, completion
-
 
 # [2026-03-18 20:39:57.177][INFO ][ChatCompletions]: Text-completion:
 #                                                  | '

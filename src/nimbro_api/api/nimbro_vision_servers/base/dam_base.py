@@ -158,7 +158,9 @@ class DamBase(ClientBase):
             assert_type_value(obj=item['bbox'], type_or_value=list, name=f"key 'bbox' of element '{i}' in argument 'prompts'")
             assert_log(expression=len(item['bbox']) == 4, message=f"Expected value of key 'bbox' of element '{i}' in argument 'prompts' to be a list of length '4' but got '{len(item['bbox'])}'.")
             for j, value in enumerate(item['bbox']):
-                assert_type_value(obj=value, type_or_value=[float, int], name=f"element '{j}' of key 'bbox' of element '{i}' in argument 'prompts'")
+                assert_type_value(obj=value, type_or_value=int, name=f"element '{j}' of key 'bbox' of element '{i}' in argument 'prompts'")
+                assert_log(expression=value >= 0, message=f"Expected element '{j}' of key 'bbox' of element '{i}' in argument 'prompts' to be non-negative but got '{value}'.")
+            assert_log(expression=item['bbox'][2] > item['bbox'][0] and item['bbox'][3] > item['bbox'][1], message=f"Expected key 'bbox' of element '{i}' in argument 'prompts' to be a non-empty box (x0, y0, x1, y1) but got '{item['bbox']}'.")
         prompts = copy.deepcopy(prompts)
 
         # validate health

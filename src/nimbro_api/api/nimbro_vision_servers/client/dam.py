@@ -290,8 +290,9 @@ class Dam(Client):
                 The image file to be processed as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
             prompts (list[dict]):
                 A list (`list`) of dictionaries (`dict`) with the following items:
-                - 'bbox': A list (`list`) of four integers (`int`) marking a bounding (x0, y0, x1, y1) within the image bounds.
-                - 'mask': A Base64 encoded boolean image matching 'bbox' masking the area to be described.
+                - 'bbox': Four absolute integer pixel coordinates (`list[int]`) in format (x0, y0, x1, y1).
+                  Boxes must use exclusive upper bounds, and the caller must ensure they are within the image bounds.
+                - 'mask': A Base64 encoded boolean image covering the box extent.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:

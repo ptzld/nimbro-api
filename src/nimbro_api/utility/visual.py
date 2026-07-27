@@ -289,6 +289,7 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             box_format (str, optional):
                 Format of the input boxes. See `convert_boxes()`.
                 One of ["xyxy_normalized", "xyxy_absolute", "xywh_normalized", "xywh_absolute"].
+                All upper bounds are exclusive. Normalized coordinates must be in [0.0, 1.0].
                 Defaults to 'xyxy_normalized'.
             fill_alpha (float):
                 Opacity of the filled box area in [0.0, 1.0]. Defaults to 0.0.
@@ -342,8 +343,8 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
                 Opacity of the point outline in [0.0, 1.0]. Defaults to 0.9.
             point_format (str, optional):
                 Format of the input points. One of ["xy_normalized", "xy_absolute"].
-                For 'xy_normalized', coordinates are floats in [0.0, 1.0].
-                For 'xy_absolute', coordinates are non-negative integer pixel coordinates.
+                For 'xy_normalized', coordinates are floats in [0.0, 1.0] (inclusive).
+                For 'xy_absolute', coordinates are integer pixel coordinates.
                 Defaults to 'xy_normalized'.
 
             label_font_size (float):
@@ -516,6 +517,14 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             for j, value in enumerate(box):
                 assert_type_value(obj=value, type_or_value=float, name=f"item '{j}' in box '{i}' argument 'boxes'")
                 assert_log(expression=0.0 <= value <= 1.0, message=f"Expected item '{j}' in box '{i}' in argument 'boxes' to be between 0.0 and 1.0 (inclusive) but got '{value}'.")
+            if box_format == "xyxy_normalized":
+                assert_log(expression=box[0] < box[2], message=f"Expected value in argument 'boxes' for x0 '{box[0]}' < x1 '{box[2]}'.")
+                assert_log(expression=box[1] < box[3], message=f"Expected value in argument 'boxes' for y0 '{box[1]}' < y1 '{box[3]}'.")
+            else:
+                assert_log(expression=box[2] > 0.0, message=f"Expected value in argument 'boxes' for width '{box[2]}' > 0.0.")
+                assert_log(expression=box[3] > 0.0, message=f"Expected value in argument 'boxes' for height '{box[3]}' > 0.0.")
+                assert_log(expression=box[0] + box[2] <= 1.0, message=f"Expected value in argument 'boxes' for x '{box[0]}' + width '{box[2]}' <= 1.0.")
+                assert_log(expression=box[1] + box[3] <= 1.0, message=f"Expected value in argument 'boxes' for y '{box[1]}' + height '{box[3]}' <= 1.0.")
     else:
         for i, box in enumerate(boxes):
             if box is None:
@@ -1193,13 +1202,15 @@ def convert_boxes(boxes, *, source_format="xyxy_absolute", target_format="xywh_a
         boxes (list | tuple | numpy.ndarray):
             Bounding boxes to convert. Each box must be a 4-element sequence.
             The input may be a a single box [...], a list of boxes: [[...], [...]], or arbitrarily nested lists/tuples/arrays of boxes.
+            Values must be finite Python or NumPy numbers. Every box must be non-empty.
+            Absolute boxes are checked against `image_size` when it is supplied.
         source_format (str, optional):
             Format of the input boxes. One of:
             - 'xyxy_absolute':
                 [x_min, y_min, x_max, y_max] in pixel coordinates using exclusive upper bounds.
-                Valid coordinates lie within:
-                    0 ≤ x_min ≤ x_max ≤ image width
-                    0 ≤ y_min ≤ y_max ≤ image height
+                When `image_size` is available, valid coordinates lie within:
+                    0 ≤ x_min < x_max ≤ image width
+                    0 ≤ y_min < y_max ≤ image height
             - 'xyxy_normalized':
                 Same as 'xyxy_absolute', but normalized to [0, 1] using:
                     x_normalized = x / image width
@@ -1216,11 +1227,11 @@ def convert_boxes(boxes, *, source_format="xyxy_absolute", target_format="xywh_a
         target_format (str, optional):
             Desired output format. See `source_format`. Defaults to 'xywh_absolute'.
         image_size (tuple | list | None, optional):
-            Required if converting to or from a normalized format. Should be (height, width).
+            Image size (height, width) required when converting to or from a normalized format.
             Defaults to `None`.
 
     Raises:
-        UnrecoverableError: If input arguments are invalid. The structure matches the input structure.
+        UnrecoverableError: If input arguments are invalid.
 
     Returns:
         list: Converted bounding boxes in the target format. The structure matches the input structure.
@@ -1242,10 +1253,11 @@ def convert_boxes(boxes, *, source_format="xyxy_absolute", target_format="xywh_a
 
     if "normalized" in source_format or "normalized" in target_format:
         assert_log(expression=image_size is not None, message="Expected argument 'image_size' to be a tuple (height, width) when converting to or from normalized boxes.")
+    if image_size is not None:
         assert_log(expression=len(image_size) == 2, message=f"Expected argument 'image_size' to be a 2-tuple (height, width) but got a tuple of length '{len(image_size)}'.")
-        assert_log(expression=isinstance(image_size[0], int) and isinstance(image_size[1], int), message="Expected argument 'image_size' to be a 2-tuple (height, width) of integers.")
+        assert_log(expression=all(isinstance(value, (int, np.integer)) and not isinstance(value, (bool, np.bool_)) for value in image_size), message="Expected argument 'image_size' to be a 2-tuple (height, width) of integers.")
         assert_log(expression=image_size[0] > 0 and image_size[1] > 0, message="Expected argument 'image_size' to be a 2-tuple (height, width) of positive integers.")
-        h, w = image_size
+        h, w = int(image_size[0]), int(image_size[1])
 
     # flatten input and store nested structure
     def flatten(x):
@@ -1267,6 +1279,24 @@ def convert_boxes(boxes, *, source_format="xyxy_absolute", target_format="xywh_a
 
     flat_boxes, structure = flatten(boxes)
     arr = np.asarray(flat_boxes, dtype=np.float64)
+
+    def validate(values, box_format, height=None, width=None):
+        assert_log(expression=np.all(np.isfinite(values)), message=f"Expected all values in argument 'boxes' to be finite for format '{box_format}'.")
+        if box_format == "xyxy_absolute":
+            valid = np.all(values[:, 0] >= 0) and np.all(values[:, 1] >= 0) and np.all(values[:, 0] < values[:, 2]) and np.all(values[:, 1] < values[:, 3])
+            if width is not None:
+                valid = valid and np.all(values[:, 2] <= width) and np.all(values[:, 3] <= height)
+        elif box_format == "xyxy_normalized":
+            valid = np.all((values >= 0.0) & (values <= 1.0)) and np.all(values[:, 0] < values[:, 2]) and np.all(values[:, 1] < values[:, 3])
+        elif box_format == "xywh_absolute":
+            valid = np.all(values[:, :2] >= 0) and np.all(values[:, 2:] > 0)
+            if width is not None:
+                valid = valid and np.all(values[:, 0] + values[:, 2] <= width) and np.all(values[:, 1] + values[:, 3] <= height)
+        else:
+            valid = np.all((values >= 0.0) & (values <= 1.0)) and np.all(values[:, 2:] > 0) and np.all(values[:, 0] + values[:, 2] <= 1.0) and np.all(values[:, 1] + values[:, 3] <= 1.0)
+        assert_log(expression=bool(valid), message=f"Expected argument 'boxes' to contain only non-empty '{box_format}' boxes within the available bounds.")
+
+    validate(arr, source_format, h if image_size is not None else None, w if image_size is not None else None)
 
     # return early if formats match
     if source_format == target_format:
@@ -1299,28 +1329,28 @@ def convert_boxes(boxes, *, source_format="xyxy_absolute", target_format="xywh_a
     else:
         raise NotImplementedError(f"Unknown source format '{source_format}'.")
 
+    if "absolute" in target_format:
+        # Avoid expanding boundaries that differ from an integer only by floating-point noise.
+        nearest = np.rint(tmp)
+        tolerance = 8 * np.finfo(np.float64).eps * np.maximum(1.0, np.abs(tmp))
+        tmp = np.where(np.abs(tmp - nearest) <= tolerance, nearest, tmp)
+
     # convert from xyxy_absolute to target_format
     if target_format == "xyxy_absolute":
-        result = np.round(tmp).astype(int)
-        if image_size is not None:
-            result[:, [0, 2]] = np.clip(result[:, [0, 2]], 0, w)
-            result[:, [1, 3]] = np.clip(result[:, [1, 3]], 0, h)
+        result = np.stack([np.floor(tmp[:, 0]), np.floor(tmp[:, 1]), np.ceil(tmp[:, 2]), np.ceil(tmp[:, 3])], axis=1).astype(int)
     elif target_format == "xyxy_normalized":
         result = tmp / np.array([w, h, w, h], dtype=np.float64)
-        result = np.clip(result, 0.0, 1.0)
     elif target_format == "xywh_absolute":
-        xyxy = np.round(tmp).astype(int)
-        if image_size is not None:
-            xyxy[:, [0, 2]] = np.clip(xyxy[:, [0, 2]], 0, w)
-            xyxy[:, [1, 3]] = np.clip(xyxy[:, [1, 3]], 0, h)
+        xyxy = np.stack([np.floor(tmp[:, 0]), np.floor(tmp[:, 1]), np.ceil(tmp[:, 2]), np.ceil(tmp[:, 3])], axis=1).astype(int)
         x1, y1, x2, y2 = xyxy[:, 0], xyxy[:, 1], xyxy[:, 2], xyxy[:, 3]
         result = np.stack([x1, y1, x2 - x1, y2 - y1], axis=1)
     elif target_format == "xywh_normalized":
         x1, y1, x2, y2 = tmp[:, 0], tmp[:, 1], tmp[:, 2], tmp[:, 3]
         result = np.stack([x1 / w, y1 / h, (x2 - x1) / w, (y2 - y1) / h], axis=1)
-        result = np.clip(result, 0.0, 1.0)
     else:
         raise NotImplementedError(f"Unknown target format '{target_format}'.")
+
+    validate(result, target_format, h if image_size is not None else None, w if image_size is not None else None)
 
     # restore original structure
     flat_result = result.tolist()
