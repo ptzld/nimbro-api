@@ -851,11 +851,9 @@ class ChatCompletionsBase(ClientBase):
 
                             if len(choices_acc) != n:
                                 logs.append(f"Expected to receive '{n}' choice{'' if n == 1 else 's'} but got '{len(choices_acc)}'.")
-                                self._logger.warn(logs[-1])
                                 break
                             if any(acc['reasoning'] == "" and acc['text'] == "" and len(acc['tool_calls']) == 0 for acc in choices_acc.values()):
                                 logs.append("Completion finished before receiving any content.")
-                                self._logger.warn(logs[-1])
                                 break
 
                             is_complete = True

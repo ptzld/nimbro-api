@@ -161,7 +161,7 @@ def assert_type_value(obj, type_or_value, *, match_types=True, match_inherited_t
     # log and raise
     if not valid:
         if logger is not None:
-            logger.fatal(f"{prefix}{_text}")
+            logger.error(f"{prefix}{_text}")
         raise UnrecoverableError(_text)
 
 def assert_keys(obj, keys, mode="whitelist", *, name="dictionary", text=None, logger=None):
