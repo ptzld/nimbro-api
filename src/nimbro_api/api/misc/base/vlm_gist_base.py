@@ -533,19 +533,18 @@ class VlmGistBase(ClientBase):
                     assert_log(expression=len(batch_item['detection']['logs']) > 0, message=f"Expected value of key 'detection.logs' in result '{i + 1}' of '{num_images}' to be non-empty.")
                     self._logger.warn(f"Skipped visualizing result '{log_index + 1}' of '{log_count}' with failed detection: {batch_item['detection']['logs'][-1]}")
                     continue
-                else:
-                    assert_keys(obj=batch_item['detection'], keys=['data'], mode="required", name=f"value of key 'detection' in result '{i + 1}' of '{num_images}'")
-                    assert_type_value(obj=batch_item['detection']['data'], type_or_value=list, name=f"value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
-                    for k, item in enumerate(batch_item['detection']['data']):
-                        assert_type_value(obj=item, type_or_value=dict, name=f"item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
-                        assert_keys(obj=item, keys=['prompt', 'box_xyxy'], mode="required", name=f"item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
-                        assert_type_value(obj=item['prompt'], type_or_value=str, name=f"value of key 'prompt' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
-                        assert_type_value(obj=item['box_xyxy'], type_or_value=list, name=f"value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
-                        assert_log(expression=len(item['box_xyxy']) == 4, message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be a list of length '4' but got '{len(item['box_xyxy'])}'.")
-                        assert_log(expression=all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in item['box_xyxy']), message=f"Expected all elements of value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be non-negative integers.")
-                        assert_log(expression=item['box_xyxy'][2] > item['box_xyxy'][0] and item['box_xyxy'][3] > item['box_xyxy'][1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be a valid bounding box but got '{item['box_xyxy']}'.")
-                        if image_dimensions is not None:
-                            assert_log(expression=item['box_xyxy'][2] <= image_dimensions[0] and item['box_xyxy'][3] <= image_dimensions[1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to lie within image dimensions {image_dimensions} but got '{item['box_xyxy']}'.")
+                assert_keys(obj=batch_item['detection'], keys=['data'], mode="required", name=f"value of key 'detection' in result '{i + 1}' of '{num_images}'")
+                assert_type_value(obj=batch_item['detection']['data'], type_or_value=list, name=f"value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                for k, item in enumerate(batch_item['detection']['data']):
+                    assert_type_value(obj=item, type_or_value=dict, name=f"item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                    assert_keys(obj=item, keys=['prompt', 'box_xyxy'], mode="required", name=f"item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=item['prompt'], type_or_value=str, name=f"value of key 'prompt' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                    assert_type_value(obj=item['box_xyxy'], type_or_value=list, name=f"value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}'")
+                    assert_log(expression=len(item['box_xyxy']) == 4, message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be a list of length '4' but got '{len(item['box_xyxy'])}'.")
+                    assert_log(expression=all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in item['box_xyxy']), message=f"Expected all elements of value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be non-negative integers.")
+                    assert_log(expression=item['box_xyxy'][2] > item['box_xyxy'][0] and item['box_xyxy'][3] > item['box_xyxy'][1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to be a valid bounding box but got '{item['box_xyxy']}'.")
+                    if image_dimensions is not None:
+                        assert_log(expression=item['box_xyxy'][2] <= image_dimensions[0] and item['box_xyxy'][3] <= image_dimensions[1], message=f"Expected value of key 'box_xyxy' in item '{k + 1}' of value of key 'detection.data' in result '{i + 1}' of '{num_images}' to lie within image dimensions {image_dimensions} but got '{item['box_xyxy']}'.")
 
                 # validate segmentation structure (only if present)
                 if 'segmentation' in batch_item:
