@@ -759,4 +759,4 @@ def test_20_structured_description_strict():
     data = {'image': {'width': 100, 'height': 100}, 'structured_description': {'raw': [], 'logs': []}}
     success, message, _ = client._base.parse_structured_description(settings=settings, data=data, stamp_local=None)
     assert_log(expression=not success, message="Expected permissive parsing to fail when no valid objects remain.")
-    assert_log(expression=message == "Expected structured description to contain at least one valid object.", message=f"Unexpected empty structured description failure: {message}")
+    assert_log(expression=message == "Expected structured description to contain at least one object but got an empty list.", message=f"Unexpected empty structured description failure: {message}")

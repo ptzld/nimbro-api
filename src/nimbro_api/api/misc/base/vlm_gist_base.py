@@ -396,8 +396,7 @@ class VlmGistBase(ClientBase):
                 try:
                     pickle.dumps((vis_args, logger_settings))
                 except Exception as e:
-                    self._logger.error(f"Failed to visualize results: Failed to serialize shared visualization arguments for multiprocessing: {repr(e)}")
-                    return True, f"Visualized '0' of '{num_images}' results.", None, None
+                    raise UnrecoverableError(f"Failed to serialize shared visualization arguments for multiprocessing: {repr(e)}") from e
             worker_args = []
             for i, (batch_item, batch_image) in enumerate(zip(batch, images)):
                 try:
@@ -605,12 +604,12 @@ class VlmGistBase(ClientBase):
             if len(point_attributes) > 0:
                 for item_index, item in enumerate(batch_item['structured_description']['data']):
                     if prompt_key not in item:
-                        self._logger.warn(f"Item '{item_index}' in structured description of result '{log_index + 1}' of '{log_count}' misses prompt key '{prompt_key}'.")
+                        self._logger.warn(f"Item '{item_index + 1}' of '{len(batch_item['structured_description']['data'])}' in structured description of result '{log_index + 1}' of '{log_count}' misses prompt key '{prompt_key}'.")
                         continue
 
                     label = item[prompt_key]
                     if label not in detection_indices_by_label:
-                        self._logger.warn(f"Result '{log_index + 1}' of '{log_count}' misses detection for item '{item_index}' in structured description due to missing prompt key '{label}'.")
+                        self._logger.warn(f"Item '{item_index + 1}' of '{len(batch_item['structured_description']['data'])}' in structured description of result '{log_index + 1}' of '{log_count}' misses a detection matching prompt '{label}' from key '{prompt_key}'.")
                         continue
 
                     detection_indices = detection_indices_by_label[label]
@@ -654,10 +653,10 @@ class VlmGistBase(ClientBase):
                             masks[j] = masks[j].astype(bool)
                         except Exception as e:
                             masks[j] = None
-                            self._logger.warn(f"Failed to visualize mask of result '{log_index + 1}' of '{log_count}': {repr(e)}")
+                            self._logger.warn(f"Failed to visualize mask '{j + 1}' of '{len(masks)}' in result '{log_index + 1}' of '{log_count}': {repr(e)}")
                     else:
                         masks[j] = None
-                        self._logger.warn(f"Failed to visualize mask of result '{log_index + 1}' of '{log_count}': {message}")
+                        self._logger.warn(f"Failed to visualize mask '{j + 1}' of '{len(masks)}' in result '{log_index + 1}' of '{log_count}': {message}")
 
             if sum(item is None for item in points) == len(points):
                 points = None
@@ -902,9 +901,21 @@ class VlmGistBase(ClientBase):
         return image, data, settings
 
     def batch_orchestrator(self, image, data, settings, scene_description, structured_description, detection, stamp_global):
+        scene_choices = 1 if settings['scene_description']['skip'] or scene_description is not None else settings['scene_description']['chat_completions']['choices']
+        structured_choices = 1 if settings['structured_description']['skip'] or structured_description is not None else settings['structured_description']['chat_completions']['choices']
+        choices = scene_choices * structured_choices
+        num_results = len(image) * choices
+        choices_message = ""
+        if scene_choices > 1 and structured_choices > 1:
+            choices_message = f" and '{scene_choices}' scene description choices and '{structured_choices}' structured description choices per image producing '{num_results}' results"
+        elif scene_choices > 1:
+            choices_message = f" and '{scene_choices}' scene description choices per image producing '{num_results}' results"
+        elif structured_choices > 1:
+            choices_message = f" and '{structured_choices}' structured description choices per image producing '{num_results}' results"
+
         # log
         message = (
-            f"Processing batch with '{len(image)}' image{'' if len(image) == 1 else 's'} using "
+            f"Processing batch with '{len(image)}' image{'' if len(image) == 1 else 's'}{choices_message} using "
             f"'{settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)}' "
             f"{('thread' if settings['batch']['style'] == 'threading' else 'process')}"
             f"{'' if (settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)) == 1 else ('s' if settings['batch']['style'] == 'threading' else 'es')}."
@@ -948,12 +959,12 @@ class VlmGistBase(ClientBase):
             results = [future.result() for future in futures]
 
         # extract batch results
-        successes = [res[0] for res in results]
-        failures = len(image) - sum(successes)
+        batch = [item for res in results for item in res[2]]
+        failures = sum(not item['run']['success'] for item in batch)
         data['run']['success'] = failures == 0
         duration = time.perf_counter() - stamp_global
         data['run']['message'] = (
-            f"Processed batch with '{len(image)}' image{'' if len(image) == 1 else 's'} using "
+            f"Processed batch with '{len(image)}' image{'' if len(image) == 1 else 's'}{choices_message} using "
             f"'{settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)}' "
             f"{('thread' if settings['batch']['style'] == 'threading' else 'process')}"
             f"{'' if (settings['batch']['size'] if settings['batch']['size'] > 0 else len(image)) == 1 else ('s' if settings['batch']['style'] == 'threading' else 'es')} "
@@ -961,7 +972,7 @@ class VlmGistBase(ClientBase):
             f"in '{duration:.3f}s'."
         )
         data['run']['duration'] = duration
-        data['batch'] = [item for res in results for item in res[2]]
+        data['batch'] = batch
         return data['run']['success'], data['run']['message'], data
 
     @staticmethod
@@ -977,11 +988,11 @@ class VlmGistBase(ClientBase):
         # log
         num_results = scene_choices * structured_choices
         if scene_choices > 1 and structured_choices > 1:
-            message = f"Processing image with '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results."
+            message = f"Processing image using '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results."
         elif scene_choices > 1:
-            message = f"Processing image with '{scene_choices}' scene description choices producing '{num_results}' results."
+            message = f"Processing image using '{scene_choices}' scene description choices."
         else:
-            message = f"Processing image with '{structured_choices}' structured description choices producing '{num_results}' results."
+            message = f"Processing image using '{structured_choices}' structured description choices."
         if settings['message_process']:
             self._logger.info(message)
         else:
@@ -1046,26 +1057,15 @@ class VlmGistBase(ClientBase):
         # extract batch results
         successes = [item['run']['success'] for item in items]
         failures = len(items) - sum(successes)
-        failure_messages = [f"Failed in choice '{i + 1}' of '{num_results}' after '{item['run']['duration']:.3f}s': {item['run']['message']}" for i, item in enumerate(items) if not item['run']['success']]
-        if failures == 1:
-            failure_messages = failure_messages[0]
         success = failures == 0
         duration = time.perf_counter() - stamp_global
 
-        if failures == 0:
-            if scene_choices > 1 and structured_choices > 1:
-                message = f"Processed image with '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
-            elif scene_choices > 1:
-                message = f"Processed image with '{scene_choices}' scene description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
-            else:
-                message = f"Processed image with '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+        if scene_choices > 1 and structured_choices > 1:
+            message = f"Processed image using '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+        elif scene_choices > 1:
+            message = f"Processed image using '{scene_choices}' scene description choices with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
         else:
-            if scene_choices > 1 and structured_choices > 1:
-                message = f"Processed image with '{scene_choices}' scene description choices and '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s': {failure_messages}"
-            elif scene_choices > 1:
-                message = f"Processed image with '{scene_choices}' scene description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s': {failure_messages}"
-            else:
-                message = f"Processed image with '{structured_choices}' structured description choices producing '{num_results}' results with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s': {failure_messages}"
+            message = f"Processed image using '{structured_choices}' structured description choices with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
 
         if is_worker:
             return success, message, items
@@ -1155,11 +1155,13 @@ class VlmGistBase(ClientBase):
             attempt = 1
 
             while len(open_indices) > 0:
+                attempt_indices = list(open_indices)
                 num_open = len(open_indices)
                 settings_success, settings_message = chat.set_settings(settings={'choices': num_open, 'retry': False}, mute=True)
                 assert_log(expression=settings_success, message=settings_message)
                 attempt_data = copy.deepcopy(base_data)
                 success, message, completion = chat.prompt(text=messages, reset_context=True, response_type="text")
+                shared_failure = not success
                 last_message = message
                 attempt_data['scene_description']['success'] = success
                 attempt_data['scene_description']['logs'] = [message]
@@ -1187,12 +1189,13 @@ class VlmGistBase(ClientBase):
                             attempt_branches[k] = branch
                     else:
                         message = split_message
+                        shared_failure = True
 
                 if not success or any(branch is None for branch in attempt_branches):
                     for k, branch in enumerate(attempt_branches):
                         if branch is None:
                             branch = copy.deepcopy(attempt_data)
-                            _, _, branch = self.consolidate_error(key='scene_description', message=message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
+                            _, _, branch = self.consolidate_error(key='scene_description', message=None if not success else message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
                             attempt_branches[k] = branch
 
                 next_open_indices = []
@@ -1205,8 +1208,8 @@ class VlmGistBase(ClientBase):
                     break
                 if retries_left == 0:
                     break
-                if success:
-                    failure_messages = [branch['run']['message'] for branch in attempt_branches if not branch['scene_description']['success']]
+                if not shared_failure:
+                    failure_messages = [f"Choice '{result_index + 1}' of '{choices}': {branch['run']['message']}" for result_index, branch in zip(attempt_indices, attempt_branches) if not branch['scene_description']['success']]
                     failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
                 else:
                     failure_message = message
@@ -1223,10 +1226,15 @@ class VlmGistBase(ClientBase):
             if failures == 0:
                 log_message = f"Generated '{choices}' scene descriptions in '{duration:.3f}s'."
             else:
-                log_message = f"Failed to generate '{failures}' of '{choices}' scene descriptions in '{duration:.3f}s'."
+                if shared_failure:
+                    failure_message = message
+                else:
+                    failure_messages = [f"Choice '{i + 1}' of '{choices}': {branch['run']['message']}" for i, branch in enumerate(branches) if not branch['scene_description']['success']]
+                    failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
+                log_message = f"Failed to generate '{failures}' of '{choices}' scene descriptions in '{duration:.3f}s': {failure_message}"
             if settings['scene_description']['message_process']:
                 if settings['scene_description']['message_results'] and num_success > 0:
-                    self._logger.info(f"{log_message[:-1]}: '\n{json.dumps([branch['scene_description']['data'] for branch in branches if branch['scene_description']['success']], indent=4)}'")
+                    self._logger.info(f"{log_message}\nSuccessful scene descriptions: '\n{json.dumps([branch['scene_description']['data'] for branch in branches if branch['scene_description']['success']], indent=4)}'")
                 else:
                     self._logger.info(log_message)
             else:
@@ -1315,7 +1323,7 @@ class VlmGistBase(ClientBase):
         completions = [None] * choices
         for i, choice in enumerate(completion['choices']):
             if not isinstance(choice, dict):
-                return False, f"Expected choice '{i}' in {name} completion to be of type 'dict' but got '{type(choice).__name__}'.", None
+                return False, f"Expected choice '{i + 1}' of '{choices}' in {name} completion to be of type 'dict' but got '{type(choice).__name__}'.", None
             item = copy.deepcopy({key: value for key, value in completion.items() if key != 'choices'})
             for key, value in choice.items():
                 if key == 'logs' and isinstance(value, list) and isinstance(item.get('logs'), list):
@@ -1381,11 +1389,13 @@ class VlmGistBase(ClientBase):
             attempt = 1
 
             while len(open_indices) > 0:
+                attempt_indices = list(open_indices)
                 num_open = len(open_indices)
                 settings_success, settings_message = chat.set_settings(settings={'choices': num_open, 'retry': False}, mute=True)
                 assert_log(expression=settings_success, message=settings_message)
                 attempt_data = copy.deepcopy(base_data)
                 success, message, completion = chat.prompt(text=messages, reset_context=True, response_type=settings['structured_description']['response_type'])
+                shared_failure = not success
                 last_message = message
                 attempt_data['structured_description']['success'] = success
                 attempt_data['structured_description']['logs'] = [message]
@@ -1413,12 +1423,13 @@ class VlmGistBase(ClientBase):
                             attempt_branches[k] = branch
                     else:
                         message = split_message
+                        shared_failure = True
 
                 if not success or any(branch is None for branch in attempt_branches):
                     for k, branch in enumerate(attempt_branches):
                         if branch is None:
                             branch = copy.deepcopy(attempt_data)
-                            _, _, branch = self.consolidate_error(key='structured_description', message=message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
+                            _, _, branch = self.consolidate_error(key='structured_description', message=None if not success else message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
                             attempt_branches[k] = branch
 
                 next_open_indices = []
@@ -1431,8 +1442,8 @@ class VlmGistBase(ClientBase):
                     break
                 if retries_left == 0:
                     break
-                if success:
-                    failure_messages = [branch['run']['message'] for branch in attempt_branches if not branch['structured_description']['success']]
+                if not shared_failure:
+                    failure_messages = [f"Choice '{result_index + 1}' of '{choices}': {branch['run']['message']}" for result_index, branch in zip(attempt_indices, attempt_branches) if not branch['structured_description']['success']]
                     failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
                 else:
                     failure_message = message
@@ -1449,10 +1460,15 @@ class VlmGistBase(ClientBase):
             if failures == 0:
                 log_message = f"Generated '{choices}' structured descriptions in '{duration:.3f}s'."
             else:
-                log_message = f"Failed to generate '{failures}' of '{choices}' structured descriptions in '{duration:.3f}s'."
+                if shared_failure:
+                    failure_message = message
+                else:
+                    failure_messages = [f"Choice '{i + 1}' of '{choices}': {branch['run']['message']}" for i, branch in enumerate(branches) if not branch['structured_description']['success']]
+                    failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
+                log_message = f"Failed to generate '{failures}' of '{choices}' structured descriptions in '{duration:.3f}s': {failure_message}"
             if settings['structured_description']['message_process']:
                 if settings['structured_description']['message_results'] and num_success > 0:
-                    self._logger.info(f"{log_message[:-1]}: '\n{json.dumps([branch['structured_description']['data'] for branch in branches if branch['structured_description']['success']], indent=4)}'")
+                    self._logger.info(f"{log_message}\nSuccessful structured descriptions: '\n{json.dumps([branch['structured_description']['data'] for branch in branches if branch['structured_description']['success']], indent=4)}'")
                 else:
                     self._logger.info(log_message)
             else:
@@ -1545,10 +1561,11 @@ class VlmGistBase(ClientBase):
         for i, obj in enumerate(description):
             # object must be dictionary
             if not isinstance(obj, dict):
-                message = f"Expected object '{i}' in structured description to be of type 'dict' but got '{type(obj).__name__}'."
                 if strict:
+                    message = f"Expected object '{i}' in structured description to be of type 'dict' but got '{type(obj).__name__}'."
                     return False, message, data
-                data['structured_description']['logs'].append(f"Discarded object '{i}' from structured description: {message}")
+                message = f"Discarded object '{i}' from structured description because it has type '{type(obj).__name__}' instead of 'dict'."
+                data['structured_description']['logs'].append(message)
                 self._logger.warn(data['structured_description']['logs'][-1])
                 continue
 
@@ -1556,11 +1573,12 @@ class VlmGistBase(ClientBase):
             keys_left = list(obj.keys())
             for key in copy.deepcopy(keys_left):
                 if not isinstance(key, str):
-                    message = f"Expected all keys in object '{i}' of structured description to be of type 'str' but got key '{key}' of type '{type(key).__name__}'."
                     if strict:
+                        message = f"Expected all keys in object '{i}' of structured description to be of type 'str' but got key '{key}' of type '{type(key).__name__}'."
                         return False, message, data
+                    message = f"Discarded key '{key}' of type '{type(key).__name__}' from object '{i}' of structured description because all keys must have type 'str'."
+                    data['structured_description']['logs'].append(message)
                     keys_left.remove(key)
-                    data['structured_description']['logs'].append(f"Discarded invalid key '{key}' from object '{i}' of structured description: {message}")
                     self._logger.warn(data['structured_description']['logs'][-1])
 
             # object can feature required keys
@@ -1695,30 +1713,32 @@ class VlmGistBase(ClientBase):
                         if not is_valid:
                             is_required = j < len(settings['structured_description']['keys_required'])
                             req_opt_str = "required" if is_required else "optional"
-                            err_msg = f"Expected format of {req_opt_str} key '{target_key}' in object '{i}' of structured description to match type '{expected_type}' but got invalid value '{val}' of type '{type(val).__name__}'."
+                            if strict:
+                                message = f"Expected format of {req_opt_str} key '{target_key}' in object '{i}' of structured description to match type '{expected_type}' but got invalid value '{val}' of type '{type(val).__name__}'."
 
                             if is_required:
                                 if strict:
-                                    return False, err_msg, data
-                                data['structured_description']['logs'].append(f"Discarded object '{i}' from structured description: {err_msg}")
+                                    return False, message, data
+                                message = f"Discarded object '{i}' from structured description because required key '{target_key}' with expected type '{expected_type}' has invalid value '{val}' of type '{type(val).__name__}'."
+                                data['structured_description']['logs'].append(message)
                                 self._logger.warn(data['structured_description']['logs'][-1])
                                 discard_obj = True
                                 break
 
-                            if strict:
-                                data['structured_description']['logs'].append(err_msg)
-                            else:
-                                data['structured_description']['logs'].append(f"Discarded optional key '{target_key}' from object '{i}' of structured description: {err_msg}")
+                            if not strict:
+                                message = f"Discarded optional key '{target_key}' from object '{i}' of structured description because value '{val}' of type '{type(val).__name__}' does not match expected type '{expected_type}'."
+                            data['structured_description']['logs'].append(message)
                             self._logger.warn(data['structured_description']['logs'][-1])
 
                         keys_left.remove(source_key)
                         break
                 else:
                     if j < len(settings['structured_description']['keys_required']):
-                        message = f"Expected object '{i}' in structured description to contain the key '{target_key}'."
                         if strict:
+                            message = f"Expected object '{i}' in structured description to contain the key '{target_key}'."
                             return False, message, data
-                        data['structured_description']['logs'].append(f"Discarded object '{i}' from structured description: {message}")
+                        message = f"Discarded object '{i}' from structured description because it does not contain required key '{target_key}'."
+                        data['structured_description']['logs'].append(message)
                         self._logger.warn(data['structured_description']['logs'][-1])
                         discard_obj = True
                         break
@@ -1736,13 +1756,16 @@ class VlmGistBase(ClientBase):
                 self._logger.warn(data['structured_description']['logs'][-1])
 
             if len(valid_obj) == 0:
-                data['structured_description']['logs'].append(f"Discarded object '{i}' from structured description because it contained no valid attributes.")
+                message = f"Discarded object '{i}' from structured description because it contained no valid attributes."
+                data['structured_description']['logs'].append(message)
                 self._logger.warn(data['structured_description']['logs'][-1])
                 continue
 
             valid_description.append(valid_obj)
 
         if not strict and len(valid_description) == 0:
+            if len(description) == 0:
+                return False, "Expected structured description to contain at least one object but got an empty list.", data
             return False, "Expected structured description to contain at least one valid object.", data
 
         if data['structured_description']['raw'] == valid_description:
