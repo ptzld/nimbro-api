@@ -98,7 +98,7 @@ def assert_result(success, message, result, settings):
                         assert_log(expression='settings' in result[key], message="Expected key 'settings' in key 'structured_description' in result for non-worker result.")
                     if 'settings' in result[key]:
                         assert_type_value(obj=result[key]['settings'], type_or_value=dict, name="key 'settings' in key 'structured_description' in result")
-                        for s_name in ['skip', 'use_scene_description', 'system_prompt_role', 'system_prompt', 'image_prompt_role', 'image_prompt_detail', 'description_prompt_role', 'description_prompt', 'response_type', 'keys_required', 'keys_required_types', 'keys_optional', 'keys_optional_types']:
+                        for s_name in ['skip', 'use_scene_description', 'system_prompt_role', 'system_prompt', 'image_prompt_role', 'image_prompt_detail', 'description_prompt_role', 'description_prompt', 'response_type', 'strict', 'keys_required', 'keys_required_types', 'keys_optional', 'keys_optional_types']:
                             if s_name == 'skip' and result[key]['settings'][s_name] is True:
                                 continue
                             assert_log(expression=result[key]['settings'][s_name] == settings[key][s_name], message=f"Expected setting '{s_name}' in key 'structured_description' in result to be '{settings[key][s_name]}' but got '{result[key]['settings'][s_name]}'.")
@@ -599,6 +599,7 @@ def test_16_choices_single_image():
         'scene_description.chat_completions.model': "gpt-5.6-terra",
         'scene_description.chat_completions.reasoning_effort': "none",
         'scene_description.chat_completions.choices': scene_choices,
+        'scene_description.chat_completions.parser': [],
         'scene_description.chat_completions.timeout_read': 40,
         'scene_description.chat_completions.timeout_completion': 40,
         'structured_description.skip': False,
@@ -606,6 +607,7 @@ def test_16_choices_single_image():
         'structured_description.chat_completions.model': "gpt-5.6-terra",
         'structured_description.chat_completions.reasoning_effort': "none",
         'structured_description.chat_completions.choices': structured_choices,
+        'structured_description.chat_completions.parser': [],
         'structured_description.chat_completions.timeout_read': 80,
         'structured_description.chat_completions.timeout_completion': 80,
         'structured_description.use_scene_description': True,
@@ -640,6 +642,7 @@ def test_17_choices_multiple_images():
         'structured_description.chat_completions.model': "gpt-5.6-terra",
         'structured_description.chat_completions.reasoning_effort': "none",
         'structured_description.chat_completions.choices': structured_choices,
+        'structured_description.chat_completions.parser': [],
         'structured_description.chat_completions.timeout_read': 40,
         'structured_description.chat_completions.timeout_completion': 40,
         'structured_description.use_scene_description': False,
@@ -676,6 +679,7 @@ def test_18_choices_partial_scene_description():
         'structured_description.chat_completions.model': "gpt-5.6-terra",
         'structured_description.chat_completions.reasoning_effort': "none",
         'structured_description.chat_completions.choices': structured_choices,
+        'structured_description.chat_completions.parser': [],
         'structured_description.chat_completions.timeout_read': 40,
         'structured_description.chat_completions.timeout_completion': 40,
         'structured_description.use_scene_description': True,
@@ -707,3 +711,52 @@ def test_18_choices_partial_scene_description():
         assert_log(expression='structured_description' in item and item['structured_description']['success'], message=f"Expected structured description choice '{i}' to succeed.")
         assert_log(expression='detection' in item and item['detection']['success'], message=f"Expected detection to succeed for structured description choice '{i}'.")
     # log_result(result=result)
+
+def test_19_structured_description_permissive():
+    client = VlmGist(settings={
+        'logger_severity': "off",
+        'structured_description.strict': False,
+        'structured_description.keys_optional': ['score'],
+        'structured_description.keys_optional_types': ['int']
+    })
+    settings = client.get_settings()
+    valid_object = {'label': "robot", 'description': "A robot.", 'box_2d': [0, 0, 1000, 1000], 'score': "invalid"}
+    second_valid_object = {'label': "table", 'description': "A table.", 'box_2d': [100, 100, 900, 900], 'score': 1}
+    invalid_object = {'label': 1, 'description': "Invalid label.", 'box_2d': [0, 0, 1000, 1000]}
+    data = {
+        'image': {'width': 100, 'height': 100},
+        'structured_description': {'raw': [valid_object, invalid_object, "invalid object", second_valid_object], 'logs': []}
+    }
+    success, message, data = client._base.parse_structured_description(settings=settings, data=data, stamp_local=None)
+    assert_log(expression=success, message=message)
+    assert_log(expression=data['structured_description']['data'] == [
+        {'label': "robot", 'description': "A robot.", 'box_2d': [0, 0, 100, 100]},
+        {'label': "table", 'description': "A table.", 'box_2d': [10, 10, 90, 90], 'score': 1}
+    ], message=f"Unexpected permissively parsed structured description: {data['structured_description']['data']}")
+    assert_log(expression='raw' in data['structured_description'], message="Expected altered structured description to retain raw data.")
+    assert_log(expression=any("Discarded optional key 'score'" in log for log in data['structured_description']['logs']), message="Expected invalid optional key to be logged.")
+    assert_log(expression=sum("Discarded object" in log for log in data['structured_description']['logs']) == 2, message="Expected both invalid objects to be logged as discarded.")
+
+def test_20_structured_description_strict():
+    client = VlmGist(settings={'logger_severity': "off", 'structured_description.strict': True})
+    settings = client.get_settings()
+    valid_object = {'label': "robot", 'description': "A robot.", 'box_2d': [0, 0, 1000, 1000]}
+    invalid_object = {'label': 1, 'description': "Invalid label.", 'box_2d': [0, 0, 1000, 1000]}
+    data = {
+        'image': {'width': 100, 'height': 100},
+        'structured_description': {'raw': [valid_object, invalid_object], 'logs': []}
+    }
+    success, message, _ = client._base.parse_structured_description(settings=settings, data=data, stamp_local=None)
+    assert_log(expression=not success, message="Expected strict structured description parsing to fail.")
+    assert_log(expression="required key 'label'" in message, message=f"Unexpected strict parsing failure: {message}")
+
+    data = {'image': {'width': 100, 'height': 100}, 'structured_description': {'raw': [], 'logs': []}}
+    success, message, data = client._base.parse_structured_description(settings=settings, data=data, stamp_local=None)
+    assert_log(expression=success, message=message)
+    assert_log(expression=data['structured_description']['data'] == [], message="Expected strict parsing to preserve the previous empty-list behavior.")
+
+    settings['structured_description']['strict'] = False
+    data = {'image': {'width': 100, 'height': 100}, 'structured_description': {'raw': [], 'logs': []}}
+    success, message, _ = client._base.parse_structured_description(settings=settings, data=data, stamp_local=None)
+    assert_log(expression=not success, message="Expected permissive parsing to fail when no valid objects remain.")
+    assert_log(expression=message == "Expected structured description to contain at least one valid object.", message=f"Unexpected empty structured description failure: {message}")

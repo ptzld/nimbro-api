@@ -53,6 +53,9 @@ class VlmGistBase(ClientBase):
         success, message = client.set_settings(settings=copy.deepcopy(settings['scene_description']['chat_completions']), mute=True)
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['scene_description']['chat_completions'] = client.get_settings()
+        if settings['scene_description']['chat_completions']['choices'] > 1:
+            assert_log(expression=len(settings['scene_description']['chat_completions']['parser']) == 0, message="Expected setting 'scene_description.chat_completions.parser' to be empty when 'scene_description.chat_completions.choices' is greater than '1'.")
+            assert_log(expression=settings['scene_description']['chat_completions']['retry'] is not True, message="Expected setting 'scene_description.chat_completions.retry' to be 'False' or a non-negative integer when 'scene_description.chat_completions.choices' is greater than '1'.")
 
         # scene_description.system_prompt_role
         assert_type_value(obj=settings['scene_description']['system_prompt_role'], type_or_value=["system", "user"], name="setting 'scene_description.system_prompt_role'")
@@ -74,7 +77,7 @@ class VlmGistBase(ClientBase):
 
         # structured_description
         assert_type_value(obj=settings['structured_description'], type_or_value=dict, name="setting 'structured_description'")
-        assert_keys(obj=settings['structured_description'], keys=['skip', 'message_process', 'message_results', 'chat_completions', 'use_scene_description', 'system_prompt_role', 'system_prompt', 'image_prompt_role', 'image_prompt_detail', 'description_prompt_role', 'description_prompt', 'response_type', 'keys_required', 'keys_required_types', 'keys_optional', 'keys_optional_types'], mode="match", name="setting 'structured_description'")
+        assert_keys(obj=settings['structured_description'], keys=['skip', 'message_process', 'message_results', 'chat_completions', 'use_scene_description', 'system_prompt_role', 'system_prompt', 'image_prompt_role', 'image_prompt_detail', 'description_prompt_role', 'description_prompt', 'response_type', 'strict', 'keys_required', 'keys_required_types', 'keys_optional', 'keys_optional_types'], mode="match", name="setting 'structured_description'")
 
         # structured_description.skip
         assert_type_value(obj=settings['structured_description']['skip'], type_or_value=bool, name="setting 'structured_description.skip'")
@@ -90,6 +93,9 @@ class VlmGistBase(ClientBase):
         success, message = client.set_settings(settings=settings['structured_description']['chat_completions'], mute=True)
         assert_log(expression=success, message=message.replace("Unrecoverable error in 'set_settings()': ", ""))
         settings['structured_description']['chat_completions'] = client.get_settings()
+        if settings['structured_description']['chat_completions']['choices'] > 1:
+            assert_log(expression=len(settings['structured_description']['chat_completions']['parser']) == 0, message="Expected setting 'structured_description.chat_completions.parser' to be empty when 'structured_description.chat_completions.choices' is greater than '1'.")
+            assert_log(expression=settings['structured_description']['chat_completions']['retry'] is not True, message="Expected setting 'structured_description.chat_completions.retry' to be 'False' or a non-negative integer when 'structured_description.chat_completions.choices' is greater than '1'.")
 
         # structured_description.use_scene_description
         assert_type_value(obj=settings['structured_description']['use_scene_description'], type_or_value=bool, name="setting 'structured_description.use_scene_description'")
@@ -114,6 +120,9 @@ class VlmGistBase(ClientBase):
 
         # structured_description.response_type
         assert_type_value(obj=settings['structured_description']['response_type'], type_or_value=["json", "text"], name="setting 'structured_description.response_type'")
+
+        # structured_description.strict
+        assert_type_value(obj=settings['structured_description']['strict'], type_or_value=bool, name="setting 'structured_description.strict'")
 
         # structured_description.keys_required
         assert_type_value(obj=settings['structured_description']['keys_required'], type_or_value=list, name="setting 'structured_description.keys_required'")
@@ -1108,7 +1117,7 @@ class VlmGistBase(ClientBase):
                 if data['image']['path'] is not None:
                     self._logger.info(f"Processing image '{data['image']['path']}'.")
                 else:
-                    self._logger.info("Processing image provided as object.")
+                    self._logger.debug("Processing image provided as object.")
             return True, message, data
 
         return self.consolidate_error(key='image', message=None, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
@@ -1128,54 +1137,111 @@ class VlmGistBase(ClientBase):
         data['scene_description'] = {'stamp': datetime.datetime.now().isoformat()}
         if not is_worker:
             data['scene_description']['settings'] = copy.deepcopy(settings['scene_description'])
-        chat = ChatCompletions(settings=settings['scene_description']['chat_completions'])
         messages = [
             {'role': settings['scene_description']['system_prompt_role'], 'content': settings['scene_description']['system_prompt']},
             {'role': settings['scene_description']['image_prompt_role'], 'content': [{'type': "image_url", 'image_url': {'url': data['image']['data'], 'detail': settings['scene_description']['image_prompt_detail']}}]},
             {'role': settings['scene_description']['description_prompt_role'], 'content': [{'type': "text", 'text': settings['scene_description']['description_prompt']}]},
         ]
-        data['scene_description']['success'], message, completion = chat.prompt(text=messages, response_type="text")
+        chat = ChatCompletions(settings=settings['scene_description']['chat_completions'])
+        if choices > 1:
+            required_keys = {'text', 'usage', 'logs'}
+            reserved_keys = ['stamp', 'settings', 'data', 'duration']
+            branches = [None] * choices
+            open_indices = list(range(choices))
+            retry = settings['scene_description']['chat_completions']['retry']
+            retries_left = 0 if retry is False else retry
+            base_data = copy.deepcopy(data)
+            last_message = ""
+            attempt = 1
+
+            while len(open_indices) > 0:
+                num_open = len(open_indices)
+                settings_success, settings_message = chat.set_settings(settings={'choices': num_open, 'retry': False}, mute=True)
+                assert_log(expression=settings_success, message=settings_message)
+                attempt_data = copy.deepcopy(base_data)
+                success, message, completion = chat.prompt(text=messages, reset_context=True, response_type="text")
+                last_message = message
+                attempt_data['scene_description']['success'] = success
+                attempt_data['scene_description']['logs'] = [message]
+                if isinstance(completion, dict):
+                    attempt_data['scene_description']['completion'] = completion
+
+                attempt_branches = [None] * num_open
+                if success:
+                    if num_open == 1:
+                        split_success, split_message, completions = True, message, [completion]
+                    else:
+                        split_success, split_message, completions = self.split_completion(completion=completion, choices=num_open, name="scene description")
+                    if split_success:
+                        del attempt_data['scene_description']['completion']
+                        for k, choice_completion in enumerate(completions):
+                            branch = copy.deepcopy(attempt_data)
+                            branch['scene_description']['completion'] = choice_completion
+                            choice_success, choice_message, branch = self.parse_completion(completion=choice_completion, required_keys=required_keys, reserved_keys=reserved_keys, data=branch, data_key='scene_description', name="scene description")
+                            if choice_success:
+                                choice_success, choice_message, branch = self.parse_scene_description(data=branch, stamp_local=stamp_local)
+                            if not choice_success:
+                                _, _, branch = self.consolidate_error(key='scene_description', message=choice_message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
+                            else:
+                                last_message = choice_message
+                            attempt_branches[k] = branch
+                    else:
+                        message = split_message
+
+                if not success or any(branch is None for branch in attempt_branches):
+                    for k, branch in enumerate(attempt_branches):
+                        if branch is None:
+                            branch = copy.deepcopy(attempt_data)
+                            _, _, branch = self.consolidate_error(key='scene_description', message=message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
+                            attempt_branches[k] = branch
+
+                next_open_indices = []
+                for k, result_index in enumerate(open_indices):
+                    branches[result_index] = attempt_branches[k]
+                    if not attempt_branches[k]['scene_description']['success']:
+                        next_open_indices.append(result_index)
+                open_indices = next_open_indices
+                if len(open_indices) == 0:
+                    break
+                if retries_left == 0:
+                    break
+                if success:
+                    failure_messages = [branch['run']['message'] for branch in attempt_branches if not branch['scene_description']['success']]
+                    failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
+                else:
+                    failure_message = message
+                self._logger.warn(
+                    f"Retrying generation of '{len(open_indices)}' scene description{'' if len(open_indices) == 1 else 's'}"
+                    f" for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}': {failure_message}"
+                )
+                retries_left -= 1
+                attempt += 1
+
+            num_success = sum(branch['scene_description']['success'] for branch in branches)
+            failures = choices - num_success
+            duration = time.perf_counter() - stamp_local
+            if failures == 0:
+                log_message = f"Generated '{choices}' scene descriptions in '{duration:.3f}s'."
+            else:
+                log_message = f"Failed to generate '{failures}' of '{choices}' scene descriptions in '{duration:.3f}s'."
+            if settings['scene_description']['message_process']:
+                if settings['scene_description']['message_results'] and num_success > 0:
+                    self._logger.info(f"{log_message[:-1]}: '\n{json.dumps([branch['scene_description']['data'] for branch in branches if branch['scene_description']['success']], indent=4)}'")
+                else:
+                    self._logger.info(log_message)
+            else:
+                self._logger.debug(log_message)
+            if failures > 0:
+                last_message = log_message
+            return failures == 0, last_message, branches
+
+        data['scene_description']['success'], message, completion = chat.prompt(text=messages, reset_context=True, response_type="text")
         data['scene_description']['logs'] = [message]
         if isinstance(completion, dict):
             data['scene_description']['completion'] = completion
         if data['scene_description']['success']:
             required_keys = {'text', 'usage', 'logs'}
             reserved_keys = ['stamp', 'settings', 'data', 'duration']
-            if choices > 1:
-                success, message, completions = self.split_completion(completion=completion, choices=choices, name="scene description")
-                if not success:
-                    success, message, data = self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-                    return success, message, [copy.deepcopy(data) for _ in range(choices)]
-                del data['scene_description']['completion']
-                branches = [None] * choices
-                num_success = 0
-                for k, choice_completion in enumerate(completions):
-                    branch = copy.deepcopy(data)
-                    branch['scene_description']['completion'] = choice_completion
-                    success, message, branch = self.parse_completion(completion=choice_completion, required_keys=required_keys, reserved_keys=reserved_keys, data=branch, data_key='scene_description', name="scene description")
-                    if success:
-                        success, message, branch = self.parse_scene_description(data=branch, stamp_local=stamp_local)
-                    if success:
-                        num_success += 1
-                    else:
-                        _, _, branch = self.consolidate_error(key='scene_description', message=message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
-                    branches[k] = branch
-                # log
-                failures = choices - num_success
-                if failures == 0:
-                    log_message = f"Generated '{choices}' scene descriptions in '{branches[-1]['scene_description']['duration']:.3f}s'."
-                else:
-                    log_message = f"Failed to generate '{failures}' of '{choices}' scene descriptions in '{branches[-1]['scene_description']['duration']:.3f}s'."
-                if settings['scene_description']['message_process']:
-                    if settings['scene_description']['message_results'] and num_success > 0:
-                        self._logger.info(f"{log_message[:-1]}: '\n{json.dumps([branch['scene_description']['data'] for branch in branches if branch['scene_description']['success']], indent=4)}'")
-                    else:
-                        self._logger.info(log_message)
-                else:
-                    self._logger.debug(log_message)
-                if failures > 0:
-                    message = log_message
-                return failures == 0, message, branches
             success, message, data = self.parse_completion(completion=completion, required_keys=required_keys, reserved_keys=reserved_keys, data=data, data_key='scene_description', name="scene description")
             if not success:
                 return self.consolidate_error(key='scene_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
@@ -1294,7 +1360,6 @@ class VlmGistBase(ClientBase):
         data['structured_description'] = {'stamp': datetime.datetime.now().isoformat()}
         if not is_worker:
             data['structured_description']['settings'] = copy.deepcopy(settings['structured_description'])
-        chat = ChatCompletions(settings=settings['structured_description']['chat_completions'])
         messages = [
             {'role': settings['structured_description']['system_prompt_role'], 'content': settings['structured_description']['system_prompt']},
             {'role': settings['structured_description']['image_prompt_role'], 'content': [{'type': "image_url", 'image_url': {'url': data['image']['data'], 'detail': settings['structured_description']['image_prompt_detail']}}]},
@@ -1303,6 +1368,99 @@ class VlmGistBase(ClientBase):
             messages.append({'role': settings['scene_description']['description_prompt_role'], 'content': [{'type': "text", 'text': settings['scene_description']['description_prompt']}]})
             messages.append({'role': "assistant", 'content': data['scene_description']['data']})
         messages.append({'role': settings['structured_description']['description_prompt_role'], 'content': [{'type': "text", 'text': settings['structured_description']['description_prompt']}]})
+        chat = ChatCompletions(settings=settings['structured_description']['chat_completions'])
+        if choices > 1:
+            required_keys = {'text', 'usage', 'logs'}
+            reserved_keys = ['stamp', 'settings', 'raw', 'data', 'duration']
+            branches = [None] * choices
+            open_indices = list(range(choices))
+            retry = settings['structured_description']['chat_completions']['retry']
+            retries_left = 0 if retry is False else retry
+            base_data = copy.deepcopy(data)
+            last_message = ""
+            attempt = 1
+
+            while len(open_indices) > 0:
+                num_open = len(open_indices)
+                settings_success, settings_message = chat.set_settings(settings={'choices': num_open, 'retry': False}, mute=True)
+                assert_log(expression=settings_success, message=settings_message)
+                attempt_data = copy.deepcopy(base_data)
+                success, message, completion = chat.prompt(text=messages, reset_context=True, response_type=settings['structured_description']['response_type'])
+                last_message = message
+                attempt_data['structured_description']['success'] = success
+                attempt_data['structured_description']['logs'] = [message]
+                if isinstance(completion, dict):
+                    attempt_data['structured_description']['completion'] = completion
+
+                attempt_branches = [None] * num_open
+                if success:
+                    if num_open == 1:
+                        split_success, split_message, completions = True, message, [completion]
+                    else:
+                        split_success, split_message, completions = self.split_completion(completion=completion, choices=num_open, name="structured description")
+                    if split_success:
+                        del attempt_data['structured_description']['completion']
+                        for k, choice_completion in enumerate(completions):
+                            branch = copy.deepcopy(attempt_data)
+                            branch['structured_description']['completion'] = choice_completion
+                            choice_success, choice_message, branch = self.parse_completion(completion=choice_completion, required_keys=required_keys, reserved_keys=reserved_keys, data=branch, data_key='structured_description', name="structured description")
+                            if choice_success:
+                                choice_success, choice_message, branch = self.parse_structured_description(settings=settings, data=branch, stamp_local=stamp_local)
+                            if not choice_success:
+                                _, _, branch = self.consolidate_error(key='structured_description', message=choice_message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
+                            else:
+                                last_message = choice_message
+                            attempt_branches[k] = branch
+                    else:
+                        message = split_message
+
+                if not success or any(branch is None for branch in attempt_branches):
+                    for k, branch in enumerate(attempt_branches):
+                        if branch is None:
+                            branch = copy.deepcopy(attempt_data)
+                            _, _, branch = self.consolidate_error(key='structured_description', message=message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
+                            attempt_branches[k] = branch
+
+                next_open_indices = []
+                for k, result_index in enumerate(open_indices):
+                    branches[result_index] = attempt_branches[k]
+                    if not attempt_branches[k]['structured_description']['success']:
+                        next_open_indices.append(result_index)
+                open_indices = next_open_indices
+                if len(open_indices) == 0:
+                    break
+                if retries_left == 0:
+                    break
+                if success:
+                    failure_messages = [branch['run']['message'] for branch in attempt_branches if not branch['structured_description']['success']]
+                    failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
+                else:
+                    failure_message = message
+                self._logger.warn(
+                    f"Retrying generation of '{len(open_indices)}' structured description{'' if len(open_indices) == 1 else 's'}"
+                    f" for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}': {failure_message}"
+                )
+                retries_left -= 1
+                attempt += 1
+
+            num_success = sum(branch['structured_description']['success'] for branch in branches)
+            failures = choices - num_success
+            duration = time.perf_counter() - stamp_local
+            if failures == 0:
+                log_message = f"Generated '{choices}' structured descriptions in '{duration:.3f}s'."
+            else:
+                log_message = f"Failed to generate '{failures}' of '{choices}' structured descriptions in '{duration:.3f}s'."
+            if settings['structured_description']['message_process']:
+                if settings['structured_description']['message_results'] and num_success > 0:
+                    self._logger.info(f"{log_message[:-1]}: '\n{json.dumps([branch['structured_description']['data'] for branch in branches if branch['structured_description']['success']], indent=4)}'")
+                else:
+                    self._logger.info(log_message)
+            else:
+                self._logger.debug(log_message)
+            if failures > 0:
+                last_message = log_message
+            return failures == 0, last_message, branches
+
         data['structured_description']['success'], message, completion = chat.prompt(text=messages, reset_context=True, response_type=settings['structured_description']['response_type'])
         data['structured_description']['logs'] = [message]
         if isinstance(completion, dict):
@@ -1310,41 +1468,6 @@ class VlmGistBase(ClientBase):
         if data['structured_description']['success']:
             required_keys = {'text', 'usage', 'logs'}
             reserved_keys = ['stamp', 'settings', 'raw', 'data', 'duration']
-            if choices > 1:
-                success, message, completions = self.split_completion(completion=completion, choices=choices, name="structured description")
-                if not success:
-                    success, message, data = self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
-                    return success, message, [copy.deepcopy(data) for _ in range(choices)]
-                del data['structured_description']['completion']
-                branches = [None] * choices
-                num_success = 0
-                for k, choice_completion in enumerate(completions):
-                    branch = copy.deepcopy(data)
-                    branch['structured_description']['completion'] = choice_completion
-                    success, message, branch = self.parse_completion(completion=choice_completion, required_keys=required_keys, reserved_keys=reserved_keys, data=branch, data_key='structured_description', name="structured description")
-                    if success:
-                        success, message, branch = self.parse_structured_description(settings=settings, data=branch, stamp_local=stamp_local)
-                    if success:
-                        num_success += 1
-                    else:
-                        _, _, branch = self.consolidate_error(key='structured_description', message=message, data=branch, stamp_local=stamp_local, stamp_global=stamp_global)
-                    branches[k] = branch
-                # log
-                failures = choices - num_success
-                if failures == 0:
-                    log_message = f"Generated '{choices}' structured descriptions in '{branches[-1]['structured_description']['duration']:.3f}s'."
-                else:
-                    log_message = f"Failed to generate '{failures}' of '{choices}' structured descriptions in '{branches[-1]['structured_description']['duration']:.3f}s'."
-                if settings['structured_description']['message_process']:
-                    if settings['structured_description']['message_results'] and num_success > 0:
-                        self._logger.info(f"{log_message[:-1]}: '\n{json.dumps([branch['structured_description']['data'] for branch in branches if branch['structured_description']['success']], indent=4)}'")
-                    else:
-                        self._logger.info(log_message)
-                else:
-                    self._logger.debug(log_message)
-                if failures > 0:
-                    message = log_message
-                return failures == 0, message, branches
             success, message, data = self.parse_completion(completion=completion, required_keys=required_keys, reserved_keys=reserved_keys, data=data, data_key='structured_description', name="structured description")
             if not success:
                 return self.consolidate_error(key='structured_description', message=message, data=data, stamp_local=stamp_local, stamp_global=stamp_global)
@@ -1417,19 +1540,31 @@ class VlmGistBase(ClientBase):
         # validate objects
 
         valid_description = []
+        strict = settings['structured_description']['strict']
 
         for i, obj in enumerate(description):
             # object must be dictionary
             if not isinstance(obj, dict):
-                return False, f"Expected object '{i}' in structured description to be of type 'dict' but got '{type(obj).__name__}'.", data
+                message = f"Expected object '{i}' in structured description to be of type 'dict' but got '{type(obj).__name__}'."
+                if strict:
+                    return False, message, data
+                data['structured_description']['logs'].append(f"Discarded object '{i}' from structured description: {message}")
+                self._logger.warn(data['structured_description']['logs'][-1])
+                continue
 
             valid_obj = {}
             keys_left = list(obj.keys())
-            for key in keys_left:
+            for key in copy.deepcopy(keys_left):
                 if not isinstance(key, str):
-                    return False, f"Expected all keys in object '{i}' of structured description to be of type 'str' but got key '{key}' of type '{type(key).__name__}'.", data
+                    message = f"Expected all keys in object '{i}' of structured description to be of type 'str' but got key '{key}' of type '{type(key).__name__}'."
+                    if strict:
+                        return False, message, data
+                    keys_left.remove(key)
+                    data['structured_description']['logs'].append(f"Discarded invalid key '{key}' from object '{i}' of structured description: {message}")
+                    self._logger.warn(data['structured_description']['logs'][-1])
 
             # object can feature required keys
+            discard_obj = False
             for j, target_key in enumerate(settings['structured_description']['keys_required'] + settings['structured_description']['keys_optional']):
                 target_key_norm = re.sub(r"[.,;:_\-\s]", "", target_key).lower().strip()
                 for source_key in copy.deepcopy(keys_left):
@@ -1563,24 +1698,52 @@ class VlmGistBase(ClientBase):
                             err_msg = f"Expected format of {req_opt_str} key '{target_key}' in object '{i}' of structured description to match type '{expected_type}' but got invalid value '{val}' of type '{type(val).__name__}'."
 
                             if is_required:
-                                return False, err_msg, data
+                                if strict:
+                                    return False, err_msg, data
+                                data['structured_description']['logs'].append(f"Discarded object '{i}' from structured description: {err_msg}")
+                                self._logger.warn(data['structured_description']['logs'][-1])
+                                discard_obj = True
+                                break
 
-                            data['structured_description']['logs'].append(err_msg)
+                            if strict:
+                                data['structured_description']['logs'].append(err_msg)
+                            else:
+                                data['structured_description']['logs'].append(f"Discarded optional key '{target_key}' from object '{i}' of structured description: {err_msg}")
                             self._logger.warn(data['structured_description']['logs'][-1])
 
                         keys_left.remove(source_key)
                         break
                 else:
                     if j < len(settings['structured_description']['keys_required']):
-                        return False, f"Expected object '{i}' in structured description to contain the key '{target_key}'.", data
+                        message = f"Expected object '{i}' in structured description to contain the key '{target_key}'."
+                        if strict:
+                            return False, message, data
+                        data['structured_description']['logs'].append(f"Discarded object '{i}' from structured description: {message}")
+                        self._logger.warn(data['structured_description']['logs'][-1])
+                        discard_obj = True
+                        break
                     data['structured_description']['logs'].append(f"Object '{i}' in structured description does not contain optional key '{target_key}'.")
                     self._logger.warn(data['structured_description']['logs'][-1])
+
+                if discard_obj:
+                    break
+
+            if discard_obj:
+                continue
 
             if len(keys_left) > 0:
                 data['structured_description']['logs'].append(f"Ignored '{len(keys_left)}' excessive key{'' if len(keys_left) == 1 else 's'} in object '{i}' of structured description: {keys_left}")
                 self._logger.warn(data['structured_description']['logs'][-1])
 
+            if len(valid_obj) == 0:
+                data['structured_description']['logs'].append(f"Discarded object '{i}' from structured description because it contained no valid attributes.")
+                self._logger.warn(data['structured_description']['logs'][-1])
+                continue
+
             valid_description.append(valid_obj)
+
+        if not strict and len(valid_description) == 0:
+            return False, "Expected structured description to contain at least one valid object.", data
 
         if data['structured_description']['raw'] == valid_description:
             del data['structured_description']['raw']

@@ -17,6 +17,7 @@ default_settings = {
             'model': "~google/gemini-flash-latest",
             'choices': 1,
             'reasoning_effort': "minimal",
+            'parser': [],
         },
         'system_prompt_role': "system",
         'system_prompt': "You are a visual perception system that identifies and analyzes objects and other visible features in an image.",
@@ -38,6 +39,7 @@ default_settings = {
             'model': "~google/gemini-flash-latest",
             'choices': 1,
             'reasoning_effort': "minimal",
+            'parser': [],
         },
         'use_scene_description': False,
         'system_prompt_role': "system",
@@ -57,6 +59,7 @@ default_settings = {
             "Be sure to include not only the objects in the center of the image, but absolutely everything, regardless of its size or location. "
             "If you're unsure about an object's nature, include it anyway to the best of your ability.",
         'response_type': "json",
+        'strict': False,
         'keys_required': ['label', 'description', 'box_2d'],
         'keys_required_types': ['str', 'str', 'box_yxyx[int1000]'],
         'keys_optional': [],
@@ -147,6 +150,7 @@ class VlmGist(Client):
                 - message_process (bool): Emit an info log before and after a scene description step.
                 - message_results (bool): Include results in the logs emitted after a scene description step.
                 - chat_completions (dict): Settings forwarded to `ChatCompletions`. See its `get_settings()`.
+                  When 'choices' is greater than 1, 'parser' must be empty and 'retry' must be `False` or a non-negative integer. Failed choices are retried while successful choices are retained.
                 - system_prompt_role (str): Role of the system prompt message. One of ["system", "user"].
                 - system_prompt (str): Content of the system prompt message.
                 - image_prompt_role (str): Role of the image prompt message. One of ["system", "user"].
@@ -159,6 +163,7 @@ class VlmGist(Client):
                 - message_process (bool): Emit an info log before and after a structured description step.
                 - message_results (bool): Include results in the logs emitted after a structured description step.
                 - chat_completions (dict): Settings forwarded to `ChatCompletions`. See its `get_settings()`.
+                  When 'choices' is greater than 1, 'parser' must be empty and 'retry' must be `False` or a non-negative integer. Failed choices are retried while successful choices are retained.
                 - use_scene_description (bool): Prepend the scene description to the structured description prompt as context.
                 - system_prompt_role (str): Role of the system prompt message. One of ["system", "user"].
                 - system_prompt (str): Content of the system prompt message.
@@ -167,6 +172,7 @@ class VlmGist(Client):
                 - description_prompt_role (str): Role of the description prompt message. One of ["system", "user"].
                 - description_prompt (str): Content of the description prompt message.
                 - response_type (str): Expected response format of the completion. Use "json" to enable JSON mode during inference or "text" to use regular decoding and parse the generated string as JSON afterwards.
+                - strict (bool): If `True`, reject the entire structured description when any object has an invalid or missing required attribute. If `False`, discard invalid optional attributes and objects with invalid or missing required attributes, failing only when no valid objects remain.
                 - keys_required (list[str]): Non-empty list of required keys expected in each object of the structured description.
                 - keys_required_types (list[str]): Types for each required key, parallel to 'keys_required'.
                   Each element must be one of ["str", "bool", "int", "likert5", "likert7", "float", "unit", "list", "point_xy[int]", "point_yx[int]", "point_xy[int1000]", "point_yx[int1000]", "box_xyxy[int]", "box_yxyx[int]", "box_xyxy[int1000]", "box_yxyx[int1000]"].
