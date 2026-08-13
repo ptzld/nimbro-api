@@ -16,6 +16,10 @@ from nimbro_api.utility.io import read_json, decode_b64, parse_image_b64
 from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log, assert_keys, count_duplicates, get_image_dimensions
 from nimbro_api.utility.visual import IMPORT_ERROR, visualize_detections
 
+def initialize_visualize_worker():
+    import cv2
+    cv2.setNumThreads(1)
+
 class VlmGistBase(ClientBase):
 
     def __init__(self, settings, default_settings, **kwargs):
@@ -257,9 +261,10 @@ class VlmGistBase(ClientBase):
         # apply settings
         return self._apply_settings(settings, mode)
 
-    def visualize(self, result, image, output_dir, vis_args, _result_index=None, _num_results=None, _log_visualized=True):
+    def visualize(self, result, image, output_dir, return_visualizations=True, vis_args=None, _result_index=None, _num_results=None, _log_visualized=True):
         # parse arguments
         assert_type_value(obj=output_dir, type_or_value=[None, str], name="argument 'output_dir'")
+        assert_type_value(obj=return_visualizations, type_or_value=bool, name="argument 'return_visualizations'")
         if isinstance(output_dir, str):
             output_dir = os.path.realpath(output_dir)
             assert_log(expression=not os.path.isfile(output_dir), message="Expected argument 'output_dir' to not exist or point to an existing folder but it points to an existing file.")
@@ -368,12 +373,7 @@ class VlmGistBase(ClientBase):
             elif len(image) > num_images:
                 image = image[:num_images]
 
-            images = [None] * num_images
-            for i, item in enumerate(image):
-                if item is not None:
-                    success, message, images[i], _ = parse_image_b64(image=item, logger=self._logger)
-                    if not success:
-                        self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}': {message}")
+            images = image
 
         # visualize
 
@@ -382,10 +382,11 @@ class VlmGistBase(ClientBase):
 
         visualizations = [None] * num_images
         paths = [None] * num_images
+        visualization_successes = [False] * num_images
 
         if result['run']['type'] == "batch" and num_images > 1:
             batch_settings = self._settings['batch']
-            max_workers = batch_settings['size'] if batch_settings['size'] > 0 else num_images
+            max_workers = min(batch_settings['size'], num_images) if batch_settings['size'] > 0 else num_images
             executor_class = (
                 concurrent.futures.ProcessPoolExecutor
                 if batch_settings['style'] == "multiprocessing"
@@ -394,7 +395,7 @@ class VlmGistBase(ClientBase):
             logger_settings = self._logger.get_settings()
             if batch_settings['style'] == "multiprocessing":
                 try:
-                    pickle.dumps((vis_args, logger_settings))
+                    pickle.dumps((return_visualizations, vis_args, logger_settings, output_dir))
                 except Exception as e:
                     raise UnrecoverableError(f"Failed to serialize shared visualization arguments for multiprocessing: {repr(e)}") from e
             worker_args = []
@@ -426,12 +427,17 @@ class VlmGistBase(ClientBase):
                 except Exception as e:
                     self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}': {e}")
 
-            with executor_class(max_workers=max_workers) as executor:
+            executor_args = {'max_workers': max_workers}
+            if batch_settings['style'] == "multiprocessing":
+                executor_args['initializer'] = initialize_visualize_worker
+            with executor_class(**executor_args) as executor:
                 futures = {
                     executor.submit(
                         VlmGistBase.visualize_worker,
                         worker_result,
                         worker_image,
+                        output_dir,
+                        return_visualizations,
                         vis_args,
                         logger_settings,
                         i,
@@ -443,31 +449,17 @@ class VlmGistBase(ClientBase):
                 for future in concurrent.futures.as_completed(futures):
                     i = futures[future]
                     try:
-                        visualizations[i] = future.result()
+                        visualization_successes[i], visualizations[i], paths[i] = future.result()
                     except Exception:
                         self._logger.error(f"Failed to visualize result '{i + 1}' of '{num_images}':\n{traceback.format_exc()}")
                         continue
-                    visual = visualizations[i]
-                    if visual is None:
-                        continue
-                    if output_dir is not None:
-                        success, encoded = cv2.imencode('.png', visual)
-                        if success:
-                            out_path = os.path.join(output_dir, f"{i}_{datetime.datetime.now().isoformat()[:23].replace('-', '_').replace(':', '_').replace('.', '_')}.png")
-                            os.makedirs(output_dir, exist_ok=True)
-                            with open(out_path, "wb") as file:
-                                file.write(encoded.tobytes())
-                            paths[i] = out_path
-                            self._logger.info(f"Saved visualization for result '{i + 1}' of '{num_images}' to '{out_path}'.")
-                        else:
-                            visualizations[i] = None
-                            self._logger.error(f"Failed to encode visualization for result '{i + 1}' of '{num_images}'.")
-                    else:
+                    if visualization_successes[i] and output_dir is None:
                         self._logger.info(f"Visualized result '{i + 1}' of '{num_images}'.")
 
-            num_success = sum(item is not None for item in visualizations)
-            if num_success == 0:
+            num_success = sum(visualization_successes)
+            if not return_visualizations or num_success == 0:
                 visualizations = None
+            if num_success == 0:
                 paths = None
             elif sum(item is not None for item in paths) == 0:
                 paths = None
@@ -490,14 +482,46 @@ class VlmGistBase(ClientBase):
                     assert_log(expression=isinstance(width, int) and not isinstance(width, bool) and width > 0, message=f"Expected image width in result '{i + 1}' of '{num_images}' to be a positive integer but got '{width}'.")
                     assert_log(expression=isinstance(height, int) and not isinstance(height, bool) and height > 0, message=f"Expected image height in result '{i + 1}' of '{num_images}' to be a positive integer but got '{height}'.")
                     metadata_dimensions = (width, height)
+                if images[data_index] is not None:
+                    success, message, parsed_image, _ = parse_image_b64(image=images[data_index], logger=self._logger)
+                    if success:
+                        success, message, parsed_image = decode_b64(string=parsed_image, name="image", logger=self._logger)
+                    if success:
+                        try:
+                            parsed_image = cv2.imdecode(np.frombuffer(parsed_image, np.uint8), cv2.IMREAD_COLOR)
+                        except Exception as e:
+                            success = False
+                            message = f"Failed to decode image: {repr(e)}"
+                        else:
+                            success = parsed_image is not None
+                        if not success:
+                            message = message if message.startswith("Failed to decode image:") else "Failed to decode image."
+                    if success:
+                        images[data_index] = parsed_image
+                    else:
+                        images[data_index] = None
+                        self._logger.error(f"Failed to visualize result '{log_index + 1}' of '{log_count}': {message}")
                 if images[data_index] is None:
                     assert_keys(obj=batch_item, keys=['image'], mode="required", name=f"result '{i + 1}' of '{num_images}'")
                     assert_type_value(obj=batch_item['image'], type_or_value=dict, name=f"value of key 'image' in result '{i + 1}' of '{num_images}'")
                     assert_keys(obj=batch_item['image'], keys=['data'], mode="required", name=f"value of key 'image' in result '{i + 1}' of '{num_images}'")
                     assert_type_value(obj=batch_item['image']['data'], type_or_value=str, name=f"value of key 'image.data' in result '{i + 1}' of '{num_images}'")
-                    images[data_index] = copy.deepcopy(batch_item['image']['data'])
-                success, message, image_dimensions = get_image_dimensions(image=images[data_index], logger=self._logger)
-                assert_log(expression=success, message=message)
+                    success, message, embedded_image, _ = parse_image_b64(image=copy.deepcopy(batch_item['image']['data']), logger=self._logger)
+                    if success:
+                        success, message, embedded_image = decode_b64(string=embedded_image, name="image", logger=self._logger)
+                    if success:
+                        try:
+                            embedded_image = cv2.imdecode(np.frombuffer(embedded_image, np.uint8), cv2.IMREAD_COLOR)
+                        except Exception as e:
+                            success = False
+                            message = f"Failed to decode image: {repr(e)}"
+                        else:
+                            success = embedded_image is not None
+                        if not success:
+                            message = message if message.startswith("Failed to decode image:") else "Failed to decode image."
+                    assert_log(expression=success, message=message)
+                    images[data_index] = embedded_image
+                image_dimensions = (images[data_index].shape[1], images[data_index].shape[0])
                 if metadata_dimensions is not None:
                     assert_log(expression=metadata_dimensions == image_dimensions, message=f"Expected image dimensions {metadata_dimensions} in result '{i + 1}' of '{num_images}' to match the rendered image dimensions {image_dimensions}.")
 
@@ -666,6 +690,9 @@ class VlmGistBase(ClientBase):
             tic = time.perf_counter()
             if vis_args is None:
                 vis_args = {}
+            else:
+                vis_args = dict(vis_args)
+            vis_args['is_rgb'] = False
             try:
                 visual = visualize_detections(
                     image=images[data_index],
@@ -684,13 +711,15 @@ class VlmGistBase(ClientBase):
             else:
                 self._logger.debug(f"Visualized result '{log_index + 1}' of '{log_count}' in '{time.perf_counter() - tic:.3f}s'.")
                 visualizations[data_index] = visual
+                visualization_successes[data_index] = True
 
             # save
             if output_dir is not None:
                 success, visual = cv2.imencode('.png', visual)
                 if success:
                     visual = visual.tobytes()
-                    out_path = os.path.join(output_dir, f"{data_index}_{datetime.datetime.now().isoformat()[:23].replace('-', '_').replace(':', '_').replace('.', '_')}.png")
+                    output_index = data_index if _result_index is None else _result_index
+                    out_path = os.path.join(output_dir, f"{output_index}_{datetime.datetime.now().isoformat()[:23].replace('-', '_').replace(':', '_').replace('.', '_')}.png")
                     os.makedirs(output_dir, exist_ok=True)
                     with open(out_path, "wb") as file:
                         file.write(visual)
@@ -698,16 +727,17 @@ class VlmGistBase(ClientBase):
                     self._logger.info(f"Saved visualization for result '{i + 1}' of '{num_images}' to '{out_path}'.")
                 else:
                     visualizations[data_index] = None
+                    visualization_successes[data_index] = False
                     self._logger.error(f"Failed to encode visualization for result '{i + 1}' of '{num_images}'.")
             elif _log_visualized:
                 self._logger.info(f"Visualized result '{log_index + 1}' of '{log_count}'.")
 
         # consolidate
-        num_success = sum(item is not None for item in visualizations)
-        # success = num_success == num_images
+        num_success = sum(visualization_successes)
         success = True # to prevent any retry attempts
-        if num_success == 0:
+        if not return_visualizations or num_success == 0:
             visualizations = None
+        if num_success == 0:
             paths = None
         elif sum(item is not None for item in paths) == 0:
             paths = None
@@ -716,20 +746,24 @@ class VlmGistBase(ClientBase):
         return success, message, visualizations, paths
 
     @staticmethod
-    def visualize_worker(result, image, vis_args, logger_settings, result_index, num_results, log_visualized):
+    def visualize_worker(result, image, output_dir, return_visualizations, vis_args, logger_settings, result_index, num_results, log_visualized):
         from ..client.vlm_gist import VlmGist
         client = VlmGist(logger_severity="off")
         client._base._logger.set_settings(logger_settings)
-        _, _, visualizations, _ = client._base.visualize(
+        _, _, visualizations, paths = client._base.visualize(
             result=result,
             image=image,
-            output_dir=None,
+            output_dir=output_dir,
+            return_visualizations=True,
             vis_args=vis_args,
             _result_index=result_index,
             _num_results=num_results,
             _log_visualized=log_visualized,
         )
-        return None if visualizations is None else visualizations[0]
+        success = visualizations is not None
+        visualization = None if visualizations is None or not return_visualizations else visualizations[0]
+        path = None if paths is None else paths[0]
+        return success, visualization, path
 
     def run(self, image, scene_description, structured_description, detection, is_worker=False):
         stamp_global = time.perf_counter()
@@ -1057,6 +1091,7 @@ class VlmGistBase(ClientBase):
         # extract batch results
         successes = [item['run']['success'] for item in items]
         failures = len(items) - sum(successes)
+        failure_messages = [f"Failed in choice '{i + 1}' of '{num_results}' after '{item['run']['duration']:.3f}s': {item['run']['message']}" for i, item in enumerate(items) if not item['run']['success']]
         success = failures == 0
         duration = time.perf_counter() - stamp_global
 
@@ -1066,6 +1101,8 @@ class VlmGistBase(ClientBase):
             message = f"Processed image using '{scene_choices}' scene description choices with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
         else:
             message = f"Processed image using '{structured_choices}' structured description choices with '{failures}' failure{'' if failures == 1 else 's'} in '{duration:.3f}s'."
+        if failures > 0:
+            message = f"{message[:-1]}: {failure_messages if failures > 1 else failure_messages[0]}"
 
         if is_worker:
             return success, message, items
@@ -1209,7 +1246,7 @@ class VlmGistBase(ClientBase):
                 if retries_left == 0:
                     break
                 if not shared_failure:
-                    failure_messages = [f"Choice '{result_index + 1}' of '{choices}': {branch['run']['message']}" for result_index, branch in zip(attempt_indices, attempt_branches) if not branch['scene_description']['success']]
+                    failure_messages = [f"Failed to generate choice '{result_index + 1}' of '{choices}': {branch['run']['message']}" for result_index, branch in zip(attempt_indices, attempt_branches) if not branch['scene_description']['success']]
                     failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
                 else:
                     failure_message = message
@@ -1229,7 +1266,7 @@ class VlmGistBase(ClientBase):
                 if shared_failure:
                     failure_message = message
                 else:
-                    failure_messages = [f"Choice '{i + 1}' of '{choices}': {branch['run']['message']}" for i, branch in enumerate(branches) if not branch['scene_description']['success']]
+                    failure_messages = [f"Failed to generate choice '{i + 1}' of '{choices}': {branch['run']['message']}" for i, branch in enumerate(branches) if not branch['scene_description']['success']]
                     failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
                 log_message = f"Failed to generate '{failures}' of '{choices}' scene descriptions in '{duration:.3f}s': {failure_message}"
             if settings['scene_description']['message_process']:
@@ -1443,7 +1480,7 @@ class VlmGistBase(ClientBase):
                 if retries_left == 0:
                     break
                 if not shared_failure:
-                    failure_messages = [f"Choice '{result_index + 1}' of '{choices}': {branch['run']['message']}" for result_index, branch in zip(attempt_indices, attempt_branches) if not branch['structured_description']['success']]
+                    failure_messages = [f"Failed to generate choice '{result_index + 1}' of '{choices}': {branch['run']['message']}" for result_index, branch in zip(attempt_indices, attempt_branches) if not branch['structured_description']['success']]
                     failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
                 else:
                     failure_message = message
@@ -1463,7 +1500,7 @@ class VlmGistBase(ClientBase):
                 if shared_failure:
                     failure_message = message
                 else:
-                    failure_messages = [f"Choice '{i + 1}' of '{choices}': {branch['run']['message']}" for i, branch in enumerate(branches) if not branch['structured_description']['success']]
+                    failure_messages = [f"Failed to generate choice '{i + 1}' of '{choices}': {branch['run']['message']}" for i, branch in enumerate(branches) if not branch['structured_description']['success']]
                     failure_message = failure_messages[0] if len(failure_messages) == 1 else failure_messages
                 log_message = f"Failed to generate '{failures}' of '{choices}' structured descriptions in '{duration:.3f}s': {failure_message}"
             if settings['structured_description']['message_process']:

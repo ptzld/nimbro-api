@@ -147,8 +147,8 @@ class VlmGist(Client):
             scene_description (dict):
                 Settings for the scene description step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
-                - message_process (bool): Emit an info log before and after a scene description step.
-                - message_results (bool): Include results in the logs emitted after a scene description step.
+                - message_process (bool): Emit a status log before and after a scene description step.
+                - message_results (bool): Include results in the logs emitted after a successful scene description step.
                 - chat_completions (dict): Settings forwarded to `ChatCompletions`. See its `get_settings()`.
                   When 'choices' is greater than 1, 'parser' must be empty and 'retry' must be `False` or a non-negative integer. Failed choices are retried while successful choices are retained.
                 - system_prompt_role (str): Role of the system prompt message. One of ["system", "user"].
@@ -160,8 +160,8 @@ class VlmGist(Client):
             structured_description (dict):
                 Settings for the structured description step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
-                - message_process (bool): Emit an info log before and after a structured description step.
-                - message_results (bool): Include results in the logs emitted after a structured description step.
+                - message_process (bool): Emit a status log before and after a structured description step.
+                - message_results (bool): Include results in the logs emitted after a successful structured description step.
                 - chat_completions (dict): Settings forwarded to `ChatCompletions`. See its `get_settings()`.
                   When 'choices' is greater than 1, 'parser' must be empty and 'retry' must be `False` or a non-negative integer. Failed choices are retried while successful choices are retained.
                 - use_scene_description (bool): Prepend the scene description to the structured description prompt as context.
@@ -186,8 +186,8 @@ class VlmGist(Client):
             detection (dict):
                 Settings for the object detection step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
-                - message_process (bool): Emit an info log before and after a detection step.
-                - message_results (bool): Include results in the logs emitted after a detection step.
+                - message_process (bool): Emit a status log before and after a detection step.
+                - message_results (bool): Include results in the logs emitted after a successful detection step.
                 - extract_from_description (bool): Extract bounding boxes from structured description instead of using the detector.
                   This required setting 'keys_required_types' to contain exactly one box type, while 'keys_optional_types' must not contain any box types.
                 - prompt_key (str): Key from 'keys_required' in 'structured_description' whose value is used as the detection prompt for each object.
@@ -197,8 +197,8 @@ class VlmGist(Client):
             segmentation (dict):
                 Settings for the instance segmentation step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
-                - message_process (bool): Emit an info log before and after a segmentation step.
-                - message_results (bool): Include results in the logs emitted after a segmentation step.
+                - message_process (bool): Emit a status log before and after a segmentation step.
+                - message_results (bool): Include results in the logs emitted after a successful segmentation step.
                 - track (bool): After initializing SAM2 with detections, run a second inference pass on the same image to obtain tracked masks. Must be `False` when 'skip' is `True`.
                 - sam2_realtime (dict): Settings forwarded to `Sam2Realtime`. See its `get_settings()`.
                 - allow_incomplete (bool): If `False`, returns an error or triggers a retry unless every detection is segmented.
@@ -248,7 +248,7 @@ class VlmGist(Client):
         """
         return self._base.wrap(0, self._base.set_settings, settings, **kwargs)
 
-    def visualize(self, result, *, image=None, output_dir=None, vis_args=None, **kwargs):
+    def visualize(self, result, *, image=None, output_dir=None, return_visualizations=True, vis_args=None, **kwargs):
         """
         Visualize the detection and segmentation results produced by `run()` on the corresponding image(s).
 
@@ -263,6 +263,8 @@ class VlmGist(Client):
                 If provided, the directory in which to save the rendered visualization(s) as PNG file(s).
                 The directory is created if it does not exist. Filenames are prefixed with the item index and a timestamp.
                 If `None`, visualizations are only returned and not written to disk. Defaults to `None`.
+            return_visualizations (bool):
+                If `True`, return the rendered visualizations. If `False`, discard rendered arrays after optional saving to avoid transferring them from batch worker processes. Defaults to `True`.
             vis_args (dict | None):
                 If provided, a dictionary with keyword arguments forwarded to `nimbro_api.utility.visual.visualize_detections`. Defaults to `None`.
             **kwargs:
@@ -278,9 +280,9 @@ class VlmGist(Client):
 
         Returns:
             tuple[bool, str, list[numpy.ndarray] | None, list[str] | None]: A tuple containing:
-                - bool: `True` if all items were visualized successfully, `False` otherwise.
+                - bool: `True` when the visualization attempt completed. Individual failures are represented by `None` entries and the summary message.
                 - str: A descriptive message about the operation result.
-                - list[numpy.ndarray] | None: A `list` of rendered visualizations (one per result item, `None` for items that failed), or `None` if none succeeded.
+                - list[numpy.ndarray] | None: A `list` of rendered visualizations (one per result item, `None` for items that failed), or `None` if disabled with 'return_visualizations' or none succeeded.
                 - list[str] | None: A `list` of output file paths (one per result item, `None` for items that were not saved), or `None` if nothing was saved to disk.
 
         Notes:
@@ -288,8 +290,9 @@ class VlmGist(Client):
             - When a valid segmentation is present, both boxes and masks are drawn.
             - Labels are taken from the 'prompt' key of each detection item.
             - The first available point attribute (required preferred over optional) of each item in the structured description is visualized.
+            - Visualization attempts return `True` after processing to prevent retries from duplicating successfully saved output files.
         """
-        return self._base.wrap(2, self._base.visualize, result, image, output_dir, vis_args, **kwargs)
+        return self._base.wrap(2, self._base.visualize, result, image, output_dir, return_visualizations, vis_args, **kwargs)
 
     def run(self, image, *, scene_description=None, structured_description=None, detection=None, **kwargs):
         """

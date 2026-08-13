@@ -1,10 +1,13 @@
 import os
+import copy
 import json
 import datetime
+import tempfile
 
 import nimbro_api
 from nimbro_api.utility.io import parse_image_b64, decode_b64
 from nimbro_api.utility.misc import assert_type_value, assert_log, assert_keys, format_obj
+from nimbro_api.utility.visual import IMPORT_ERROR
 from ..client.vlm_gist import VlmGist
 
 def assert_result(success, message, result, settings):
@@ -209,6 +212,29 @@ def get_target_settings(client):
     target_settings['structured_description']['keys_required_types'] = [setting.replace("int1000", "int") for setting in target_settings['structured_description']['keys_required_types']]
     target_settings['structured_description']['keys_optional_types'] = [setting.replace("int1000", "int") for setting in target_settings['structured_description']['keys_optional_types']]
     return target_settings
+
+def make_visualization_batch(n=2):
+    import cv2
+    image_path = os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png")
+    image = cv2.imread(image_path)
+    assert_log(expression=image is not None, message=f"Failed to read test image '{image_path}'.")
+    height, width = image.shape[:2]
+    settings = {
+        'scene_description': {'skip': True},
+        'structured_description': {
+            'skip': True,
+            'keys_required': ['label'],
+            'keys_required_types': ['str'],
+            'keys_optional': [],
+            'keys_optional_types': []
+        },
+        'detection': {'prompt_key': 'label'}
+    }
+    item = {
+        'image': {'width': width, 'height': height},
+        'detection': {'success': True, 'data': [{'prompt': 'object', 'box_xyxy': [0, 0, width, height]}]}
+    }
+    return {'run': {'type': 'batch', 'settings': settings}, 'batch': [copy.deepcopy(item) for _ in range(n)]}, image_path
 
 def test_01_image_path():
     client = VlmGist(settings={
@@ -760,3 +786,42 @@ def test_20_structured_description_strict():
     success, message, _ = client._base.parse_structured_description(settings=settings, data=data, stamp_local=None)
     assert_log(expression=not success, message="Expected permissive parsing to fail when no valid objects remain.")
     assert_log(expression=message == "Expected structured description to contain at least one object but got an empty list.", message=f"Unexpected empty structured description failure: {message}")
+
+def test_21_visualize_batch_compact_processes():
+    if IMPORT_ERROR is not None:
+        return f"Visual utilities are not available due to missing dependencies: {IMPORT_ERROR}"
+    import cv2
+    import numpy as np
+    result, image_path = make_visualization_batch()
+    thread_client = VlmGist(settings={'logger_severity': "off", 'batch.size': 2, 'batch.style': "threading"})
+    success, message, expected, paths = thread_client.visualize(result, image=[image_path] * 2)
+    assert_log(expression=success, message=message)
+    assert_log(expression=expected is not None and len(expected) == 2 and all(item is not None for item in expected), message="Expected default batch visualization to return all rendered arrays.")
+    assert_log(expression=paths is None, message=f"Expected no paths without an output directory but got '{paths}'.")
+
+    success, message, image_data, _ = parse_image_b64(image=image_path)
+    assert_log(expression=success, message=message)
+    result['batch'][0]['image']['data'] = image_data
+    client = VlmGist(settings={'logger_severity': "off", 'batch.size': 2, 'batch.style': "multiprocessing"})
+    with tempfile.TemporaryDirectory() as output_dir:
+        success, message, visualizations, paths = client.visualize(result, image=["missing-image.png", image_path], output_dir=output_dir, return_visualizations=False)
+        assert_log(expression=success, message=message)
+        assert_log(expression=visualizations is None, message="Expected compact process visualization to discard rendered arrays.")
+        assert_log(expression=paths is not None and len(paths) == 2 and all(os.path.isfile(path) for path in paths), message=f"Expected compact process visualization to return two output paths but got '{paths}'.")
+        assert_log(expression=os.path.basename(paths[0]).startswith("0_") and os.path.basename(paths[1]).startswith("1_"), message=f"Expected worker output names to retain result indices but got '{paths}'.")
+        actual = [cv2.imread(path, cv2.IMREAD_UNCHANGED) for path in paths]
+        assert_log(expression=all(np.array_equal(expected_item, actual_item) for expected_item, actual_item in zip(expected, actual)), message="Expected process-worker-saved PNGs to match normally returned visualizations pixel-for-pixel.")
+
+def test_22_visualize_partial_batch():
+    if IMPORT_ERROR is not None:
+        return f"Visual utilities are not available due to missing dependencies: {IMPORT_ERROR}"
+    result, image_path = make_visualization_batch()
+    result['batch'][1]['detection'] = {'success': False, 'logs': ["Detection failed."]}
+    client = VlmGist(settings={'logger_severity': "off", 'batch.size': 2, 'batch.style': "threading"})
+    with tempfile.TemporaryDirectory() as output_dir:
+        success, message, visualizations, paths = client.visualize(result, image=[image_path] * 2, output_dir=output_dir, persist=True)
+        assert_log(expression=success, message="Expected a partial visualization attempt to return success and prevent retries.")
+        assert_log(expression=message == "Visualized '1' of '2' results.", message=f"Unexpected partial visualization message: {message}")
+        assert_log(expression=visualizations is not None and visualizations[0] is not None and visualizations[1] is None, message="Expected only the valid batch item to return a visualization.")
+        assert_log(expression=paths is not None and paths[0] is not None and paths[1] is None, message=f"Expected only the valid batch item to return an output path but got '{paths}'.")
+        assert_log(expression=len(os.listdir(output_dir)) == 1, message="Expected failed visualization batches to avoid automatic retries and duplicate files.")
