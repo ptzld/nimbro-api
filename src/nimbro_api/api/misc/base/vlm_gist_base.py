@@ -1131,7 +1131,7 @@ class VlmGistBase(ClientBase):
         data['image']['logs'] = [message]
         for key in copy.deepcopy(metadata):
             data['image'][key] = metadata.pop(key)
-            data['image']['logs'].append(f"Included metadata key '{key}'.")
+            self._logger.debug(f"Included metadata key '{key}'.")
         if data['image']['success']:
             data['image']['data'] = image_data
             data['image']['path'] = image_path
@@ -1575,13 +1575,15 @@ class VlmGistBase(ClientBase):
                     else:
                         return False, "Failed to extract JSON from structured description received as string.", data
 
-        # extract structured description nested in dictionary
-        if isinstance(description, dict) and len(description) == 1:
-            candidate = description[list(description.keys())[0]]
-            if isinstance(candidate, list):
-                description = candidate
+        # extract structured description dictionary
+        if isinstance(description, dict):
+            if len(description) == 1 and isinstance(description[list(description.keys())[0]], list):
+                description = description[list(description.keys())[0]]
                 data['structured_description']['logs'].append("Extracted structured description from data of type 'dict' containing '1' item with value of type 'list'.")
-                self._logger.warn(data['structured_description']['logs'][-1])
+            else:
+                description = [description]
+                data['structured_description']['logs'].append("Extracted structured description by wrapping data of type 'dict' in a 'list'.")
+            self._logger.warn(data['structured_description']['logs'][-1])
 
         # structured description must be list
         if not isinstance(description, list):
@@ -1800,10 +1802,8 @@ class VlmGistBase(ClientBase):
 
             valid_description.append(valid_obj)
 
-        if not strict and len(valid_description) == 0:
-            if len(description) == 0:
-                return False, "Expected structured description to contain at least one object but got an empty list.", data
-            return False, "Expected structured description to contain at least one valid object.", data
+        if len(valid_description) == 0:
+            return False, f"Expected structured description to contain at least one {'valid ' if len(description) == 0 else ''}object.", data
 
         if data['structured_description']['raw'] == valid_description:
             del data['structured_description']['raw']
