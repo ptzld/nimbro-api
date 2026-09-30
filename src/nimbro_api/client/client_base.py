@@ -588,25 +588,21 @@ class ClientBase:
         """
         assert_type_value(obj=name, type_or_value=list(self._default_settings.keys()) + [None], name="argument 'name'", logger=self._logger, prefix="Failed in 'get_settings()': ")
 
-        if self._lock_settings.locked():
-            self._logger.debug("Waiting for settings lock in 'get_settings()'.")
-        self._lock_settings.acquire()
+        with self._lock_settings:
+            if name is None:
+                settings = copy.deepcopy(self._settings)
+                # consolidate active endpoint (implying base implements set(get()) contract by accepting 'endpoint' as dict)
+                if {'endpoints', 'endpoint'}.issubset(set(settings.keys())):
+                    if isinstance(settings['endpoints'], dict):
+                        if isinstance(settings['endpoint'], str):
+                            if settings['endpoint'] in settings['endpoints']:
+                                if isinstance(settings['endpoints'][settings['endpoint']], dict):
+                                    if 'name' not in settings['endpoints'][settings['endpoint']]:
+                                        settings['endpoint'] = {'name': settings['endpoint'], ** settings['endpoints'][settings['endpoint']]}
+                                        del settings['endpoints']
+            else:
+                settings = copy.deepcopy(self._settings[name])
 
-        if name is None:
-            settings = copy.deepcopy(self._settings)
-            # consolidate active endpoint (implying base implements set(get()) contract by accepting 'endpoint' as dict)
-            if {'endpoints', 'endpoint'}.issubset(set(settings.keys())):
-                if isinstance(settings['endpoints'], dict):
-                    if isinstance(settings['endpoint'], str):
-                        if settings['endpoint'] in settings['endpoints']:
-                            if isinstance(settings['endpoints'][settings['endpoint']], dict):
-                                if 'name' not in settings['endpoints'][settings['endpoint']]:
-                                    settings['endpoint'] = {'name': settings['endpoint'], ** settings['endpoints'][settings['endpoint']]}
-                                    del settings['endpoints']
-        else:
-            settings = copy.deepcopy(self._settings[name])
-
-        self._lock_settings.release()
         return settings
 
     def set_settings(self, settings, mode="set"):

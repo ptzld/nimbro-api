@@ -128,12 +128,12 @@ class Logger:
         frame = inspect.currentframe().f_back
         key = (frame.f_code.co_name, frame.f_code.co_filename, frame.f_lineno)
 
-        with lock:
-            if self._core_settings is None:
-                core_settings = nimbro_api.get_settings()
-            else:
-                core_settings = self._core_settings
+        if self._core_settings is None:
+            core_settings = nimbro_api.get_settings()
+        else:
+            core_settings = self._core_settings
 
+        with lock:
             # check severity and global mute
             severity = self._settings['severity']
             if severity is None:
