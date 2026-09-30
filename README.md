@@ -41,6 +41,7 @@
 | Client | API Docs |
 |--------|----------|
 | [nimbro_api.misc.No](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/misc/client/no.py) | [No-as-a-Service](https://github.com/hotheadhacker/no-as-a-service) |
+| [nimbro_api.misc.SystemOne](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/misc/client/system_one.py) | [System One](https://openrouter.ai/docs/api/api-reference/systemone/submit-a-system-one-request) |
 | [nimbro_api.misc.VlmGist](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/misc/client/vlm_gist.py) | [VLM-GIST](https://vlm-gist.github.io) |
 
 #### 🪧 All clients feature:

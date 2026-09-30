@@ -31,11 +31,11 @@ class Sam2RealtimeBase(ClientBase):
         for endpoint in settings['endpoints']:
             assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
             assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
-            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
+            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
         if isinstance(settings['endpoint'], dict):
-            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=True, require_name=True, setting_name="endpoint provided through setting 'endpoint'")
+            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=True, require_name=True, allow_models=True, setting_name="endpoint provided through setting 'endpoint'")
             settings['endpoints'][settings['endpoint']['name']] = settings['endpoint']
             settings['endpoint'] = settings['endpoint']['name']
             del settings['endpoints'][settings['endpoint']]['name']

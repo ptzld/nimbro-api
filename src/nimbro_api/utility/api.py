@@ -508,7 +508,7 @@ def get_api_key(self):
 
     return True, message, api_key
 
-def validate_endpoint(endpoint, *, flavors, require_key, require_name, setting_name):
+def validate_endpoint(endpoint, *, flavors, require_key, require_name, allow_models, setting_name):
     """
     Validates the structure and content of an endpoint definition.
 
@@ -522,6 +522,8 @@ def validate_endpoint(endpoint, *, flavors, require_key, require_name, setting_n
             Determines if the 'endpoint' requires the keys "key_type" and "key_value".
         require_name (bool):
             Determines if the 'endpoint' requires the key "name".
+        allow_models (bool):
+            Determines if the 'endpoint' permits the optional key "models_url".
         setting_name (str):
             The name of the 'endpoint' being validated.
 
@@ -533,12 +535,13 @@ def validate_endpoint(endpoint, *, flavors, require_key, require_name, setting_n
         - "key_type" and "key_value" are required when argument 'require_key' is `True`.
         - "name" is required when argument 'require_name' is `True`.
         - If argument 'flavors' is provided and non-empty, "api_flavor" is also required and it's value must be in 'flavors'.
-        - The only permitted optional key is "models_url".
+        - The only permitted optional key is "models_url", when 'allow_models' is `True`.
         - All keys and values in 'endpoint' must be non-empty strings, except the value of key "key_value", which can be an empty string.
         - The value of "key_type" must be either "environment" or "plain".
     """
     # parse arguments
     assert_type_value(obj=flavors, type_or_value=[list, None], name="argument 'flavors'")
+    assert_type_value(obj=allow_models, type_or_value=bool, name="argument 'allow_models'")
     assert_type_value(obj=setting_name, type_or_value=str, name="argument 'setting_name'")
 
     if flavors is None or len(flavors) == 0:
@@ -558,7 +561,7 @@ def validate_endpoint(endpoint, *, flavors, require_key, require_name, setting_n
     if has_flavors:
         keys_required.insert(1, 'api_flavor')
     assert_keys(obj=endpoint, keys=keys_required, mode="required", name=setting_name)
-    keys_optional = ['models_url']
+    keys_optional = ['models_url'] if allow_models else []
     assert_keys(obj=endpoint, keys=keys_required + keys_optional, mode="whitelist", name=setting_name)
 
     # keys and values are non-empty strings
