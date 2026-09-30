@@ -1699,7 +1699,7 @@ class VlmGistBase(ClientBase):
                         elif expected_type in ["point_xy[int1000]", "point_yx[int1000]"]:
                             if isinstance(val, list) and len(val) == 1:
                                 val = val[0]
-                            if isinstance(val, list) and len(val) == 2 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 and x <= 1000 for x in val):
+                            if isinstance(val, list) and len(val) == 2 and all(isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= 1000 for x in val):
                                 if expected_type == "point_xy[int1000]":
                                     x = round(val[0] / 1000 * (data['image']['width'] - 1))
                                     y = round(val[1] / 1000 * (data['image']['height'] - 1))
@@ -1726,7 +1726,7 @@ class VlmGistBase(ClientBase):
                         elif expected_type in ["box_xyxy[int1000]", "box_yxyx[int1000]"]:
                             if isinstance(val, list) and len(val) == 1:
                                 val = val[0]
-                            if isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 and x <= 1000 for x in val) and val[2] > val[0] and val[3] > val[1]:
+                            if isinstance(val, list) and len(val) == 4 and all(isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= 1000 for x in val) and val[2] > val[0] and val[3] > val[1]:
                                 if expected_type == "box_xyxy[int1000]":
                                     x_min = val[0] * data['image']['width'] // 1000
                                     y_min = val[1] * data['image']['height'] // 1000

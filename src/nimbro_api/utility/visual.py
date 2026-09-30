@@ -608,7 +608,7 @@ def visualize_detections(image, *, boxes=None, masks=None, points=None, labels=N
             assert_log(expression=len(point) == 2, message=f"Expected item '{i}' in argument 'points' to contain '2' values but got '{len(point)}'.")
             for j, value in enumerate(point):
                 assert_type_value(obj=value, type_or_value=float, name=f"item '{j}' in point '{i}' argument 'points'")
-                assert_log(expression=value >= 0.0 and value <= 1.0, message=f"Expected value in argument 'points' to be in [0.0, 1.0] but got '{value}'.")
+                assert_log(expression=0.0 <= value <= 1.0, message=f"Expected value in argument 'points' to be in [0.0, 1.0] but got '{value}'.")
     else:
         for i, point in enumerate(points):
             if point is None:
