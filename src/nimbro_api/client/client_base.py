@@ -57,6 +57,7 @@ class ClientBase:
         if len(kwargs) > 0:
             assert_log(expression=settings is None or len(settings) == 0, message="Failed during initialization: Expected settings to be passed as either a dictionary via the 'settings' argument or as keyword arguments, but not both.")
             settings = kwargs
+        self._default_settings = copy.deepcopy(default_settings)
         from ..core import CoreBase
         if isinstance(self, CoreBase):
             self._logger_settings = {
@@ -64,7 +65,7 @@ class ClientBase:
                 'logger_line_length': default_settings['logger_line_length'],
                 'logger_multi_line_prefix': default_settings['logger_multi_line_prefix']
             }
-            self._logger = Logger(
+            self._logger = self._create_logger(
                 settings={'severity': default_settings['logger_severity'], 'name': default_settings['logger_name']},
                 core_settings=self._logger_settings
             )
@@ -77,7 +78,7 @@ class ClientBase:
                     severity = settings.get('logger_severity')
                 if 'logger_name' in settings and isinstance(settings['logger_name'], (str, type(None))):
                     name = settings.get('logger_name')
-            self._logger = Logger(
+            self._logger = self._create_logger(
                 settings={'severity': severity, 'name': name}
             )
             self._logger.debug(f"Initializing '{type(self).__name__}' object.")
@@ -87,10 +88,12 @@ class ClientBase:
             self._initial_settings = copy.deepcopy(default_settings)
         else:
             self._initial_settings = copy.deepcopy(settings)
-        self._default_settings = copy.deepcopy(default_settings)
         self._settings = {}
 
         self.wrap(0, self.set_settings, default_settings if isinstance(self, CoreBase) else settings, "init")
+
+    def _create_logger(self, settings, *, core_settings=None):
+        return Logger(settings=settings, core_settings=core_settings)
 
     def wrap(self, responses, function, *args, **kwargs):
         """

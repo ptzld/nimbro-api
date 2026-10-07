@@ -75,6 +75,9 @@ class Logger:
         settings = update_dict(old_dict=default_settings, new_dict=settings)
         self.set_settings(settings=settings)
 
+    def _get_effective_name(self):
+        return self._settings['name']
+
     def _log(self, method, text, *, once=False, skip_first=False, throttle=None, suffix=None, core_settings=None):
         """
         Internal logging method applying filters and thread safety.
@@ -174,7 +177,8 @@ class Logger:
             stamp_str = f"[{stamp.isoformat()[:23]}]"
             stamp_str = stamp_str[:11] + " " + stamp_str[12:]
             # stamp_str = f"[{stamp.isoformat()}]"
-            name_str = f"[{self._settings['name']}]" if self._settings['name'] else ""
+            name = self._get_effective_name()
+            name_str = f"[{name}]" if name else ""
             suffix_str = f"[{suffix}]" if suffix else ""
             prefix_first_line = f"{stamp_str}{self._method_prefix[method]}{name_str}{suffix_str}"
             if core_settings['logger_multi_line_prefix']:
