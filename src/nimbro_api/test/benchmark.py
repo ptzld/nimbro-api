@@ -219,16 +219,22 @@ def _worker_main(index, connection, config, gate, start, stop):
                 phase = connection.recv()
                 if phase['kind'] == "shutdown":
                     break
+                local_gate = threading.Event()
+                local_stop = threading.Event()
                 statistics = [_Statistics() for _ in clients]
-                threads = [threading.Thread(target=_caller, args=(client, stat, config, phase, start, gate, stop), daemon=True) for client, stat in zip(clients, statistics)]
+                threads = [threading.Thread(target=_caller, args=(client, stat, config, phase, start, local_gate, local_stop), daemon=True) for client, stat in zip(clients, statistics)]
                 for thread in threads:
                     thread.start()
                 connection.send({'kind': "prepared", 'worker': index})
                 gate.wait()
+                if stop.is_set():
+                    local_stop.set()
                 cpu_start = time.process_time()
+                local_gate.set()
                 last_report, interrupted = 0.0, False
                 while any(thread.is_alive() for thread in threads):
-                    if stop.is_set() and not interrupted:
+                    if not interrupted and stop.is_set():
+                        local_stop.set()
                         interrupted = True
                         faulthandler.dump_traceback(file=stacks, all_threads=True)
                         for client in clients:
