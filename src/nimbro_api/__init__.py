@@ -4,7 +4,7 @@ from inspect import getmembers
 from importlib.metadata import version, metadata, PackageNotFoundError
 
 from .core import Core
-from .test import test
+from .test import benchmark, test
 from . import api as _api
 from .api import __all__ as api_all
 from .client import Client, ClientBase
@@ -15,7 +15,7 @@ try:
 except PackageNotFoundError:
     pass
 
-__all__ = ["test"]
+__all__ = ["benchmark", "test"]
 
 _core = Core()
 _module = sys.modules[__name__]

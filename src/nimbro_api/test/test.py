@@ -1,7 +1,35 @@
 #!/usr/bin/env python3
 
+"""
+Run common client checks, package utilities, and API-specific tests.
+
+Install this checkout with Python 3.9+:
+    pip install -e .
+
+Run from the repository root:
+    python src/nimbro_api/test/test.py
+    python src/nimbro_api/test/test.py --provider openai --module classify
+    python src/nimbro_api/test/test.py --no-common --no-utilities --severity debug
+
+Call from Python with the same arguments and defaults:
+    nimbro_api.test()
+    nimbro_api.test(provider="openai", module="classify")
+
+Defaults select offline API utility tests and also run common client checks and
+package utilities. See --help for filters and logging controls. --function none
+includes live tests requiring external services and credentials.
+
+Test reports are always emitted. --severity controls underlying `nimbro_api` logs
+and defaults to "off".
+
+Results overwrite test.txt and test_pretty.txt in the package test directory.
+The return value and script exit status are the total number of test failures.
+"""
+
+import sys
 import time
 import inspect
+import argparse
 import datetime
 import threading
 import traceback
@@ -10,7 +38,8 @@ from pathlib import Path
 
 import nimbro_api
 
-from ..utility.misc import UnrecoverableError, assert_type_value, assert_log, escape, print_lines
+from nimbro_api.utility.logger import Logger
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log, escape, print_lines
 
 log_raw, log_pretty = "", ""
 lock = threading.Lock()
@@ -188,7 +217,7 @@ def _common_tests(provider, module):
     _report("", f"Performed common tests with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['darkyellow'] if failures > 0 else escape['cyan'])
     return failures
 
-def test(provider=None, *, module=None, function="utilities", common=True, utilities=True, severity=None):
+def test(provider=None, *, module=None, function="utilities", common=True, utilities=True, severity="off"):
     """
     Executes a comprehensive suite of tests including common client checks and API-specific test modules.
 
@@ -196,15 +225,19 @@ def test(provider=None, *, module=None, function="utilities", common=True, utili
         provider (str | None, optional):
             The name of a specific API provider to test. If `None`, all discovered APIs are processed. Defaults to `None`.
         module (str | None, optional):
-            A sub-string filter used to select specific test modules (files) within an API's test directory. Defaults to `None`.
+            A case-sensitive substring filter for API test filenames and common client class names.
+            Use `None` to select all modules. Defaults to `None`.
         function (str | None, optional):
-            A sub-string filter used to select specific test functions within a module. Only functions starting with "test_" are considered. Defaults to "utilities" which must not require any outgoing connection.
+            A case-sensitive substring filter for API test functions. Only functions starting with
+            "test_" are considered. Use `None` to select all functions, including live tests requiring
+            services and credentials. Defaults to "utilities", which selects offline utility tests.
         common (bool, optional):
             If `True`, performs common client tests across the selected APIs. Defaults to `True`.
         utilities (bool, optional):
-            If `True`, performs general level-package tests. Defaults to `True`.
-        severity (str | None, optional):
-            Logger severity of all tests in ["debug", "info", "warn", "error", "fatal", "off"] (str). Defaults to `None`.
+            If `True`, performs package utility checks. Defaults to `True`.
+        severity (str, optional):
+            Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] for underlying `nimbro_api` logs.
+            Use "off" to mute all underlying logs. Test reports are always emitted. Defaults to "off".
 
     Raises:
         UnrecoverableError: If input arguments are invalid or if internal assertions fail during test preparation.
@@ -215,6 +248,7 @@ def test(provider=None, *, module=None, function="utilities", common=True, utili
     Notes:
         - Two log files are generated in the "test" sub-directory of the package: "test.txt" (raw text) and "test_pretty.txt" (with ANSI color codes).
         - Test discovery relies on the directory structure where each API provider resides in a sub-directory of the "api" folder containing a "test" directory.
+        - Logging and credential cache settings changed by the runner are restored after execution.
     """
     # parse arguments
     assert_type_value(obj=provider, type_or_value=[str, None], name="argument 'provider'")
@@ -222,58 +256,71 @@ def test(provider=None, *, module=None, function="utilities", common=True, utili
     assert_type_value(obj=function, type_or_value=[str, None], name="argument 'function'")
     assert_type_value(obj=common, type_or_value=bool, name="argument 'common'")
     assert_type_value(obj=utilities, type_or_value=bool, name="argument 'utilities'")
+    assert_type_value(obj=severity, type_or_value=[str, int], name="argument 'severity'")
+    severity = Logger(severity=severity).get_settings(name='severity')
 
     # set logger
-    logger_mute = nimbro_api.get_settings(name='logger_mute')
-    keys_cache = nimbro_api.get_settings(name='keys_cache')
-    if severity is None:
-        success, message = nimbro_api.set_settings(settings={'logger_mute': True, 'keys_cache': False})
-    else:
-        logger_severity = nimbro_api.get_settings(name='logger_severity')
-        success, message = nimbro_api.set_settings(settings={'logger_mute': False, 'logger_severity': severity, 'keys_cache': False})
-    assert_log(expression=success, message=message)
-
+    original_settings = {name: nimbro_api.get_settings(name=name) for name in ['logger_mute', 'logger_severity', 'keys_cache']}
     global log_raw, log_pretty
     log_raw, log_pretty = "", ""
-
-    # run tests
-    _report("", "Starting tests.", escape['darkgreen'])
-    stamp = time.perf_counter()
-    failures = 0
-
-    if utilities:
-        failures += _test_utilities()
-
-    if common:
-        failures += _common_tests(provider=provider, module=module)
     package_path = Path(nimbro_api.__path__[0])
-    api_root_path = package_path / "api"
-    api_paths = [api_root_path / provider] if provider else [p for p in api_root_path.iterdir() if p.is_dir()]
-    for path in api_paths:
-        if not path.name.startswith("_"):
-            failures += _test_provider(path=path, module=module, function=function)
-    _report("", f"Finished tests with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['red'] if failures > 0 else escape['green'])
-
-    # ensure deferred jobs are drained
-    nimbro_api.execute_deferred_jobs()
-
-    # reset logger severity
-    success, message = nimbro_api.set_settings(keys_cache=keys_cache)
-    assert_log(expression=success, message=message)
-    if severity is not None:
-        success, message = nimbro_api.set_settings(logger_severity=logger_severity)
+    try:
+        success, message = nimbro_api.set_settings(settings={
+            'logger_mute': severity == "off",
+            'logger_severity': severity,
+            'keys_cache': False
+        })
         assert_log(expression=success, message=message)
-    success, message = nimbro_api.set_settings(logger_mute=logger_mute)
-    assert_log(expression=success, message=message)
 
-    # write files
-    path = package_path / "test"
-    with open(path / "test.txt", "w", encoding="utf-8") as file:
-        file.write(f"{log_raw}\n")
-    with open(path / "test_pretty.txt", "w", encoding="utf-8") as file:
-        file.write(f"{log_pretty}\n")
+        # run tests
+        _report("", "Starting tests.", escape['darkgreen'])
+        stamp = time.perf_counter()
+        failures = 0
+
+        if utilities:
+            failures += _test_utilities()
+
+        if common:
+            failures += _common_tests(provider=provider, module=module)
+        api_root_path = package_path / "api"
+        api_paths = [api_root_path / provider] if provider else [p for p in api_root_path.iterdir() if p.is_dir()]
+        for path in api_paths:
+            if not path.name.startswith("_"):
+                failures += _test_provider(path=path, module=module, function=function)
+        _report("", f"Finished tests with '{failures}' failure{'' if failures == 1 else 's'} in '{time.perf_counter() - stamp:.3f}s'.", escape['red'] if failures > 0 else escape['green'])
+
+        # ensure deferred jobs are drained
+        nimbro_api.execute_deferred_jobs()
+    finally:
+        # restore settings
+        success, message = nimbro_api.set_settings(settings=original_settings, mute=True)
+        assert_log(expression=success, message=message)
+
+        # write files
+        path = package_path / "test"
+        with open(path / "test.txt", "w", encoding="utf-8") as file:
+            file.write(f"{log_raw}\n")
+        with open(path / "test_pretty.txt", "w", encoding="utf-8") as file:
+            file.write(f"{log_pretty}\n")
 
     return failures
 
-if __name__ == '__main__':
-    test()
+def _optional_filter(value):
+    return None if value.lower() == "none" else value
+
+def _severity(value):
+    return int(value) if value.isdigit() else value
+
+def _arguments():
+    parser = argparse.ArgumentParser(description="Run NimbRo API tests. Default utility tests do not contact providers.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--provider", type=_optional_filter, help="API provider name. Use 'none' to select all providers.")
+    parser.add_argument("--module", type=_optional_filter, help="Test module/class substring filter, or 'none'.")
+    parser.add_argument("--function", type=_optional_filter, help="Test function substring filter. Use 'none' to include live tests requiring services and credentials.")
+    parser.add_argument("--common", action=argparse.BooleanOptionalAction, help="Run common client checks.")
+    parser.add_argument("--utilities", action=argparse.BooleanOptionalAction, help="Run package utility checks.")
+    parser.add_argument("--severity", type=_severity, choices=["debug", "info", "warn", "error", "fatal", "off", 0, 10, 20, 30, 40, 50], metavar="{debug,info,warn,error,fatal,off}", help="Logger severity for underlying nimbro_api logs. Use 'off' to mute those logs. Test reports are always emitted.")
+    parser.set_defaults(**{name: parameter.default for name, parameter in inspect.signature(test).parameters.items()})
+    return vars(parser.parse_args())
+
+if __name__ == "__main__":
+    sys.exit(test(**_arguments()))

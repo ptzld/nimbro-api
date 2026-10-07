@@ -71,7 +71,7 @@ Repository = "https://github.com/ptzld/nimbro-api"
 where = ["src"]
 
 [tool.setuptools.package-data]
-nimbro_api = ["**/*.json", "fonts/*", "test/assets/*"]
+nimbro_api = ["**/*.json", "fonts/*", "test/assets/*", "test/benchmark_server/*.go", "test/benchmark_server/go.mod"]
 
 [tool.pylint.messages_control]
 disable = [
