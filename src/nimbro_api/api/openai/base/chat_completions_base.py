@@ -802,7 +802,7 @@ class ChatCompletionsBase(ClientBase):
 
                     alive = request_thread.is_alive()
 
-                    if self.pipe[0].poll():
+                    if self.pipe[0].poll(timeout=0.01):
                         stamp_last_chunk = time.perf_counter()
 
                         chunk = self.pipe[0].recv()
@@ -906,8 +906,6 @@ class ChatCompletionsBase(ClientBase):
                         usage = self.save_usage(chunk=None, stamp_start=datetime_start)
                         logs.append(f"Error while receiving completion: Completion thread unexpectedly died after '{now - stamp_start:.3f}s'.")
                         break
-                    else:
-                        time.sleep(0.01)
             except BaseException as e:
                 self._completion_cancel.set()
                 interrupt = e
