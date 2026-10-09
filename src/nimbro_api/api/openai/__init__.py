@@ -1,9 +1,24 @@
-from .client.chat_completions import ChatCompletions
-from .client.classify import Classify
-from .client.embeddings import Embeddings
-from .client.images import Images
-from .client.speech import Speech
-from .client.transcriptions import Transcriptions
-from .client.translations import Translations
+import importlib
 
-__all__ = ["ChatCompletions", "Classify", "Embeddings", "Images", "Speech", "Transcriptions", "Translations"]
+_CLIENTS = {
+    'ChatCompletions': "chat_completions",
+    'Classify': "classify",
+    'Embeddings': "embeddings",
+    'Images': "images",
+    'Speech': "speech",
+    'Transcriptions': "transcriptions",
+    'Translations': "translations"
+}
+
+__all__ = list(_CLIENTS)
+
+def __getattr__(name):
+    if name in _CLIENTS:
+        module = importlib.import_module(f".client.{_CLIENTS[name]}", package=__name__)
+        value = getattr(module, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"Module '{__name__}' has no attribute '{name}'.")
+
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

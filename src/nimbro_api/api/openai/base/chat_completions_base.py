@@ -9,18 +9,34 @@ import threading
 import importlib.util
 import multiprocessing
 
-try:
-    import jsonschema
-    JSONSCHEMA_AVAILABLE = True
-except ImportError:
-    JSONSCHEMA_AVAILABLE = False
-
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import download_file, read_as_b64, encode_b64
 from nimbro_api.utility.api import get_api_key, validate_endpoint, http_request, HttpRequestCancelled
 from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log, escape, format_obj
 from nimbro_api.utility.string import is_url, is_base64, extract_json
 from ..utility import validate_connection, get_models
+
+JSONSCHEMA_AVAILABLE = None
+_JSONSCHEMA_LOCK = threading.Lock()
+_JSONSCHEMA = None
+
+def _reset_jsonschema_lock():
+    global _JSONSCHEMA_LOCK
+    _JSONSCHEMA_LOCK = threading.Lock()
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_jsonschema_lock)
+
+def _load_jsonschema():
+    global JSONSCHEMA_AVAILABLE, _JSONSCHEMA
+    with _JSONSCHEMA_LOCK:
+        if JSONSCHEMA_AVAILABLE is None:
+            try:
+                _JSONSCHEMA = importlib.import_module("jsonschema")
+            except ImportError:
+                JSONSCHEMA_AVAILABLE = False
+            else:
+                JSONSCHEMA_AVAILABLE = True
 
 class CustomException(Exception):
     pass
@@ -1926,7 +1942,7 @@ class ChatCompletionsBase(ClientBase):
                     reason = f"Your response contains a tool-call of which the arguments cannot be parsed as JSON: {e.msg}"
                 else:
                     if JSONSCHEMA_AVAILABLE:
-                        validator = jsonschema.Draft7Validator(schema)
+                        validator = _JSONSCHEMA.Draft7Validator(schema)
                         errors = sorted(validator.iter_errors(arguments), key=lambda e: e.path)
                         if errors:
                             success = False
@@ -2569,6 +2585,7 @@ class ChatCompletionsBase(ClientBase):
                     if updates > 0:
                         tool_msg += f"\n*tool existed before ('{updates}' of '{len(tools)}')"
 
+                _load_jsonschema()
                 self._logger.info(tool_msg)
                 self.tools = copy.deepcopy(tools)
 

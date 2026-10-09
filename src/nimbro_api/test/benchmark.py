@@ -27,8 +27,8 @@ Use --hold-ms to observe overlap. Immediate responses naturally have low overlap
 A strong Go result demonstrates endpoint capacity for that run. If both clients
 are slow, that does not establish a NimbRo bottleneck.
 
-Console output and diagnostics are saved to benchmark.txt beside this script,
-overwritten each run. Certificates, binaries and intermediate logs are temporary.
+Benchmark statistics and enabled error diagnostics are saved to benchmark.txt beside
+this script, overwritten each run. Certificates, binaries and intermediate logs are temporary.
 Bandwidth counts HTTP body bytes, not HTTP/TLS overhead. Latency percentiles use
 approximately 2% histogram buckets. --warmup 0 still probes once per caller.
 """
@@ -66,8 +66,11 @@ LOGGER = None
 
 # reporting
 
-def _report(text):
-    if LOGGER is not None:
+def _report(text, error_logger=None):
+    if error_logger is not None:
+        if not error_logger.error(text):
+            return
+    elif LOGGER is not None:
         LOGGER.info(text)
     if REPORT_FILE is not None:
         REPORT_FILE.write(text + "\n")
@@ -314,7 +317,7 @@ def _arguments():
     parser.add_argument("--h2-max-streams", type=_positive_int, help="Server stream limit per HTTP/2 connection.")
     parser.add_argument("--max-keepalive-connections", type=_optional_int, help="NimbRo idle connections per process. Use 'none' for unlimited connections or 'default' to preserve package settings.")
     parser.add_argument("--request-timeout", type=_positive_float, help="Connect/read/completion timeout seconds.")
-    parser.add_argument("--severity", type=_severity, choices=["debug", "info", "warn", "error", "fatal", "off", 0, 10, 20, 30, 40, 50], metavar="{debug,info,warn,error,fatal,off}", help="Logger severity for underlying nimbro_api logs. Use 'off' to mute those logs. Benchmark reports are always emitted.")
+    parser.add_argument("--severity", type=_severity, choices=["debug", "info", "warn", "error", "fatal", "off", 0, 10, 20, 30, 40, 50], metavar="{debug,info,warn,error,fatal,off}", help="Logger severity for underlying nimbro_api logs and benchmark error diagnostics. Benchmark statistics are always emitted.")
     parser.set_defaults(**{name: parameter.default for name, parameter in signature(benchmark).parameters.items()})
     return vars(parser.parse_args())
 
@@ -647,13 +650,11 @@ def _run_workload(name, workload, config, results):
         except (OSError, ValueError) as exc:
             run['server_metrics_error'] = repr(exc)
 
-def _report_results(name, result):
+def _report_results(name, result, logger):
     _report(f"{name.capitalize()}:")
     rate = None
     if 'error' in result:
-        _report(f"  Error: {result['error']}")
-    elif result['status'] != "complete":
-        _report(f"  State: '{result['status']}'")
+        _report(f"{name.capitalize()}: {result['error']}", error_logger=logger)
     for phase_name in ['warmup', 'measurement']:
         phase = result.get(phase_name)
         if phase is None:
@@ -675,25 +676,21 @@ def _report_results(name, result):
             latencies = [f"{key.removesuffix('_seconds')} '{value:.3f}s'" if value is not None else f"{key.removesuffix('_seconds')} unavailable" for key, value in phase['latency'].items()]
             _report(f"  Latency: {', '.join(latencies)}, max '{stats['max_latency_seconds']:.3f}s'")
             _report(f"  Client CPU: '{phase['client_cpu_seconds']:.3f}s' ({phase['client_cpu_source']})")
-            for category, count in stats['errors'].items():
-                _report(f"  Failures: '{count}' {category}")
-            for message in stats['error_samples']:
-                _report(f"  Failure: {message}")
         server = phase.get('server')
         if server:
             _report(f"  Peak server requests: '{server['peak_active']}'")
             if phase['status'] != "complete":
                 _report(f"  Server requests: '{server['received']}' received, '{server['completed']}' completed")
             if server['read_errors'] or server['write_errors'] or server['canceled']:
-                _report(f"  Server errors: '{server['read_errors']}' read, '{server['write_errors']}' write, '{server['canceled']}' canceled")
+                _report(f"{name.capitalize()} server errors: '{server['read_errors']}' read, '{server['write_errors']}' write, '{server['canceled']}' canceled", error_logger=logger)
         if 'response_body_mib_per_second' in phase:
             _report(f"  Body bandwidth: '{phase['request_body_mib_per_second']:.3f}' request MiB/s, '{phase['response_body_mib_per_second']:.3f}' response MiB/s")
     if 'worker_exit_codes' in result and any(code != 0 for code in result['worker_exit_codes']):
-        _report(f"  Worker exit codes: {result['worker_exit_codes']}")
+        _report(f"{name.capitalize()} worker exit codes: {result['worker_exit_codes']}", error_logger=logger)
     if 'exit_code' in result and result['exit_code'] != 0:
-        _report(f"  Client exit code: '{result['exit_code']}'")
+        _report(f"{name.capitalize()} client exit code: '{result['exit_code']}'", error_logger=logger)
     if 'server_metrics_error' in result:
-        _report(f"  Final server metrics unavailable: {result['server_metrics_error']}")
+        _report(f"{name.capitalize()} final server metrics unavailable: {result['server_metrics_error']}", error_logger=logger)
     _report(f"  Throughput: '{rate:.2f}' req/s" if rate is not None else "  Throughput: unavailable req/s")
 
 def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2.0, prompt_bytes=2048, response_bytes=2048, http="h1", hold_ms=0.0, h2_max_streams=250, max_keepalive_connections="default", request_timeout=10.0, severity="off"):
@@ -729,7 +726,8 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
             Positive connect, read, and completion timeout in seconds. Defaults to `10.0`.
         severity (str, optional):
             Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] for underlying `nimbro_api` logs.
-            Use "off" to mute all underlying logs. Benchmark reports are always emitted. Defaults to "off".
+            Use "off" to mute all underlying logs and benchmark error diagnostics.
+            Benchmark statistics are always emitted. Defaults to "off".
 
     Raises:
         UnrecoverableError: If arguments are invalid or HTTP/2 dependencies are unavailable.
@@ -742,7 +740,8 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
         - Offered concurrency is 'processes' multiplied by 'threads_per_process'.
         - Go runs first, then NimbRo. Each has a separate warm-up and measurement.
         - Enabling underlying logs adds work to the measured workload and can reduce throughput.
-        - Results overwrite "benchmark.txt" in the package test directory, including failure diagnostics.
+        - Results overwrite "benchmark.txt" in the package test directory, including enabled error diagnostics.
+        - Relative throughput compares successful measurement requests per second when both clients have successes, even if other requests fail.
         - Workers use the runner's HTTP pool settings with any benchmark override applied.
         - Certificates, binaries, and intermediate logs are temporary. Runner pool settings are restored after execution.
     """
@@ -800,6 +799,7 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
     }
     logger_settings['logger_mute'] = False
     LOGGER = Logger(severity="info", name="Benchmark", core_settings=logger_settings)
+    error_logger = Logger(severity=config['severity'], name="Benchmark", core_settings=logger_settings)
     output = Path(nimbro_api.__path__[0]) / "test" / "benchmark.txt"
     with open(output, "w", encoding="utf-8") as results_file, tempfile.TemporaryDirectory(prefix="nimbro-bandwidth-") as temporary:
         REPORT_FILE = results_file
@@ -811,7 +811,7 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
         config['run_directory'] = temporary
         results = {}
         server = _Server(config)
-        exit_code, status = 1, "failed"
+        exit_code = 1
         try:
             success, message = nimbro_api.set_settings(settings=config['pool_settings'], mute=True)
             assert_log(expression=success, message=message)
@@ -834,24 +834,24 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
                 raise RuntimeError("Server exited during the reference run.")
             _run_workload("package", _Workers(config), config, results)
             if all(results[name]['status'] == "complete" for name in ['reference', 'package']):
-                exit_code, status = 0, "complete"
+                exit_code = 0
         except KeyboardInterrupt:
-            exit_code, status = 130, "interrupted"
+            exit_code = 130
             _report("Interrupted by user.")
         except Exception as exc:
-            _report(f"Benchmark failed: {exc}")
+            _report(f"Benchmark failed: {exc}", error_logger=error_logger)
         finally:
             server.close()
             success, message = nimbro_api.set_settings(settings=original_pool_settings, mute=True)
             assert_log(expression=success, message=message)
             for name, result in results.items():
-                _report_results(name, result)
-            if status == "complete":
+                _report_results(name, result, error_logger)
+            if all(results.get(name, {}).get('measurement', {}).get('statistics', {}).get('succeeded', 0) > 0 for name in ['reference', 'package']):
                 percentage = 100 * results['package']['measurement']['successful_completions_per_second'] / results['reference']['measurement']['successful_completions_per_second']
                 _report(f"Relative package throughput: '{percentage:.2f}%'")
             for path in sorted(Path(temporary).iterdir()):
                 if path.suffix in [".log", ".txt"] and path.stat().st_size:
-                    _report(f"Diagnostics ({path.name}):\n{path.read_text(encoding='utf-8', errors='replace').rstrip()}")
+                    _report(f"Diagnostics ({path.name}):\n{path.read_text(encoding='utf-8', errors='replace').rstrip()}", error_logger=error_logger)
             REPORT_FILE = None
     LOGGER = None
     if exit_code == 0:

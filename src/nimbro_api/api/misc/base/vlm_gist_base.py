@@ -14,7 +14,6 @@ from nimbro_api.api.nimbro_vision_servers import MmGroundingDino, Sam2Realtime
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import read_json, decode_b64, parse_image_b64
 from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log, assert_keys, count_duplicates, get_image_dimensions
-from nimbro_api.utility.visual import IMPORT_ERROR, visualize_detections
 
 def initialize_visualize_worker():
     import cv2
@@ -262,6 +261,8 @@ class VlmGistBase(ClientBase):
         return self._apply_settings(settings, mode)
 
     def visualize(self, result, image, output_dir, return_visualizations=True, vis_args=None, _result_index=None, _num_results=None, _log_visualized=True):
+        from nimbro_api.utility.visual import IMPORT_ERROR, visualize_detections
+
         # parse arguments
         assert_type_value(obj=output_dir, type_or_value=[None, str], name="argument 'output_dir'")
         assert_type_value(obj=return_visualizations, type_or_value=bool, name="argument 'return_visualizations'")
