@@ -281,8 +281,10 @@ class ClientBase:
                     stage = 0
                 else:
                     stage = 1
+                    persist = True
             else:
                 stage = 1
+                persist = True
 
             attempt = 1
 
