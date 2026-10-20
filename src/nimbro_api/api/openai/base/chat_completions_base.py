@@ -4,6 +4,7 @@ import copy
 import json
 import time
 import uuid
+import queue
 import datetime
 import threading
 import importlib.util
@@ -11,7 +12,7 @@ import multiprocessing
 
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import download_file, read_as_b64, encode_b64
-from nimbro_api.utility.api import get_api_key, validate_endpoint, http_request, HttpRequestCancelled
+from nimbro_api.utility.api import get_api_key, validate_endpoint, http_request, HttpRequestCancelled, _HttpRequestCancelEvent
 from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log, escape, format_obj
 from nimbro_api.utility.string import is_url, is_base64, extract_json
 from ..utility import validate_connection, get_models
@@ -41,6 +42,31 @@ def _load_jsonschema():
 class CustomException(Exception):
     pass
 
+class _CompletionMessages:
+    """
+    Delivers buffered completion messages without pipe serialization.
+    """
+
+    def __init__(self):
+        self.messages = queue.SimpleQueue()
+        self.closed = False
+
+    def send(self, message):
+        if self.closed:
+            raise OSError("Completion receiver is closed.")
+        self.messages.put(message)
+
+    def poll(self):
+        return not self.messages.empty()
+
+    def recv(self):
+        return self.messages.get_nowait()
+
+    def close(self):
+        self.closed = True
+        while not self.messages.empty():
+            self.messages.get_nowait()
+
 class ChatCompletionsBase(ClientBase):
 
     def __init__(self, settings, default_settings, **kwargs):
@@ -50,7 +76,7 @@ class ChatCompletionsBase(ClientBase):
         self.get_models = get_models.__get__(self)
 
         self.is_prompting = False
-        self._completion_cancel = threading.Event()
+        self._completion_cancel = _HttpRequestCancelEvent()
         self._completion_interrupt_external = threading.Event()
         self._completion_finished = threading.Event()
         self._completion_finished.set()
@@ -786,14 +812,23 @@ class ChatCompletionsBase(ClientBase):
             if self._completion_interrupt_external.is_set():
                 self._completion_cancel.set()
                 raise UnrecoverableError("Interrupted prompt via interrupt function.")
-            self.pipe = multiprocessing.Pipe(duplex=True)
-            request_thread = threading.Thread(target=self.completion_thread, kwargs={'pipe': self.pipe, 'api_key': api_key})
-            request_thread.daemon = True
-            request_thread.start()
+            self._completion_cancel.deadline = None if self._settings['timeout_completion'] is None else stamp_start + self._settings['timeout_completion']
+            if self._settings['stream']:
+                self.pipe = multiprocessing.Pipe(duplex=True)
+            else:
+                messages = _CompletionMessages()
+                self.pipe = (messages, messages)
+            request_thread = None
+            if self._settings['stream']:
+                request_thread = threading.Thread(target=self.completion_thread, kwargs={'pipe': self.pipe, 'api_key': api_key})
+                request_thread.daemon = True
+                request_thread.start()
             interrupt = None
 
             # receive response
             try:
+                if request_thread is None:
+                    self.completion_thread(pipe=self.pipe, api_key=api_key)
                 while True:
                     now = time.perf_counter()
 
@@ -816,9 +851,10 @@ class ChatCompletionsBase(ClientBase):
                             logs.append(f"Error while receiving completion: Timeout after '{self._settings['timeout_chunk_next']}s' without receiving the next chunk.")
                             break
 
-                    alive = request_thread.is_alive()
+                    alive = request_thread is not None and request_thread.is_alive()
 
-                    if self.pipe[0].poll(timeout=0.01):
+                    available = self.pipe[0].poll(timeout=0.01) if self._settings['stream'] else self.pipe[0].poll()
+                    if available:
                         stamp_last_chunk = time.perf_counter()
 
                         chunk = self.pipe[0].recv()
@@ -927,7 +963,7 @@ class ChatCompletionsBase(ClientBase):
                 interrupt = e
             finally:
                 # deterministically cancel the request, release pipe FDs and reap the completion thread
-                if request_thread.is_alive():
+                if request_thread is not None and request_thread.is_alive():
                     self._completion_cancel.set()
                     if self.completion_response is not None:
                         try:
@@ -948,6 +984,7 @@ class ChatCompletionsBase(ClientBase):
                             logs.append(message)
                             interrupt = UnrecoverableError(message)
                 self.completion_response = None
+                self._completion_cancel.deadline = None
                 self.pipe[0].close()
                 self.pipe[1].close()
             if interrupt is not None:

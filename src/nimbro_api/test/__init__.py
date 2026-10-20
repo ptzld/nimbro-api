@@ -2,7 +2,7 @@ import importlib
 
 __all__ = ["benchmark", "test"]
 
-def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2.0, prompt_bytes=2048, response_bytes=2048, http="h1", hold_ms=0.0, h2_max_streams=250, max_keepalive_connections="default", request_timeout=10.0, severity="off"):
+def benchmark(*, processes=None, threads_per_process=100, duration=30.0, warmup=5.0, prompt_bytes=2048, response_bytes=2048, http="h1", hold_ms=5000.0, h2_max_streams=250, max_keepalive_connections="default", request_timeout=None, severity="off"):
     """
     Compare a native Go client and ChatCompletions against a local fake HTTPS endpoint.
 
@@ -12,11 +12,11 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
             Use `None` for one process per available logical CPU, respecting CPU affinity where supported.
             Defaults to `None`.
         threads_per_process (int, optional):
-            Positive number of callers per process. Defaults to `10`.
+            Positive number of request threads per process. Defaults to `100`.
         duration (float | int, optional):
-            Positive measurement duration in seconds. Defaults to `10.0`.
+            Positive measurement duration in seconds. Defaults to `30.0`.
         warmup (float | int, optional):
-            Nonnegative warm-up duration in seconds. Zero sends one excluded probe per caller. Defaults to `2.0`.
+            Nonnegative warm-up duration in seconds. Zero sends one excluded probe per caller. Defaults to `5.0`.
         prompt_bytes (int, optional):
             Positive ASCII prompt size in bytes. Defaults to `2048`.
         response_bytes (int, optional):
@@ -24,14 +24,15 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
         http (str, optional):
             HTTPS protocol, "h1" or "h2". Defaults to "h1".
         hold_ms (float | int, optional):
-            Nonnegative server delay in milliseconds. Defaults to `0.0`.
+            Nonnegative server delay in milliseconds. Defaults to `5000.0`.
         h2_max_streams (int, optional):
             HTTP/2 stream limit from `1` through `4294967295`. Defaults to `250`.
         max_keepalive_connections (int | str | None, optional):
             Idle connection limit per process. Use "default" to preserve package settings,
             `None` for unlimited, or a nonnegative integer. Defaults to "default".
-        request_timeout (float | int, optional):
-            Positive connect, read, and completion timeout in seconds. Defaults to `10.0`.
+        request_timeout (float | int | None, optional):
+            Positive override for connect, read, and completion timeouts in seconds.
+            Use `None` to inherit the separate ChatCompletions defaults. Defaults to `None`.
         severity (str | int, optional):
             Underlying log severity: "debug", "info", "warn", "error", "fatal", or "off".
             Numeric levels `0`, `10`, `20`, `30`, `40`, and `50` are also accepted.
@@ -52,6 +53,7 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
         - Results overwrite "benchmark.txt" in the package test directory, including enabled error diagnostics.
         - Relative throughput compares successful measurement requests per second when both clients have successes, even if other requests fail.
         - Workers use the runner's HTTP pool settings with any benchmark override applied.
+        - The native reference's overall request deadline uses the resolved completion timeout.
         - Certificates, binaries, and intermediate logs are temporary. Runner pool settings are restored after execution.
     """
     implementation = importlib.import_module(".benchmark", __name__).benchmark

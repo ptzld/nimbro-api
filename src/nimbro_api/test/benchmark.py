@@ -12,9 +12,10 @@ Run from the repository root:
     python src/nimbro_api/test/benchmark.py --processes 100 --threads-per-process 100 --hold-ms 1000
     python src/nimbro_api/test/benchmark.py --prompt-bytes 8192 --response-bytes 1048576 --warmup 5
 
-Defaults: one process per available logical CPU, 10 callers per process, HTTP/1.1,
-2 KiB prompt/completion text, immediate responses, and 2 seconds warm-up followed
-by 10 seconds measurement for each client. See --help for all workload controls.
+Defaults: one process per available logical CPU, 100 request threads per process, HTTP/1.1,
+2 KiB prompt/completion text, a 5-second response delay, and 5 seconds warm-up followed
+by 30 seconds measurement for each client. Timeouts inherit ChatCompletions defaults.
+See --help for all workload controls.
 
 Go runs first, then NimbRo, using the same offered concurrency and payload sizes.
 Go uses goroutines, pre-encoded JSON and generous connection reuse. It can open
@@ -59,6 +60,7 @@ import nimbro_api
 
 from nimbro_api.utility.logger import Logger
 from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_log
+from nimbro_api.api.openai.client.chat_completions import default_settings as chat_default_settings
 
 HISTOGRAM_BASE = 1.02
 REPORT_FILE = None
@@ -210,8 +212,7 @@ def _worker_main(index, connection, config, gate, start, stop):
                 },
                 model="fake-model", stream=False, validate_model=False, correction=False,
                 retry=0, parser=[],
-                timeout_connect=config['request_timeout'], timeout_read=config['request_timeout'],
-                timeout_completion=config['request_timeout']
+                **config['request_timeouts']
             ) for _ in range(config['threads_per_process'])]
             connection.send({
                 'kind': "ready",
@@ -284,6 +285,9 @@ def _positive_float(value):
         raise argparse.ArgumentTypeError(f"Expected a positive number but got '{value}'.")
     return number
 
+def _optional_positive_float(value):
+    return None if value.lower() == "none" else _positive_float(value)
+
 def _optional_int(value):
     if value == "default":
         return value
@@ -307,7 +311,7 @@ def _severity(value):
 def _arguments():
     parser = argparse.ArgumentParser(description="Compare a native Go client and ChatCompletions against a local fake HTTPS endpoint.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--processes", type=_positive_int, help="Spawned Python workers. If omitted, use one per available logical CPU.")
-    parser.add_argument("--threads-per-process", type=_positive_int, help="Persistent clients/callers per process.")
+    parser.add_argument("--threads-per-process", type=_positive_int, help="Persistent request threads per process.")
     parser.add_argument("--duration", type=_positive_float, help="Measured seconds per client.")
     parser.add_argument("--warmup", type=_nonnegative_float, help="Warm-up duration in seconds per client. Zero still probes once per caller.")
     parser.add_argument("--prompt-bytes", type=_positive_int, help="ASCII prompt content bytes.")
@@ -316,7 +320,7 @@ def _arguments():
     parser.add_argument("--hold-ms", type=_nonnegative_float, help="Server delay after receiving the body.")
     parser.add_argument("--h2-max-streams", type=_positive_int, help="Server stream limit per HTTP/2 connection.")
     parser.add_argument("--max-keepalive-connections", type=_optional_int, help="NimbRo idle connections per process. Use 'none' for unlimited connections or 'default' to preserve package settings.")
-    parser.add_argument("--request-timeout", type=_positive_float, help="Connect/read/completion timeout seconds.")
+    parser.add_argument("--request-timeout", type=_optional_positive_float, help="Override connect/read/completion timeouts in seconds. Use 'none' to inherit ChatCompletions defaults.")
     parser.add_argument("--severity", type=_severity, choices=["debug", "info", "warn", "error", "fatal", "off", 0, 10, 20, 30, 40, 50], metavar="{debug,info,warn,error,fatal,off}", help="Logger severity for underlying nimbro_api logs and benchmark error diagnostics. Benchmark statistics are always emitted.")
     parser.set_defaults(**{name: parameter.default for name, parameter in signature(benchmark).parameters.items()})
     return vars(parser.parse_args())
@@ -693,7 +697,7 @@ def _report_results(name, result, logger):
         _report(f"{name.capitalize()} final server metrics unavailable: {result['server_metrics_error']}", error_logger=logger)
     _report(f"  Throughput: '{rate:.2f}' req/s" if rate is not None else "  Throughput: unavailable req/s")
 
-def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2.0, prompt_bytes=2048, response_bytes=2048, http="h1", hold_ms=0.0, h2_max_streams=250, max_keepalive_connections="default", request_timeout=10.0, severity="off"):
+def benchmark(*, processes=None, threads_per_process=100, duration=30.0, warmup=5.0, prompt_bytes=2048, response_bytes=2048, http="h1", hold_ms=5000.0, h2_max_streams=250, max_keepalive_connections="default", request_timeout=None, severity="off"):
     """
     Compare a native Go client and ChatCompletions against a local fake HTTPS endpoint.
 
@@ -703,12 +707,12 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
             Use `None` for one process per available logical CPU, respecting CPU affinity where supported.
             Defaults to `None`.
         threads_per_process (int, optional):
-            Positive number of persistent ChatCompletions callers per process. Defaults to `10`.
+            Positive number of persistent ChatCompletions request threads per process. Defaults to `100`.
         duration (float | int, optional):
-            Positive measured submission duration in seconds for each client. Defaults to `10.0`.
+            Positive measured submission duration in seconds for each client. Defaults to `30.0`.
         warmup (float | int, optional):
             Nonnegative warm-up duration in seconds per client. Zero sends one excluded probe per caller.
-            Defaults to `2.0`.
+            Defaults to `5.0`.
         prompt_bytes (int, optional):
             Positive ASCII prompt content size in bytes. Defaults to `2048`.
         response_bytes (int, optional):
@@ -716,14 +720,15 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
         http (str, optional):
             Required negotiated protocol, "h1" or "h2". Both use HTTPS. Defaults to "h1".
         hold_ms (float | int, optional):
-            Nonnegative server delay after receiving a request body, in milliseconds. Defaults to `0.0`.
+            Nonnegative server delay after receiving a request body, in milliseconds. Defaults to `5000.0`.
         h2_max_streams (int, optional):
             Server HTTP/2 stream limit per connection from `1` through `4294967295`. Defaults to `250`.
         max_keepalive_connections (int | str | None, optional):
             NimbRo idle connection limit per process. Use "default" to preserve package settings,
             `None` for unlimited idle connections, or a nonnegative integer. Defaults to "default".
-        request_timeout (float | int, optional):
-            Positive connect, read, and completion timeout in seconds. Defaults to `10.0`.
+        request_timeout (float | int | None, optional):
+            Positive override for connect, read, and completion timeouts in seconds.
+            Use `None` to inherit the separate ChatCompletions defaults. Defaults to `None`.
         severity (str, optional):
             Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] for underlying `nimbro_api` logs.
             Use "off" to mute all underlying logs and benchmark error diagnostics.
@@ -743,6 +748,7 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
         - Results overwrite "benchmark.txt" in the package test directory, including enabled error diagnostics.
         - Relative throughput compares successful measurement requests per second when both clients have successes, even if other requests fail.
         - Workers use the runner's HTTP pool settings with any benchmark override applied.
+        - The native reference's overall request deadline uses the resolved completion timeout.
         - Certificates, binaries, and intermediate logs are temporary. Runner pool settings are restored after execution.
     """
     # parse arguments
@@ -771,13 +777,21 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
         assert_type_value(obj=value, type_or_value=int, name=f"argument '{name}'")
         assert_log(expression=value > 0, message=f"Expected argument '{name}' to be positive but got '{value}'.")
     assert_log(expression=h2_max_streams <= 4294967295, message=f"Expected argument 'h2_max_streams' to be at most '4294967295' but got '{h2_max_streams}'.")
-    for name in ['duration', 'warmup', 'hold_ms', 'request_timeout']:
+    for name in ['duration', 'warmup', 'hold_ms']:
         value = config[name]
         assert_type_value(obj=value, type_or_value=[float, int], name=f"argument '{name}'")
         assert_log(expression=math.isfinite(value) and value >= 0, message=f"Expected argument '{name}' to be finite and nonnegative but got '{value}'.")
-        if name in ['duration', 'request_timeout']:
+        if name == "duration":
             assert_log(expression=value > 0, message=f"Expected argument '{name}' to be positive but got '{value}'.")
-    config['drain_timeout'] = request_timeout + 5.0
+    assert_type_value(obj=request_timeout, type_or_value=[float, int, None], name="argument 'request_timeout'")
+    if request_timeout is not None:
+        assert_log(expression=math.isfinite(request_timeout) and request_timeout > 0, message=f"Expected argument 'request_timeout' to be finite and positive but got '{request_timeout}'.")
+    config['request_timeouts'] = {
+        name: chat_default_settings[name] if request_timeout is None else request_timeout
+        for name in ['timeout_connect', 'timeout_read', 'timeout_completion']
+    }
+    config['request_timeout'] = config['request_timeouts']['timeout_completion']
+    config['drain_timeout'] = config['request_timeout'] + 5.0
     assert_type_value(obj=http, type_or_value=["h1", "h2"], name="argument 'http'")
     assert_type_value(obj=severity, type_or_value=[str, int], name="argument 'severity'")
     config['severity'] = Logger(severity=severity).get_settings(name='severity')
@@ -820,7 +834,9 @@ def benchmark(*, processes=None, threads_per_process=10, duration=10.0, warmup=2
             server_config = _admin_request(config['admin_url'] + "/metrics")['config']
             _report("Environment:")
             _report(f"  Concurrency: '{config['processes']}' process{'' if config['processes'] == 1 else 'es'}, '{config['threads_per_process']}' caller{'' if config['threads_per_process'] == 1 else 's'} per process, '{concurrency}' total")
-            _report(f"  Timing: '{config['warmup']:.3f}s' warm-up, '{config['duration']:.3f}s' measurement, '{config['request_timeout']:.3f}s' timeout")
+            _report(f"  Timing: '{config['warmup']:.3f}s' warm-up, '{config['duration']:.3f}s' measurement")
+            timeouts = config['request_timeouts']
+            _report(f"  Request timeouts (seconds): connect={timeouts['timeout_connect']}, read={timeouts['timeout_read']}, completion={timeouts['timeout_completion']}")
             _report(f"  Payload: '{config['prompt_bytes']}' prompt bytes, '{config['response_bytes']}' completion bytes")
             _report(f"  {server_details}")
             versions = _versions()

@@ -15,6 +15,33 @@ from .misc import UnrecoverableError, assert_type_value, assert_keys, assert_log
 
 _HTTP2_AVAILABLE = importlib.util.find_spec("h2") is not None
 
+class _HttpRequestCancelEvent(threading.Event):
+    """
+    Wakes registered HTTP waits when cancellation is requested.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.deadline = None
+        self._waiters = set()
+        self._waiters_lock = threading.Lock()
+
+    def add_waiter(self, waiter):
+        with self._waiters_lock:
+            self._waiters.add(waiter)
+            if self.is_set():
+                waiter.set()
+
+    def remove_waiter(self, waiter):
+        with self._waiters_lock:
+            self._waiters.discard(waiter)
+
+    def set(self):
+        super().set()
+        with self._waiters_lock:
+            for waiter in self._waiters:
+                waiter.set()
+
 class _HttpxStreamResponse:
     """
     Provides synchronous access to an asynchronous streaming HTTP response.
@@ -179,14 +206,27 @@ class _HttpxRunner:
     def _wait_future(self, future, cancel_event):
         done = threading.Event()
         future.add_done_callback(lambda _: done.set())
+        notified = isinstance(cancel_event, _HttpRequestCancelEvent)
+        if notified:
+            cancel_event.add_waiter(done)
         try:
             while True:
                 if cancel_event is not None and cancel_event.is_set():
                     raise HttpRequestCancelled(
                         "HTTP request was cancelled."
                     )
-                if not done.wait(timeout=0.1):
+                timeout = None if cancel_event is None or notified else 0.1
+                if notified and cancel_event.deadline is not None:
+                    timeout = min(cancel_event.deadline - time.perf_counter(), threading.TIMEOUT_MAX)
+                    if timeout <= 0:
+                        raise HttpRequestCancelled("HTTP request exceeded its completion deadline.")
+                # Windows lock waits need periodic returns to deliver main-thread signals.
+                if os.name == "nt":
+                    timeout = 0.1 if timeout is None else min(timeout, 0.1)
+                if not done.wait(timeout=timeout):
                     continue
+                if cancel_event is not None and cancel_event.is_set():
+                    raise HttpRequestCancelled("HTTP request was cancelled.")
                 try:
                     return future.result()
                 except concurrent.futures.CancelledError as exc:
@@ -197,6 +237,9 @@ class _HttpxRunner:
             if not future.cancel():
                 self._discard_result(future)
             raise
+        finally:
+            if notified:
+                cancel_event.remove_waiter(done)
 
     def _discard_result(self, future):
         if not future.done() or future.cancelled() or future.exception() is not None:
