@@ -12,25 +12,26 @@ def test_1_utilities():
     key_name = settings['endpoint']['key_value']
     key_before = os.getenv(key_name)
     key_now = "supersecretkey"
-    os.environ[key_name] = key_now
+    try:
+        os.environ[key_name] = key_now
+        success, message, api_key = client.get_api_key()
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=api_key, type_or_value=key_now, name="API key")
+        assert_type_value(obj=os.getenv(key_name), type_or_value=key_now, name=f"environment variable '{key_name}' (pre)")
 
-    success, message, api_key = client.get_api_key()
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=api_key, type_or_value=key_now, name="API key")
-
-    assert_type_value(obj=os.getenv(key_name), type_or_value=key_now, name=f"environment variable '{key_name}' (pre)")
-
-    if key_before is None:
-        key_before = key_now
-
-    success, message = nimbro_api.set_api_key(name=key_name, key=key_before)
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-
-    assert_type_value(obj=os.getenv(key_name), type_or_value=key_before, name=f"environment variable '{key_name}' (post)")
+        key_after = key_before or key_now
+        success, message = nimbro_api.set_api_key(name=key_name, key=key_after)
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=os.getenv(key_name), type_or_value=key_after, name=f"environment variable '{key_name}' (post)")
+    finally:
+        if key_before is None:
+            os.environ.pop(key_name, None)
+        else:
+            os.environ[key_name] = key_before
 
 def test_2_endpoint():
     client = Dam(validate_health=True)
@@ -59,34 +60,36 @@ def test_2_endpoint():
     assert_log(expression=success, message=message)
     assert_type_value(obj=flavors, type_or_value=list, name="result of get_flavors()")
 
-    success, message = client.load()
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
+    try:
+        success, message = client.load()
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+    finally:
+        success, message = client.unload()
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
 
-    success, message = client.unload()
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-
-def test_2_inference():
+def test_3_inference():
     client = Dam()
 
-    success, message, result = client.get_descriptions(
-        image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
-        prompts=[{
-            'mask': "iVBORw0KGgoAAAANSUhEUgAAACoAAAAOCAAAAAB8ldGnAAAANUlEQVQoFY3BsQ0AIADDsOT/o4NY2JBqyxWP/AjERIiNxMhYGStjZayMlbEyVsZKYqPEQOAAje0OBG+k6IcAAAAASUVORK5CYII=",
-            'bbox': [205, 224, 247, 238]
-        }]
-    )
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=result, type_or_value=list, name="result")
-    assert_log(expression=len(result) == 1, message=f"Expected result to contain be a list with '1' element but got '{len(result)}'.")
-    assert_type_value(obj=result[0], type_or_value=str, name="first element in result")
-
-    success, message = client.unload()
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
+    try:
+        success, message, result = client.get_descriptions(
+            image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
+            prompts=[{
+                'mask': "iVBORw0KGgoAAAANSUhEUgAAACoAAAAOCAAAAAB8ldGnAAAANUlEQVQoFY3BsQ0AIADDsOT/o4NY2JBqyxWP/AjERIiNxMhYGStjZayMlbEyVsZKYqPEQOAAje0OBG+k6IcAAAAASUVORK5CYII=",
+                'bbox': [205, 224, 247, 238]
+            }]
+        )
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=result, type_or_value=list, name="result")
+        assert_log(expression=len(result) == 1, message=f"Expected result to contain be a list with '1' element but got '{len(result)}'.")
+        assert_type_value(obj=result[0], type_or_value=str, name="first element in result")
+    finally:
+        success, message = client.unload()
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)

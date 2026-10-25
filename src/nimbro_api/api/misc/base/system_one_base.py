@@ -24,8 +24,8 @@ class SystemOneBase(ClientBase):
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
             validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=False, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
@@ -45,12 +45,18 @@ class SystemOneBase(ClientBase):
         # timeout_connect
         assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
         if settings['timeout_connect'] is not None:
-            assert_log(expression=settings['timeout_connect'] > 0.0, message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'.")
+            assert_log(
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
+            )
 
         # timeout_read
         assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
         if settings['timeout_read'] is not None:
-            assert_log(expression=settings['timeout_read'] > 0.0, message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'.")
+            assert_log(
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
+            )
 
         # apply settings
         self._endpoint = settings['endpoints'][settings['endpoint']]
@@ -199,7 +205,7 @@ class SystemOneBase(ClientBase):
 
         # use API
         success, message, response = post_request(
-            api_name="System One API",
+            api_name="System-One API",
             api_url=self._endpoint['api_url'],
             headers=headers,
             data=data,

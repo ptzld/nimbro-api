@@ -121,6 +121,9 @@ class VlmGist(Client):
             **kwargs:
                 All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
+
+        Raises:
+            UnrecoverableError: If initialization fails, including invalid settings.
         """
         super().__init__(client_base=VlmGistBase, settings=settings, default_settings=default_settings, **kwargs)
 
@@ -193,7 +196,7 @@ class VlmGist(Client):
                 - prompt_key (str): Key from 'keys_required' in 'structured_description' whose value is used as the detection prompt for each object.
                 - mmgroundingdino (dict): Settings forwarded to `MmGroundingDino`. See its `get_settings()`.
                 - allow_incomplete (bool): If `False`, returns an error or triggers a retry unless every item in the structured description is detected.
-                - allow_excessive (bool): If `False`, returns an error or triggers a retry when an item in the structured description is detected more than once.
+                - allow_excessive (bool): If `False`, keep at most the requested number of detections per prompt, selecting by descending confidence. Unexpected prompts are discarded regardless of this setting.
             segmentation (dict):
                 Settings for the instance segmentation step.
                 - skip (bool): Skip this step. At least one step must not be skipped.
@@ -202,7 +205,7 @@ class VlmGist(Client):
                 - track (bool): After initializing SAM2 with detections, run a second inference pass on the same image to obtain tracked masks. Must be `False` when 'skip' is `True`.
                 - sam2_realtime (dict): Settings forwarded to `Sam2Realtime`. See its `get_settings()`.
                 - allow_incomplete (bool): If `False`, returns an error or triggers a retry unless every detection is segmented.
-                - allow_excessive (bool): If `False`, returns an error or triggers a retry when a detection is segmented more than once.
+                - allow_excessive (bool): If `False`, keep only the segmentation with the largest bounding-box area per detection. Unexpected track IDs are discarded regardless of this setting.
             batch (dict):
                 Settings for processing multiple images passed to `run()`. Ignored when not passing a list of images to `run()`.
                 - logger_severity (str | None): Logger severity applied to each worker in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
@@ -212,15 +215,15 @@ class VlmGist(Client):
                   Then, the global 'retry' setting is applied to the entire batch, triggering retry when at least one worker failed (after using up all their retry attempts).
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of retry attempts.
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
                 - Scope depends on mode (see 'batch.retry').
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
             - See the global dictionary 'default_settings' on top of this file for defaults.
@@ -255,17 +258,17 @@ class VlmGist(Client):
         Args:
             result (str | dict):
                 A result returned by `run()` (for either a single image or a batch), either as the dictionary (`dict`) itself or as a path (`str`) to a JSON file containing it.
-            image (str | bytes | list[str] | list[bytes] | None):
+            image (str | bytes | list[str] | list[bytes] | None, optional):
                 The image(s) corresponding to the result as a local path to a file or a folder containing files, URL, Base64 encoding (all `str`), or raw `bytes`.
                 For a batch result, a `list` of length matching the batch size is required. If `None`, the image must be provided
                 within 'result', which requires the setting 'include_image' to have been enabled during the originating call to `run()`. Defaults to `None`.
-            output_dir (str | None):
+            output_dir (str | None, optional):
                 If provided, the directory in which to save the rendered visualization(s) as PNG file(s).
                 The directory is created if it does not exist. Filenames are prefixed with the item index and a timestamp.
                 If `None`, visualizations are only returned and not written to disk. Defaults to `None`.
-            return_visualizations (bool):
+            return_visualizations (bool, optional):
                 If `True`, return the rendered visualizations. If `False`, discard rendered arrays after optional saving to avoid transferring them from batch worker processes. Defaults to `True`.
-            vis_args (dict | None):
+            vis_args (dict | None, optional):
                 If provided, a dictionary with keyword arguments forwarded to `nimbro_api.utility.visual.visualize_detections`. Defaults to `None`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
@@ -275,15 +278,12 @@ class VlmGist(Client):
                     mute (bool):
                         If `True`, all logs emitted by this function are muted. Defaults to `False`.
 
-        Raises:
-            UnrecoverableError: If the visual dependencies (`cv2`, `numpy`) are not available.
-
         Returns:
-            tuple[bool, str, list[numpy.ndarray] | None, list[str] | None]: A tuple containing:
-                - bool: `True` when the visualization attempt completed. Individual failures are represented by `None` entries and the summary message.
+            tuple[bool, str, list[numpy.ndarray | None] | None, list[str | None] | None]: A tuple containing:
+                - bool: `True` when the visualization attempt completed. Individual failures are represented by `None` entries and the summary message. `False` for operation-level failures, including unavailable visual dependencies.
                 - str: A descriptive message about the operation result.
-                - list[numpy.ndarray] | None: A `list` of rendered visualizations (one per result item, `None` for items that failed), or `None` if disabled with 'return_visualizations' or none succeeded.
-                - list[str] | None: A `list` of output file paths (one per result item, `None` for items that were not saved), or `None` if nothing was saved to disk.
+                - list[numpy.ndarray | None] | None: A `list` of rendered visualizations (one per result item, `None` for items that failed), or `None` if disabled with 'return_visualizations', none succeeded, or the operation failed.
+                - list[str | None] | None: A `list` of output file paths (one per result item, `None` for items that were not saved), or `None` if nothing was saved to disk or the operation failed.
 
         Notes:
             - Results without a successful detection step are discarded.
@@ -323,7 +323,7 @@ class VlmGist(Client):
             tuple[bool, str, dict | None]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
-                - dict | None: A dictionary (`dict`) containing the results, or `None` if not successful.
+                - dict | None: A dictionary containing results, including completed stages or batch items when later processing fails. Operation-level exceptions may instead return `None`.
 
         Notes:
             - Structure of resulting dictionary:

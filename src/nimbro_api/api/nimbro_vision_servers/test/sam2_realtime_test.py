@@ -12,25 +12,26 @@ def test_1_utilities():
     key_name = settings['endpoint']['key_value']
     key_before = os.getenv(key_name)
     key_now = "supersecretkey"
-    os.environ[key_name] = key_now
+    try:
+        os.environ[key_name] = key_now
+        success, message, api_key = client.get_api_key()
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=api_key, type_or_value=key_now, name="API key")
+        assert_type_value(obj=os.getenv(key_name), type_or_value=key_now, name=f"environment variable '{key_name}' (pre)")
 
-    success, message, api_key = client.get_api_key()
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=api_key, type_or_value=key_now, name="API key")
-
-    assert_type_value(obj=os.getenv(key_name), type_or_value=key_now, name=f"environment variable '{key_name}' (pre)")
-
-    if key_before is None:
-        key_before = key_now
-
-    success, message = nimbro_api.set_api_key(name=key_name, key=key_before)
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-
-    assert_type_value(obj=os.getenv(key_name), type_or_value=key_before, name=f"environment variable '{key_name}' (post)")
+        key_after = key_before or key_now
+        success, message = nimbro_api.set_api_key(name=key_name, key=key_after)
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=os.getenv(key_name), type_or_value=key_after, name=f"environment variable '{key_name}' (post)")
+    finally:
+        if key_before is None:
+            os.environ.pop(key_name, None)
+        else:
+            os.environ[key_name] = key_before
 
 def test_2_endpoint():
     client = Sam2Realtime(validate_health=True)
@@ -54,66 +55,68 @@ def test_2_endpoint():
     assert_log(expression=success, message=message)
     assert_type_value(obj=flavors, type_or_value=list, name="result of get_flavors()")
 
-    success, message = client.load()
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-
-    success, message = client.unload()
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
+    try:
+        success, message = client.load()
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+    finally:
+        success, message = client.unload()
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
 
 def test_3_inference():
     client = Sam2Realtime()
 
-    success, message, result = client.get_response(
-        image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
-        prompts=[{'object_id': 0, 'points': [[50, 50], [60, 60]], 'labels': [1, 1]}],
-    )
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=result, type_or_value=list, name="result")
-    for i, item in enumerate(result):
-        assert_type_value(obj=item, type_or_value=dict, name=f"element '{i}' in result")
-        assert_keys(obj=item, keys=['box_xyxy', 'mask', 'track_id'], mode="match", name=f"element '{i}' in result")
+    try:
+        success, message, result = client.get_response(
+            image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
+            prompts=[{'object_id': 0, 'points': [[50, 50], [60, 60]], 'labels': [1, 1]}],
+        )
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=result, type_or_value=list, name="result")
+        for i, item in enumerate(result):
+            assert_type_value(obj=item, type_or_value=dict, name=f"element '{i}' in result")
+            assert_keys(obj=item, keys=['box_xyxy', 'mask', 'track_id'], mode="required", name=f"element '{i}' in result")
 
-    success, message, result = client.get_response(
-        image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
-    )
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=result, type_or_value=list, name="result")
-    for i, item in enumerate(result):
-        assert_type_value(obj=item, type_or_value=dict, name=f"element '{i}' in result")
-        assert_keys(obj=item, keys=['box_xyxy', 'mask', 'track_id'], mode="match", name=f"element '{i}' in result")
+        success, message, result = client.get_response(
+            image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
+        )
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=result, type_or_value=list, name="result")
+        for i, item in enumerate(result):
+            assert_type_value(obj=item, type_or_value=dict, name=f"element '{i}' in result")
+            assert_keys(obj=item, keys=['box_xyxy', 'mask', 'track_id'], mode="required", name=f"element '{i}' in result")
 
-    success, message, result = client.get_response(
-        image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
-        prompts=[{'object_id': 0, 'bbox': [50, 50, 100, 100]}, {'object_id': 1, 'bbox': [212, 245, 465, 485]}],
-    )
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=result, type_or_value=list, name="result")
-    for i, item in enumerate(result):
-        assert_type_value(obj=item, type_or_value=dict, name=f"element '{i}' in result")
-        assert_keys(obj=item, keys=['box_xyxy', 'mask', 'track_id'], mode="match", name=f"element '{i}' in result")
+        success, message, result = client.get_response(
+            image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
+            prompts=[{'object_id': 0, 'bbox': [50, 50, 100, 100]}, {'object_id': 1, 'bbox': [212, 245, 465, 485]}],
+        )
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=result, type_or_value=list, name="result")
+        for i, item in enumerate(result):
+            assert_type_value(obj=item, type_or_value=dict, name=f"element '{i}' in result")
+            assert_keys(obj=item, keys=['box_xyxy', 'mask', 'track_id'], mode="required", name=f"element '{i}' in result")
 
-    success, message, result = client.get_response(
-        image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
-    )
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=result, type_or_value=list, name="result")
-    for i, item in enumerate(result):
-        assert_type_value(obj=item, type_or_value=dict, name=f"element '{i}' in result")
-        assert_keys(obj=item, keys=['box_xyxy', 'mask', 'track_id'], mode="match", name=f"element '{i}' in result")
-
-    success, message = client.unload()
-    assert_log(expression=success, message=message)
-    assert_type_value(obj=success, type_or_value=bool, name="success")
-    assert_type_value(obj=message, type_or_value=str, name="message")
+        success, message, result = client.get_response(
+            image=os.path.join(nimbro_api.__path__[0], "test", "assets", "test.png"),
+        )
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=result, type_or_value=list, name="result")
+        for i, item in enumerate(result):
+            assert_type_value(obj=item, type_or_value=dict, name=f"element '{i}' in result")
+            assert_keys(obj=item, keys=['box_xyxy', 'mask', 'track_id'], mode="required", name=f"element '{i}' in result")
+    finally:
+        success, message = client.unload()
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=success, type_or_value=bool, name="success")
+        assert_type_value(obj=message, type_or_value=str, name="message")

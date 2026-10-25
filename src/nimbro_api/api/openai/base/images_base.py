@@ -1,4 +1,5 @@
 import os
+import math
 import time
 import random
 import string
@@ -28,8 +29,8 @@ class ImagesBase(ClientBase):
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
             validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
@@ -53,6 +54,9 @@ class ImagesBase(ClientBase):
             )
 
         # quality, style, size
+        assert_type_value(obj=settings['quality'], type_or_value=str, name="setting 'quality'")
+        assert_type_value(obj=settings['style'], type_or_value=str, name="setting 'style'")
+        assert_type_value(obj=settings['size'], type_or_value=str, name="setting 'size'")
         if "gpt-image" in settings['model']:
             assert_type_value(obj=settings['quality'], type_or_value=["auto", "high", "medium", "low"], name=f"setting 'quality' for model '{settings['model']}'")
             assert_type_value(obj=settings['style'], type_or_value="", name=f"setting 'style' for model '{settings['model']}'")
@@ -66,21 +70,11 @@ class ImagesBase(ClientBase):
             assert_type_value(obj=settings['style'], type_or_value="", name=f"setting 'style' for model '{settings['model']}'")
             assert_type_value(obj=settings['size'], type_or_value=["256x256", "512x512", "1024x1024"], name=f"setting 'size' for model '{settings['model']}'")
 
-        # timeout_connect
-        assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
-        if settings['timeout_connect'] is not None:
-            assert_log(
-                expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
-            )
+        # return_path
+        assert_type_value(obj=settings['return_path'], type_or_value=bool, name="setting 'return_path'")
 
-        # timeout_read
-        assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
-        if settings['timeout_read'] is not None:
-            assert_log(
-                expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
-            )
+        # return_encoding
+        assert_type_value(obj=settings['return_encoding'], type_or_value=["bytes", "base64"], name="setting 'return_encoding'")
 
         # cache_folder
         assert_type_value(obj=settings['cache_folder'], type_or_value=[str, None], name="setting 'cache_folder'")
@@ -90,12 +84,6 @@ class ImagesBase(ClientBase):
 
         # cache_file
         assert_type_value(obj=settings['cache_file'], type_or_value=str, name="setting 'cache_file'")
-
-        # return_path
-        assert_type_value(obj=settings['return_path'], type_or_value=bool, name="setting 'return_path'")
-
-        # return_encoding
-        assert_type_value(obj=settings['return_encoding'], type_or_value=["bytes", "base64"], name="setting 'return_encoding'")
 
         # cache_read
         assert_type_value(obj=settings['cache_read'], type_or_value=[bool, float, int], name="setting 'cache_read'")
@@ -107,6 +95,22 @@ class ImagesBase(ClientBase):
 
         # cache_write
         assert_type_value(obj=settings['cache_write'], type_or_value=bool, name="setting 'cache_write'")
+
+        # timeout_connect
+        assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
+        if settings['timeout_connect'] is not None:
+            assert_log(
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
+            )
+
+        # timeout_read
+        assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
+        if settings['timeout_read'] is not None:
+            assert_log(
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
+            )
 
         # apply settings
         self._endpoint = settings['endpoints'][settings['endpoint']]
@@ -167,7 +171,7 @@ class ImagesBase(ClientBase):
                 try:
                     assert_type_value(obj=index, type_or_value=dict, name="cache-index")
                     if self._settings['endpoint'] in index:
-                        assert_type_value(obj=index, type_or_value=dict, name="cache-index")
+                        assert_type_value(obj=index[self._settings['endpoint']], type_or_value=dict, name=f"value of cache-index key '{self._settings['endpoint']}'")
                         if self._settings['model'] in index[self._settings['endpoint']]:
                             assert_type_value(obj=index[self._settings['endpoint']][self._settings['model']], type_or_value=dict, name=f"value of cache-index key '{self._settings['model']}'")
                             if self._settings['quality'] in index[self._settings['endpoint']][self._settings['model']]:
@@ -432,7 +436,6 @@ class ImagesBase(ClientBase):
             api_url=self._endpoint['api_url'],
             headers=headers,
             data=data,
-            files=None,
             timeout=(self._settings['timeout_connect'], self._settings['timeout_read']),
             logger=self._logger
         )

@@ -1,4 +1,5 @@
 import os
+import math
 import time
 import atexit
 import asyncio
@@ -470,6 +471,8 @@ def _assert_timeout(timeout):
         assert_log(expression=len(timeout) == 2, message=f"Expected argument 'timeout' to be a tuple of length '2', but it has length '{len(timeout)}'.")
         for i, t in enumerate(timeout):
             assert_type_value(obj=t, type_or_value=[float, int, "default", None], name=f"element '{i}' in argument 'timeout'")
+            if isinstance(t, (int, float)):
+                assert_log(expression=math.isfinite(t) and t > 0.0, message=f"Expected element '{i}' in argument 'timeout' to be positive and finite, 'default', or None but got '{t}'.")
 
 def _process_response(api_name, api_url, response, duration, logger):
     status_code = response.status_code
@@ -503,9 +506,9 @@ def _process_response(api_name, api_url, response, duration, logger):
                 else:
                     break
         if len(str(response_str).strip()) == 0:
-            message = f"{api_name.capitalize()} '{api_url}' responded with status code '{status_code}' via '{http_version}' after '{duration:.3f}s'."
+            message = f"{api_name[:1].upper() + api_name[1:]} '{api_url}' responded with status code '{status_code}' via '{http_version}' after '{duration:.3f}s'."
         else:
-            message = f"{api_name.capitalize()} '{api_url}' responded with status code '{status_code}' via '{http_version}' after '{duration:.3f}s': {format_obj(response_str)}."
+            message = f"{api_name[:1].upper() + api_name[1:]} '{api_url}' responded with status code '{status_code}' via '{http_version}' after '{duration:.3f}s': {format_obj(response_str)}."
 
     return success, message
 
@@ -564,7 +567,7 @@ def validate_endpoint(endpoint, *, flavors, require_key, require_name, allow_mod
         require_key (bool):
             Determines if the 'endpoint' requires the keys "key_type" and "key_value".
         require_name (bool):
-            Determines if the 'endpoint' requires the key "name".
+            Determines if the 'endpoint' requires the key "name", whose value must contain a non-whitespace character.
         allow_models (bool):
             Determines if the 'endpoint' permits the optional key "models_url".
         setting_name (str):
@@ -612,6 +615,8 @@ def validate_endpoint(endpoint, *, flavors, require_key, require_name, allow_mod
         assert_type_value(obj=key, type_or_value=str, name=f"key '{key}' in {setting_name}")
         assert_log(expression=len(key) > 0, message=f"Expected key '{key}' in {setting_name} to be a non-empty string.")
         assert_type_value(obj=endpoint[key], type_or_value=str, name=f"key '{key}' in {setting_name}")
+        if key == "name":
+            assert_log(expression=len(endpoint[key].strip()) > 0, message=f"Expected a nonempty, non-whitespace value of key 'name' in {setting_name} but got '{endpoint[key]}'.")
         if key != "key_value":
             assert_log(expression=len(endpoint[key]) > 0, message=f"Expected value of key '{key}' in {setting_name} to be a non-empty string.")
 
@@ -651,7 +656,7 @@ def post_request(api_name, api_url, *, headers, data, files=None, timeout="defau
             - Use "default" (`str`) to adopt core settings 'http_timeout_connect' and 'http_timeout_read'.
             - Use None to not time out when connecting or reading.
             - Use a tuple with two elements, where the first one specifies connection timeout, and the second one specifies the read timeout.
-              Both values can be `int` or `float` in seconds, as well as "default" or None as described above.
+              Both values can be positive, finite `int` or `float` in seconds, as well as "default" or `None` as described above.
             Defaults to "default".
         logger (nimbro_api.utility.logger.Logger | None, optional):
             If provided, logs the request attempt, the payload, and the received response. Defaults to `None`.
@@ -736,7 +741,7 @@ def get_request(api_name, api_url, *, headers, timeout="default", logger=None):
             - Use "default" (`str`) to adopt core settings 'http_timeout_connect' and 'http_timeout_read'.
             - Use None to not time out when connecting or reading.
             - Use a tuple with two elements, where the first one specifies connection timeout, and the second one specifies the read timeout.
-              Both values can be `int` or `float` in seconds, as well as "default" or None as described above.
+              Both values can be positive, finite `int` or `float` in seconds, as well as "default" or `None` as described above.
             Defaults to "default".
         logger (nimbro_api.utility.logger.Logger | None, optional):
             If provided, logs the request attempt and the received response (including the response body). Defaults to `None`.
@@ -811,7 +816,7 @@ def http_request(method, api_url, *, headers, json=None, data=None, files=None, 
             - Use "default" (`str`) to adopt core settings 'http_timeout_connect' and 'http_timeout_read'.
             - Use None to not time out when connecting or reading.
             - Use a tuple with two elements, where the first one specifies connection timeout, and the second one specifies the read timeout.
-              Both values can be `int` or `float` in seconds, as well as "default" or None as described above.
+              Both values can be positive, finite `int` or `float` in seconds, as well as "default" or `None` as described above.
             Defaults to "default".
         cancel_event (threading.Event | None, optional):
             An event used to cancel the request. Defaults to `None`.

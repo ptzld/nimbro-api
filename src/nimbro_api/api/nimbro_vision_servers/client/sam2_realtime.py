@@ -47,6 +47,9 @@ class Sam2Realtime(Client):
             **kwargs:
                 All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
+
+        Raises:
+            UnrecoverableError: If initialization fails, including invalid settings.
         """
         super().__init__(client_base=Sam2RealtimeBase, settings=settings, default_settings=default_settings, **kwargs)
 
@@ -64,48 +67,53 @@ class Sam2Realtime(Client):
                 Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
-            message_results (bool):
-                Include results in successful response messages when using `get_response()`.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
+                - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
                 - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url', 'key_type', and 'key_value'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
-                Pass an endpoint definition (`dict`) with the additional key 'name' to automatically add/update the setting 'endpoints' and select it.
+                Pass an endpoint definition (`dict`) with the additional key 'name' (a string containing a non-whitespace character) to automatically add/update the setting 'endpoints' and select it.
             validate_health (float | int | bool):
                 Validate the set 'endpoint' is healthy when using `get_response()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
             validate_status (float | int | bool):
-                Validate the set 'flavor' is available with the set 'endpoint' when using `load()` or `get_response()`
-                and validate the tracker is initialized when tracking with `get_response()`:
+                Check the loaded 'flavor' and tracker state when using `get_response()`.
+                Initialization requests may load the configured flavor; tracking requires it to be loaded and initialized.
+                Explicit `load()` calls perform their own status and flavor checks regardless of this setting:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
             flavor (str):
                 Name of the model flavor used (see `get_flavors()`).
             timeout_connect (float | int | None):
                 Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read (float | int | None):
-                Time in seconds waited for receiving a response from the 'endpoint' (except "load" and "infer"), or `None` to wait indefinitely.
+                Time in seconds waited for receiving a response from the 'endpoint' (except "load", "infer", and "update"), or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read_load (float | int | None):
                 Time in seconds waited for receiving a "load" response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read_infer (float | int | None):
-                Time in seconds waited for receiving an "infer" response from the 'endpoint', or `None` to wait indefinitely.
+                Time in seconds waited for receiving an "infer" or "update" response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of retry attempts.
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
             - See the global dictionary 'default_settings' on top of this file for defaults.
+            - A full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)
 
@@ -157,8 +165,9 @@ class Sam2Realtime(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -172,7 +181,7 @@ class Sam2Realtime(Client):
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
                 - str | None: The name of the model flavor loaded by the 'endpoint', or `None` if either not successful, or no model is loaded.
-                - bool | None: `True` if the tracker loaded by the 'endpoint' is initialized, or `None` if either not successful, or no model is loaded.
+                - bool | None: `True` if the tracker loaded by the 'endpoint' is initialized, `False` if uninitialized, or `None` if either not successful, or no model is loaded.
         """
         return self._base.wrap(2, self._base.get_status, age, **kwargs)
 
@@ -182,8 +191,9 @@ class Sam2Realtime(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -206,8 +216,9 @@ class Sam2Realtime(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -226,7 +237,7 @@ class Sam2Realtime(Client):
 
     def load(self, **kwargs):
         """
-        Request the set 'endpoint' to load the set 'model'.
+        Request the set 'endpoint' to load the set 'flavor'.
 
         Args:
             **kwargs:
@@ -272,6 +283,7 @@ class Sam2Realtime(Client):
             image (str | bytes):
                 The image file to be processed as a local path, URL, Base64 encoding (all `str`), or raw `bytes`.
             prompts (list[dict] | None, optional):
+                Use `None` to continue existing tracks. Defaults to `None`.
                 A list (`list`) of prompts (`dict`) with either a bounding box or a points:
                 - point: {'object_id': int, 'points': [[x, y], [p, q], ...], 'labels': [1, 0, ...]}
                 - bounding box: {'object_id': int, 'bbox': [x0, y0, x1, y1]}

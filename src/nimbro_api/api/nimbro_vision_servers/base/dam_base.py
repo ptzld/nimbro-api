@@ -1,10 +1,11 @@
 import copy
+import math
 import time
 
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import parse_image_b64
 from nimbro_api.utility.api import get_api_key, validate_endpoint, post_request
-from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log, format_obj
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log
 from nimbro_api.utility.string import is_base64
 from ..utility import get_status, get_health, get_flavors, load, unload
 
@@ -32,13 +33,13 @@ class DamBase(ClientBase):
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
-            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
+            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=False, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
         if isinstance(settings['endpoint'], dict):
-            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=True, require_name=True, allow_models=True, setting_name="endpoint provided through setting 'endpoint'")
+            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=True, require_name=True, allow_models=False, setting_name="endpoint provided through setting 'endpoint'")
             settings['endpoints'][settings['endpoint']['name']] = settings['endpoint']
             settings['endpoint'] = settings['endpoint']['name']
             del settings['endpoints'][settings['endpoint']]['name']
@@ -69,71 +70,71 @@ class DamBase(ClientBase):
 
         # temperature
         assert_type_value(obj=settings['temperature'], type_or_value=[float, int], name="setting 'temperature'")
-        settings['temperature'] = float(settings['temperature'])
         assert_log(
             expression=0.0 <= settings['temperature'] <= 1.0,
             message=f"Expected setting 'temperature' to be between zero and one (inclusive) but got '{settings['temperature']}'."
         )
+        settings['temperature'] = float(settings['temperature'])
 
         # top_p
         assert_type_value(obj=settings['top_p'], type_or_value=[float, int], name="setting 'top_p'")
-        settings['top_p'] = float(settings['top_p'])
         assert_log(
             expression=0.0 <= settings['top_p'] <= 1.0,
             message=f"Expected setting 'top_p' to be between zero and one (inclusive) but got '{settings['top_p']}'."
         )
+        settings['top_p'] = float(settings['top_p'])
 
         # num_beams
         assert_type_value(obj=settings['num_beams'], type_or_value=int, name="setting 'num_beams'")
         assert_log(
             expression=settings['num_beams'] > 0,
-            message=f"Expected setting 'num_beams' to be non-negative but got '{settings['num_beams']}'."
+            message=f"Expected setting 'num_beams' to be positive but got '{settings['num_beams']}'."
         )
 
         # max_new_tokens
         assert_type_value(obj=settings['max_new_tokens'], type_or_value=int, name="setting 'max_new_tokens'")
         assert_log(
             expression=settings['max_new_tokens'] > 0,
-            message=f"Expected setting 'max_new_tokens' to be non-negative but got '{settings['max_new_tokens']}'."
+            message=f"Expected setting 'max_new_tokens' to be positive but got '{settings['max_new_tokens']}'."
         )
 
         # max_batch_size
         assert_type_value(obj=settings['max_batch_size'], type_or_value=int, name="setting 'max_batch_size'")
         assert_log(
             expression=settings['max_batch_size'] > 0,
-            message=f"Expected setting 'max_batch_size' to be non-negative but got '{settings['max_batch_size']}'."
+            message=f"Expected setting 'max_batch_size' to be positive but got '{settings['max_batch_size']}'."
         )
 
         # timeout_connect
         assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
         if settings['timeout_connect'] is not None:
             assert_log(
-                expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
         assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
         if settings['timeout_read'] is not None:
             assert_log(
-                expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
             )
 
         # timeout_read_load
         assert_type_value(obj=settings['timeout_read_load'], type_or_value=[float, int, None], name="setting 'timeout_read_load'")
         if settings['timeout_read_load'] is not None:
             assert_log(
-                expression=settings['timeout_read_load'] > 0.0,
-                message=f"Expected setting 'timeout_read_load' to be None or greater than zero but got '{settings['timeout_read_load']}'."
+                expression=math.isfinite(settings['timeout_read_load']) and settings['timeout_read_load'] > 0.0,
+                message=f"Expected setting 'timeout_read_load' to be None or positive and finite but got '{settings['timeout_read_load']}'."
             )
 
         # timeout_read_infer
         assert_type_value(obj=settings['timeout_read_infer'], type_or_value=[float, int, None], name="setting 'timeout_read_infer'")
         if settings['timeout_read_infer'] is not None:
             assert_log(
-                expression=settings['timeout_read_infer'] > 0.0,
-                message=f"Expected setting 'timeout_read_infer' to be None or greater than zero but got '{settings['timeout_read_infer']}'."
+                expression=math.isfinite(settings['timeout_read_infer']) and settings['timeout_read_infer'] > 0.0,
+                message=f"Expected setting 'timeout_read_infer' to be None or positive and finite but got '{settings['timeout_read_infer']}'."
             )
 
         # apply settings
@@ -235,7 +236,7 @@ class DamBase(ClientBase):
                 message = f"Generated '{len(response)}' description{'' if len(response) == 1 else 's'}{suffix} in '{time.perf_counter() - stamp:.3f}s'"
                 if self._settings['message_results']:
                     if len(response) > 0:
-                        message = f"{message}: {format_obj(obj=response)}."
+                        message = f"{message}: {response}."
                     else:
                         message = f"{message}."
                 else:

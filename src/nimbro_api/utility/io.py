@@ -493,7 +493,7 @@ def parse_image_b64(image, *, logger=None):
     else:
         success = False
         message = f"Provided image '{image}' is neither Base64-encoded, a valid local path, or a web URL."
-        image_file = image
+        image_file = None
 
     if success:
         message = f"Parsed image as Base64 in '{time.perf_counter() - tic:.3f}s'."
@@ -518,7 +518,7 @@ def parse_audio_bytes(audio, *, logger=None):
             - bool: `True` if the operation succeeded, `False` otherwise.
             - str: A descriptive message about the operation result.
             - bytes | None: Audio data as bytes, or `None` if not successful.
-            - str | None: Original path, URL, or Base64 string of the audio if applicable and successful, otherwise `None`.
+            - str | None: Original URL or absolute local path of the audio if applicable and successful, otherwise `None`. Base64 and raw bytes have no source path.
     """
     # parse arguments
     from nimbro_api.utility.logger import Logger
@@ -532,7 +532,6 @@ def parse_audio_bytes(audio, *, logger=None):
                 logger.debug("Provided audio is Base64-encoded.")
             success, message, audio_file = decode_b64(string=audio, name="audio", logger=logger)
             if success:
-                audio_path = audio
                 if logger is not None:
                     logger.debug(message)
         elif is_url(audio):

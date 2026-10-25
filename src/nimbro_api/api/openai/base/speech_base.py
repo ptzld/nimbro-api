@@ -1,4 +1,5 @@
 import os
+import math
 import time
 import random
 import string
@@ -29,8 +30,8 @@ class SpeechBase(ClientBase):
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
             validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
@@ -55,6 +56,8 @@ class SpeechBase(ClientBase):
 
         # voice_presets
         assert_type_value(obj=settings['voice_presets'], type_or_value=[str, None], name="setting 'voice_presets'")
+        assert_type_value(obj=settings['voice'], type_or_value=str, name="setting 'voice'")
+        assert_type_value(obj=settings['instructions'], type_or_value=str, name="setting 'instructions'")
         if settings['voice_presets'] is None:
             voice_presets = {}
         elif self._settings.get('voice_presets') == settings['voice_presets']:
@@ -67,13 +70,22 @@ class SpeechBase(ClientBase):
                 self._logger.debug(message)
             else:
                 raise UnrecoverableError(message)
+        assert_type_value(obj=voice_presets, type_or_value=dict, name="voice-presets file contents")
         if settings['voice'] in voice_presets:
+            preset = voice_presets[settings['voice']]
+            preset_name = f"voice preset '{settings['voice']}'"
+            assert_type_value(obj=preset, type_or_value=dict, name=preset_name)
+            assert_keys(obj=preset, keys=['voice', 'instructions'] if settings['instructions'] == "" else ['voice'], mode="required", name=preset_name)
             if settings['instructions'] == "":
                 self._logger.debug(f"Applying instructions from preset '{settings['voice']}'.")
                 settings['instructions'] = voice_presets[settings['voice']]['instructions']
             self._logger.debug(f"Applying voice from preset '{settings['voice']}'.")
             settings['voice'] = voice_presets[settings['voice']]['voice']
         elif settings['instructions'] in voice_presets:
+            preset = voice_presets[settings['instructions']]
+            preset_name = f"voice preset '{settings['instructions']}'"
+            assert_type_value(obj=preset, type_or_value=dict, name=preset_name)
+            assert_keys(obj=preset, keys=['voice', 'instructions'] if settings['voice'] == "" else ['instructions'], mode="required", name=preset_name)
             if settings['voice'] == "":
                 self._logger.debug(f"Applying voice from preset '{settings['instructions']}'.")
                 settings['voice'] = voice_presets[settings['instructions']]['voice']
@@ -93,24 +105,13 @@ class SpeechBase(ClientBase):
             expression=speed_range[0] <= settings['speed'] <= speed_range[1],
             message=f"Expected setting 'speed' to be in interval [{speed_range[0]}, {speed_range[1]}] but got '{settings['speed']}'."
         )
-        if isinstance(settings['speed'], int):
-            settings['speed'] = float(settings['speed'])
+        settings['speed'] = float(settings['speed'])
 
-        # timeout_connect
-        assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
-        if settings['timeout_connect'] is not None:
-            assert_log(
-                expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
-            )
+        # return_path
+        assert_type_value(obj=settings['return_path'], type_or_value=bool, name="setting 'return_path'")
 
-        # timeout_read
-        assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
-        if settings['timeout_read'] is not None:
-            assert_log(
-                expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
-            )
+        # return_encoding
+        assert_type_value(obj=settings['return_encoding'], type_or_value=["bytes", "base64"], name="setting 'return_encoding'")
 
         # cache_folder
         assert_type_value(obj=settings['cache_folder'], type_or_value=[str, None], name="setting 'cache_folder'")
@@ -120,12 +121,6 @@ class SpeechBase(ClientBase):
 
         # cache_file
         assert_type_value(obj=settings['cache_file'], type_or_value=str, name="setting 'cache_file'")
-
-        # return_path
-        assert_type_value(obj=settings['return_path'], type_or_value=bool, name="setting 'return_path'")
-
-        # return_encoding
-        assert_type_value(obj=settings['return_encoding'], type_or_value=["bytes", "base64"], name="setting 'return_encoding'")
 
         # cache_read
         assert_type_value(obj=settings['cache_read'], type_or_value=[bool, int, float], name="setting 'cache_read'")
@@ -137,6 +132,22 @@ class SpeechBase(ClientBase):
 
         # cache_write
         assert_type_value(obj=settings['cache_write'], type_or_value=bool, name="setting 'cache_write'")
+
+        # timeout_connect
+        assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
+        if settings['timeout_connect'] is not None:
+            assert_log(
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
+            )
+
+        # timeout_read
+        assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
+        if settings['timeout_read'] is not None:
+            assert_log(
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
+            )
 
         # apply settings
         self._endpoint = settings['endpoints'][settings['endpoint']]
@@ -198,7 +209,7 @@ class SpeechBase(ClientBase):
                 try:
                     assert_type_value(obj=index, type_or_value=dict, name="cache-index")
                     if self._settings['endpoint'] in index:
-                        assert_type_value(obj=index, type_or_value=dict, name="cache-index")
+                        assert_type_value(obj=index[self._settings['endpoint']], type_or_value=dict, name=f"value of cache-index key '{self._settings['endpoint']}'")
                         if self._settings['model'] in index[self._settings['endpoint']]:
                             assert_type_value(obj=index[self._settings['endpoint']][self._settings['model']], type_or_value=dict, name=f"value of cache-index key '{self._settings['model']}'")
                             if self._settings['voice'] in index[self._settings['endpoint']][self._settings['model']]:
@@ -450,7 +461,6 @@ class SpeechBase(ClientBase):
             api_url=self._endpoint['api_url'],
             headers=headers,
             data=data,
-            files=None,
             timeout=(self._settings['timeout_connect'], self._settings['timeout_read']),
             logger=self._logger
         )
@@ -463,6 +473,7 @@ class SpeechBase(ClientBase):
                 speech_bytes = response.content
             else:
                 success = False
+                message = "Expected audio data from Speech API but received a JSON response."
 
         # generate file name and path
         if success:

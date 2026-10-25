@@ -249,7 +249,7 @@ class VlmGistBase(ClientBase):
         if not isinstance(settings['batch']['retry'], bool):
             assert_log(
                 expression=settings['batch']['retry'] >= 0,
-                message=f"Expected setting 'retry' to be of type 'bool' or a non-negative 'int' but got '{settings['batch']['retry']}'."
+                message=f"Expected setting 'batch.retry' to be of type 'bool' or a non-negative 'int' but got '{settings['batch']['retry']}'."
             )
             if settings['batch']['retry'] == 0:
                 settings['batch']['retry'] = False

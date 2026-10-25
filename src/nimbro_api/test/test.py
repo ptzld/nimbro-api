@@ -199,6 +199,70 @@ def _test_client(module, name):
     assert_log(expression='retry' in settings, message="Expected to find setting 'retry'.")
     assert_type_value(obj=settings['retry'], type_or_value=1, name="setting 'retry'")
 
+    # endpoint names
+    if isinstance(settings.get('endpoint'), dict):
+        endpoints = client.get_settings('endpoints')
+        endpoint = settings['endpoint'].copy()
+        for endpoint_name in ["", " ", "\t\n"]:
+            registry = endpoints.copy()
+            registry[endpoint_name] = {key: value for key, value in endpoint.items() if key != "name"}
+            success, message = client.set_settings(endpoints=registry)
+            assert_type_value(obj=success, type_or_value=bool, name="success")
+            assert_type_value(obj=message, type_or_value=str, name="message")
+            assert_log(expression=not success, message=f"Expected rejection of endpoint registry name '{endpoint_name}'.")
+            assert_log(expression=client.get_settings() == settings, message="Expected invalid endpoint registry names to leave settings unchanged.")
+            endpoint['name'] = endpoint_name
+            success, message = client.set_settings(endpoint=endpoint)
+            assert_type_value(obj=success, type_or_value=bool, name="success")
+            assert_type_value(obj=message, type_or_value=str, name="message")
+            assert_log(expression=not success, message=f"Expected rejection of inline endpoint name '{endpoint_name}'.")
+            assert_log(expression=client.get_settings() == settings, message="Expected invalid inline endpoint names to leave settings unchanged.")
+        endpoint['name'] = " test endpoint "
+        success, message = client.set_settings(endpoint=endpoint)
+        assert_log(expression=success, message=message)
+        assert_type_value(obj=client.get_settings('endpoint'), type_or_value=" test endpoint ", name="preserved endpoint name")
+        success, message = client.set_settings(settings)
+        assert_log(expression=success, message=message)
+        assert_log(expression=client.get_settings() == settings, message="Expected a settings round trip to preserve the selected endpoint.")
+
+    # connect and read timeouts
+    for setting in settings:
+        if setting == "timeout_connect" or setting.startswith("timeout_read"):
+            for value in [True, False, 0, -1, float('inf'), float('-inf'), float('nan')]:
+                success, message = client.set_settings(**{setting: value})
+                assert_type_value(obj=success, type_or_value=bool, name="success")
+                assert_type_value(obj=message, type_or_value=str, name="message")
+                assert_log(expression=not success, message=f"Expected rejection of setting '{setting}' with value '{value}'.")
+                assert_log(expression=client.get_settings() == settings, message=f"Expected invalid setting '{setting}' to leave settings unchanged.")
+            for value in [None, 1, 0.5]:
+                success, message = client.set_settings(**{setting: value})
+                assert_type_value(obj=success, type_or_value=bool, name="success")
+                assert_type_value(obj=message, type_or_value=str, name="message")
+                assert_log(expression=success, message=message)
+                assert_type_value(obj=client.get_settings(setting), type_or_value=value, name=f"setting '{setting}'")
+            success, message = client.set_settings(settings)
+            assert_log(expression=success, message=message)
+
+    # reset to initialization settings
+    reset_client = getattr(module, name)(logger_name="Initial client")
+    initial = reset_client.get_settings()
+    registry = None
+    if isinstance(initial.get('endpoint'), dict):
+        registry = reset_client.get_settings('endpoints')
+        endpoint = initial['endpoint'].copy()
+        endpoint['name'] = "temporary endpoint"
+        success, message = reset_client.set_settings(endpoint=endpoint)
+        assert_log(expression=success, message=message)
+    success, message = reset_client.set_settings(retry=True, logger_name="Changed client")
+    assert_log(expression=success, message=message)
+    success, message = reset_client.set_settings()
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_log(expression=reset_client.get_settings() == initial, message="Expected resetting settings to restore all initialization settings.")
+    if registry is not None:
+        assert_log(expression=reset_client.get_settings('endpoints') == registry, message="Expected resetting settings to remove endpoint definitions added after initialization.")
+
 def _common_tests(provider, module):
     failures = 0
     _report("", "Performing common tests.", escape['darkcyan'])

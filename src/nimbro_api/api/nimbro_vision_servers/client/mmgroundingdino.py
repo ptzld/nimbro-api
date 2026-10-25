@@ -51,6 +51,9 @@ class MmGroundingDino(Client):
             **kwargs:
                 All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
+
+        Raises:
+            UnrecoverableError: If initialization fails, including invalid settings.
         """
         super().__init__(client_base=MmGroundingDinoBase, settings=settings, default_settings=default_settings, **kwargs)
 
@@ -72,27 +75,32 @@ class MmGroundingDino(Client):
                 Include results in successful response messages when using `get_detections()`.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
+                - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
                 - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url', 'key_type', and 'key_value'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
-                Pass an endpoint definition (`dict`) with the additional key 'name' to automatically add/update the setting 'endpoints' and select it.
+                Pass an endpoint definition (`dict`) with the additional key 'name' (a string containing a non-whitespace character) to automatically add/update the setting 'endpoints' and select it.
             validate_health (float | int | bool):
                 Validate the set 'endpoint' is healthy when using `get_detections()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
             validate_flavor (float | int | bool):
-                Validate the set 'flavor' is available with the set 'endpoint' when using `load()` or `get_detections()`:
+                Check the loaded 'flavor' when using `get_detections()` and load the configured flavor if needed.
+                Explicit `load()` calls perform their own status and flavor checks regardless of this setting:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
             flavor (str):
                 Name of the model flavor used (see `get_flavors()`).
             min_confidence (float):
+                Must be finite; range validation is left to the server.
                 Confidence threshold below which detections are discorded. Confidences are between 0.0 and 1.0.
             nms_iou (float | None):
+                Numeric values must be finite; range validation is left to the server.
                 Non-maximum suppression IoU threshold.
             overdetect_factor (float | None):
+                Numeric values must be finite; range validation is left to the server.
                 Filters or augments detections:
                 - Use `None` to deactivate.
                 - Use a value greater than zero to first select the highest-confidence detection per prompt and then augment with the
@@ -101,25 +109,30 @@ class MmGroundingDino(Client):
                 - Use zero or a negative value to forward only the highest-confidence detection per prompt without augmenting.
             timeout_connect (float | int | None):
                 Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read (float | int | None):
                 Time in seconds waited for receiving a response from the 'endpoint' (except "load" and "infer"), or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read_load (float | int | None):
                 Time in seconds waited for receiving a "load" response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read_infer (float | int | None):
                 Time in seconds waited for receiving an "infer" response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of retry attempts.
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
             - See the global dictionary 'default_settings' on top of this file for defaults.
+            - A full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)
 
@@ -171,8 +184,9 @@ class MmGroundingDino(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -195,8 +209,9 @@ class MmGroundingDino(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -219,8 +234,9 @@ class MmGroundingDino(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -239,7 +255,7 @@ class MmGroundingDino(Client):
 
     def load(self, **kwargs):
         """
-        Request the set 'endpoint' to load the set 'model'.
+        Request the set 'endpoint' to load the set 'flavor'.
 
         Args:
             **kwargs:

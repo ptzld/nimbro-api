@@ -2,6 +2,7 @@ import os
 import re
 import copy
 import json
+import math
 import time
 import uuid
 import queue
@@ -111,8 +112,8 @@ class ChatCompletionsBase(ClientBase):
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
             validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=valid_flavors, require_key=True, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
@@ -144,19 +145,19 @@ class ChatCompletionsBase(ClientBase):
 
         # temperature
         assert_type_value(obj=settings['temperature'], type_or_value=[float, int], name="setting 'temperature'")
-        settings['temperature'] = float(settings['temperature'])
         assert_log(
             expression=0.0 <= settings['temperature'] <= 1.5,
             message=f"Expected setting 'temperature' to be between '0.0' and '1.5' (inclusive) but got '{settings['temperature']}'."
         )
+        settings['temperature'] = float(settings['temperature'])
 
         # top_p
         assert_type_value(obj=settings['top_p'], type_or_value=[float, int], name="setting 'top_p'")
-        settings['top_p'] = float(settings['top_p'])
         assert_log(
             expression=0.0 <= settings['top_p'] <= 2.0,
             message=f"Expected setting 'top_p' to be between '0.0' and '+2.0' (inclusive) but got '{settings['top_p']}'."
         )
+        settings['top_p'] = float(settings['top_p'])
 
         # max_tokens
         assert_type_value(obj=settings['max_tokens'], type_or_value=int, name="setting 'max_tokens'")
@@ -167,19 +168,19 @@ class ChatCompletionsBase(ClientBase):
 
         # presence_penalty
         assert_type_value(obj=settings['presence_penalty'], type_or_value=[float, int], name="setting 'presence_penalty'")
-        settings['presence_penalty'] = float(settings['presence_penalty'])
         assert_log(
             expression=-2.0 <= settings['presence_penalty'] <= 2.0,
             message=f"Expected setting 'presence_penalty' to be between '-2.0' and '+2.0' (inclusive) but got '{settings['presence_penalty']}'."
         )
+        settings['presence_penalty'] = float(settings['presence_penalty'])
 
         # frequency_penalty
         assert_type_value(obj=settings['frequency_penalty'], type_or_value=[float, int], name="setting 'frequency_penalty'")
-        settings['frequency_penalty'] = float(settings['frequency_penalty'])
         assert_log(
             expression=-2.0 <= settings['frequency_penalty'] <= 2.0,
             message=f"Expected setting 'frequency_penalty' to be between '-2.0' and '+2.0' (inclusive) but got '{settings['frequency_penalty']}'."
         )
+        settings['frequency_penalty'] = float(settings['frequency_penalty'])
 
         # reasoning_effort
         assert_type_value(obj=settings['reasoning_effort'], type_or_value=str, name="setting 'reasoning_effort'")
@@ -219,40 +220,40 @@ class ChatCompletionsBase(ClientBase):
         assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
         if settings['timeout_connect'] is not None:
             assert_log(
-                expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
         assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
         if settings['timeout_read'] is not None:
             assert_log(
-                expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
             )
 
         # timeout_chunk_first
         assert_type_value(obj=settings['timeout_chunk_first'], type_or_value=[float, int, None], name="setting 'timeout_chunk_first'")
         if settings['timeout_chunk_first'] is not None:
             assert_log(
-                expression=settings['timeout_chunk_first'] > 0.0,
-                message=f"Expected setting 'timeout_chunk_first' to be None or greater than zero but got '{settings['timeout_chunk_first']}'."
+                expression=math.isfinite(settings['timeout_chunk_first']) and settings['timeout_chunk_first'] > 0.0,
+                message=f"Expected setting 'timeout_chunk_first' to be None or positive and finite but got '{settings['timeout_chunk_first']}'."
             )
 
         # timeout_chunk_next
         assert_type_value(obj=settings['timeout_chunk_next'], type_or_value=[float, int, None], name="setting 'timeout_chunk_next'")
         if settings['timeout_chunk_next'] is not None:
             assert_log(
-                expression=settings['timeout_chunk_next'] > 0.0,
-                message=f"Expected setting 'timeout_chunk_next' to be None or greater than zero but got '{settings['timeout_chunk_next']}'."
+                expression=math.isfinite(settings['timeout_chunk_next']) and settings['timeout_chunk_next'] > 0.0,
+                message=f"Expected setting 'timeout_chunk_next' to be None or positive and finite but got '{settings['timeout_chunk_next']}'."
             )
 
         # timeout_completion
         assert_type_value(obj=settings['timeout_completion'], type_or_value=[float, int, None], name="setting 'timeout_completion'")
         if settings['timeout_completion'] is not None:
             assert_log(
-                expression=settings['timeout_completion'] > 0.0,
-                message=f"Expected setting 'timeout_completion' to be None or greater than zero but got '{settings['timeout_completion']}'."
+                expression=math.isfinite(settings['timeout_completion']) and settings['timeout_completion'] > 0.0,
+                message=f"Expected setting 'timeout_completion' to be None or positive and finite but got '{settings['timeout_completion']}'."
             )
 
         # parsers
@@ -677,7 +678,8 @@ class ChatCompletionsBase(ClientBase):
                 insert_2 = f"before generating a '{response_type}' tool-call"
 
             if insert_1 is None:
-                self._logger.info(f"{insert_2.removeprefix('before ').capitalize()}.")
+                insert_2 = insert_2.removeprefix('before ')
+                self._logger.info(f"{insert_2[:1].upper() + insert_2[1:]}.")
             else:
                 self._logger.info(f"{insert_1} {insert_2}.")
 
@@ -1202,6 +1204,7 @@ class ChatCompletionsBase(ClientBase):
                     'frequency_penalty': self._settings['frequency_penalty'],
                     'response_format': self.response_format,
                     # 'verbosity': "medium",
+                    # 'service_tier': "fast",
                     'n': self._settings['choices'],
                     'stream': self._settings['stream']
                 }
@@ -1245,6 +1248,9 @@ class ChatCompletionsBase(ClientBase):
                     'presence_penalty': self._settings['presence_penalty'],
                     'frequency_penalty': self._settings['frequency_penalty'],
                     'response_format': self.response_format,
+                    # 'provider': {
+                    #     'sort': "latency"
+                    # },
                     'n': self._settings['choices'],
                     'stream': self._settings['stream']
                 }

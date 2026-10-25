@@ -218,7 +218,7 @@ class Logger:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
         """
         assert_type_value(obj=name, type_or_value=list(default_settings.keys()) + [None], name="argument 'name'")
         if name is None:

@@ -1,4 +1,5 @@
 import os
+import math
 import time
 import copy
 import atexit
@@ -58,14 +59,14 @@ class CoreBase(ClientBase):
         assert_type_value(obj=settings['http_timeout_connect'], type_or_value=[int, float, None], name="setting 'http_timeout_connect'")
         if settings['http_timeout_connect'] is not None:
             assert_log(
-                expression=settings['http_timeout_connect'] > 0.0,
-                message=f"Expected setting 'http_timeout_connect' to be None or greater than zero but got '{settings['http_timeout_connect']}'."
+                expression=math.isfinite(settings['http_timeout_connect']) and settings['http_timeout_connect'] > 0.0,
+                message=f"Expected setting 'http_timeout_connect' to be None or positive and finite but got '{settings['http_timeout_connect']}'."
             )
         assert_type_value(obj=settings['http_timeout_read'], type_or_value=[int, float, None], name="setting 'http_timeout_read'")
         if settings['http_timeout_read'] is not None:
             assert_log(
-                expression=settings['http_timeout_read'] > 0.0,
-                message=f"Expected setting 'http_timeout_read' to be None or greater than zero but got '{settings['http_timeout_read']}'."
+                expression=math.isfinite(settings['http_timeout_read']) and settings['http_timeout_read'] > 0.0,
+                message=f"Expected setting 'http_timeout_read' to be None or positive and finite but got '{settings['http_timeout_read']}'."
             )
 
         # keys

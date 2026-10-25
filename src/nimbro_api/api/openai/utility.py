@@ -12,7 +12,7 @@ def validate_connection(self, api_key):
         success = True
         message = "Not probing Models API for endpoint that does not contain a Models URL."
     else:
-        if isinstance(self._settings['validate_model'], (int, float)):
+        if self._settings['validate_model'] is not True:
             # query cache
             success, message, cache = nimbro_api.query_cache(
                 category="models",
@@ -121,15 +121,16 @@ def get_models(self, age, api_key=None):
             message = f"Models served under Models API '{self._endpoint['models_url']}': {models}"
 
     # update cache
-    _success, _message = nimbro_api.update_cache(
-        category="models",
-        identifier=self._endpoint['models_url'],
-        data=models,
-        mute=True
-    )
-    if _success:
-        self._logger.debug(_message)
-    else:
-        self._logger.warn(_message)
+    if success:
+        _success, _message = nimbro_api.update_cache(
+            category="models",
+            identifier=self._endpoint['models_url'],
+            data=models,
+            mute=True
+        )
+        if _success:
+            self._logger.debug(_message)
+        else:
+            self._logger.warn(_message)
 
     return success, message, models

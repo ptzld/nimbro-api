@@ -80,10 +80,12 @@ class Core(Client):
                 Time in seconds an idle HTTP connection is kept alive before it is closed.
                 Use `None` to keep idle connections alive indefinitely.
             http_timeout_connect (int | float | None):
+                Numeric values must be positive and finite.
                 Default time in seconds to wait for establishing an HTTP connection before timing out.
                 Applies to requests that do not specify a connect timeout explicitly.
                 Use `None` to wait indefinitely.
             http_timeout_read (int | float | None):
+                Numeric values must be positive and finite.
                 Default time in seconds to wait for receiving HTTP response data before timing out.
                 Applies to requests that do not specify a read timeout explicitly.
                 Use `None` to wait indefinitely.
@@ -94,15 +96,15 @@ class Core(Client):
             defer_delay (int | float):
                 Time in seconds cache jobs are deferred after each registration of a new cache job.
             retry (bool | int):
-                Defines retry behavior in failure cases, if the cause is eligible for retry.
-                If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                Use a positive `int` to permit a specific number of retry attempts.
+                Defines retry behavior in failure cases, if the cause is eligible for retry:
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
         """
         return self._base.get_settings(name)
 

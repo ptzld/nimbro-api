@@ -51,6 +51,9 @@ class SystemOne(Client):
             **kwargs:
                 All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
+
+        Raises:
+            UnrecoverableError: If initialization fails, including invalid settings.
         """
         super().__init__(client_base=SystemOneBase, settings=settings, default_settings=default_settings, **kwargs)
 
@@ -75,34 +78,38 @@ class SystemOne(Client):
                 Exact weighted scores and confidence values remain available in the response dictionary, but are not displayed.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
+                - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
                 - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url', 'key_type', and 'key_value'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
                 - Use 'key_type'="plain" and 'key_value'="" for an unauthenticated local server.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
-                Pass an endpoint definition (`dict`) with the additional key 'name' to automatically add/update the setting 'endpoints' and select it.
+                Pass an endpoint definition (`dict`) with the additional key 'name' (a string containing a non-whitespace character) to automatically add/update the setting 'endpoints' and select it.
             model (str | None):
                 Name of the model used. OpenRouter and TypeSafe accept the default alias "jev-latest".
                 Set the served model name when using a local server, or use `None` to omit the field for server-side selection.
                 Model availability is not probed, since model catalogs differ and may omit valid aliases or versioned models.
             timeout_connect (float | int | None):
                 Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read (float | int | None):
                 Time in seconds waited for receiving a response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of retry attempts.
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
             - See the global dictionary 'default_settings' on top of this file for defaults.
+            - A full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)
 

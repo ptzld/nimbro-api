@@ -1,3 +1,5 @@
+import math
+
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.api import validate_endpoint, get_request
 from nimbro_api.utility.misc import assert_type_value, assert_log
@@ -19,13 +21,13 @@ class NoBase(ClientBase):
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
-            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=False, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
+            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=False, require_name=False, allow_models=False, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
         if isinstance(settings['endpoint'], dict):
-            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=False, require_name=True, allow_models=True, setting_name="endpoint provided through setting 'endpoint'")
+            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=False, require_name=True, allow_models=False, setting_name="endpoint provided through setting 'endpoint'")
             settings['endpoints'][settings['endpoint']['name']] = settings['endpoint']
             settings['endpoint'] = settings['endpoint']['name']
             del settings['endpoints'][settings['endpoint']]['name']
@@ -36,16 +38,16 @@ class NoBase(ClientBase):
         assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
         if settings['timeout_connect'] is not None:
             assert_log(
-                expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
         assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
         if settings['timeout_read'] is not None:
             assert_log(
-                expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
             )
 
         # apply settings
@@ -55,7 +57,7 @@ class NoBase(ClientBase):
     def no(self):
         # use API
         success, message, response = get_request(
-            api_name="no-as-a-service API",
+            api_name="No-as-a-Service API",
             api_url=f"{self._endpoint['api_url']}",
             headers={
                 'Content-Type': "application/json",

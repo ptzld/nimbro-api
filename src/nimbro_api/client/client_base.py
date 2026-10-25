@@ -91,6 +91,7 @@ class ClientBase:
         self._settings = {}
 
         self.wrap(0, self.set_settings, default_settings if isinstance(self, CoreBase) else settings, "init")
+        self._initial_settings = copy.deepcopy(self._settings)
 
     def _create_logger(self, settings, *, core_settings=None):
         return Logger(settings=settings, core_settings=core_settings)
@@ -589,7 +590,10 @@ class ClientBase:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
+
+        Notes:
+            - For clients with endpoint settings, a full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         assert_type_value(obj=name, type_or_value=list(self._default_settings.keys()) + [None], name="argument 'name'", logger=self._logger, prefix="Failed in 'get_settings()': ")
 
@@ -843,7 +847,8 @@ class ClientBase:
             if self._settings.keys() != self._default_settings.keys():
                 raise RuntimeError("Unexpected mismatch between keys of settings and default settings.")
             self._walk_settings(self._settings, settings, mode=mode, tense="present")
-            settings = update_dict(old_dict=self._settings, new_dict=settings)
+            if mode != "reset":
+                settings = update_dict(old_dict=self._settings, new_dict=settings)
         else:
             assert_log(expression=self._settings == {}, message="Expected internal settings to be empty before initializing.")
             merged = update_dict(old_dict=self._default_settings, new_dict=settings)

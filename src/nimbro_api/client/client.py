@@ -56,18 +56,19 @@ class Client:
             logger_name (str | None):
                 Logger name shown in each log for identifying this object.
             retry (bool | int):
-                Defines retry behavior in failure cases, if the cause is eligible for retry.
-                If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                Use a positive `int` to permit a specific number of retry attempts.
+                Defines retry behavior in failure cases, if the cause is eligible for retry:
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
             - Overwrite this function in the class inheriting from `Client` to provide documentation for all settings.
+            - For clients with endpoint settings, a full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)
 

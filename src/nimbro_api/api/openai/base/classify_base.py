@@ -1,4 +1,4 @@
-import copy
+import math
 import time
 
 from nimbro_api.client import ClientBase
@@ -26,8 +26,8 @@ class ClassifyBase(ClientBase):
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
             validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
@@ -62,7 +62,7 @@ class ClassifyBase(ClientBase):
             )
 
         # truncation_side
-        assert_type_value(obj=settings['truncation_side'], type_or_value=[str, None], name="setting 'truncation_side'")
+        assert_type_value(obj=settings['truncation_side'], type_or_value=["left", "right", None], name="setting 'truncation_side'")
 
         # request_id
         assert_type_value(obj=settings['request_id'], type_or_value=[str, None], name="setting 'request_id'")
@@ -88,6 +88,10 @@ class ClassifyBase(ClientBase):
 
         # continue_final_message
         assert_type_value(obj=settings['continue_final_message'], type_or_value=bool, name="setting 'continue_final_message'")
+        assert_log(
+            expression=settings['mode'] != "messages" or not (settings['add_generation_prompt'] and settings['continue_final_message']),
+            message="Expected settings 'add_generation_prompt' and 'continue_final_message' not to both be True in mode 'messages'."
+        )
 
         # chat_template
         assert_type_value(obj=settings['chat_template'], type_or_value=[str, None], name="setting 'chat_template'")
@@ -102,16 +106,16 @@ class ClassifyBase(ClientBase):
         assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
         if settings['timeout_connect'] is not None:
             assert_log(
-                expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
         assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
         if settings['timeout_read'] is not None:
             assert_log(
-                expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
             )
 
         # apply settings
@@ -121,6 +125,7 @@ class ClassifyBase(ClientBase):
     def classify(self, prompt):
         stamp = time.perf_counter()
 
+        # parse arguments
         if self._settings['mode'] == "input":
             assert_type_value(obj=prompt, type_or_value=[list, str], name=f"argument 'prompt' in mode '{self._settings['mode']}'")
         elif self._settings['mode'] == "messages":
@@ -185,7 +190,7 @@ class ClassifyBase(ClientBase):
         else:
             raise NotImplementedError(f"Unknown mode '{self._settings['mode']}'.")
 
-        for key in copy.deepcopy(list(data.keys())):
+        for key in list(data):
             if data[key] is None:
                 del data[key]
 
@@ -199,26 +204,18 @@ class ClassifyBase(ClientBase):
             logger=self._logger
         )
         if success:
-            # parse API response
+            # parse response
             try:
                 classification = classification.json()
-            except Exception:
-                classification = classification.text.strip()
-            if isinstance(classification, str):
-                classification_str = classification
+            except ValueError as e:
+                raise UnrecoverableError(f"Expected a JSON object from Classify API but failed to decode the response: {e}. Response body: {classification.text!r}") from e
+            assert_type_value(obj=classification, type_or_value=dict, name="classification response")
+            # assert_log(expression='text' in classification, message=f"Expected classification response to contain the key 'text': {format_obj(classification)}")
+            # assert_type_value(obj=classification['text'], type_or_value=str, name="key 'text' in classification response")
+            if self._settings['message_results'] and 'data' in classification:
+                classification_str = f": {classification}"
             else:
-                try:
-                    assert_type_value(obj=classification, type_or_value=dict, name="classification response")
-                    # assert_log(expression='text' in classification, message=f"Expected classification response to contain the key 'text': {format_obj(classification)}")
-                    # assert_type_value(obj=classification['text'], type_or_value=str, name="key 'text' in classification response")
-                except UnrecoverableError as e:
-                    success = False
-                    message = str(e)
-                else:
-                    if self._settings['message_results'] and 'data' in classification:
-                        classification_str = f": {classification}"
-                    else:
-                        classification_str = "."
+                classification_str = "."
 
         # finalize response
         if success:

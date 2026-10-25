@@ -1,6 +1,8 @@
+import math
 import time
 import copy
 
+import nimbro_api
 from nimbro_api.client import ClientBase
 from nimbro_api.utility.io import parse_image_b64
 from nimbro_api.utility.api import get_api_key, validate_endpoint, post_request
@@ -29,13 +31,13 @@ class Sam2RealtimeBase(ClientBase):
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
-            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
+            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=False, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
         if isinstance(settings['endpoint'], dict):
-            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=True, require_name=True, allow_models=True, setting_name="endpoint provided through setting 'endpoint'")
+            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=True, require_name=True, allow_models=False, setting_name="endpoint provided through setting 'endpoint'")
             settings['endpoints'][settings['endpoint']['name']] = settings['endpoint']
             settings['endpoint'] = settings['endpoint']['name']
             del settings['endpoints'][settings['endpoint']]['name']
@@ -65,32 +67,32 @@ class Sam2RealtimeBase(ClientBase):
         assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
         if settings['timeout_connect'] is not None:
             assert_log(
-                expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
         assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
         if settings['timeout_read'] is not None:
             assert_log(
-                expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
             )
 
         # timeout_read_load
         assert_type_value(obj=settings['timeout_read_load'], type_or_value=[float, int, None], name="setting 'timeout_read_load'")
         if settings['timeout_read_load'] is not None:
             assert_log(
-                expression=settings['timeout_read_load'] > 0.0,
-                message=f"Expected setting 'timeout_read_load' to be None or greater than zero but got '{settings['timeout_read_load']}'."
+                expression=math.isfinite(settings['timeout_read_load']) and settings['timeout_read_load'] > 0.0,
+                message=f"Expected setting 'timeout_read_load' to be None or positive and finite but got '{settings['timeout_read_load']}'."
             )
 
         # timeout_read_infer
         assert_type_value(obj=settings['timeout_read_infer'], type_or_value=[float, int, None], name="setting 'timeout_read_infer'")
         if settings['timeout_read_infer'] is not None:
             assert_log(
-                expression=settings['timeout_read_infer'] > 0.0,
-                message=f"Expected setting 'timeout_read_infer' to be None or greater than zero but got '{settings['timeout_read_infer']}'."
+                expression=math.isfinite(settings['timeout_read_infer']) and settings['timeout_read_infer'] > 0.0,
+                message=f"Expected setting 'timeout_read_infer' to be None or positive and finite but got '{settings['timeout_read_infer']}'."
             )
 
         # apply settings
@@ -167,12 +169,8 @@ class Sam2RealtimeBase(ClientBase):
                         flavor=self._settings['flavor'],
                         age=0
                     )
-                    if success:
-                        self._logger.debug(message)
-                    else:
+                    if not success:
                         return False, message, None
-
-                    self._logger.debug(message)
                 elif prompts is None and not init:
                     message = "Tracker is not initialized."
                     return False, message, None
@@ -218,6 +216,16 @@ class Sam2RealtimeBase(ClientBase):
 
         if success:
             # parse response
+            if prompts is not None:
+                _success, _message = nimbro_api.clear_cache(
+                    category="nimbro_vision_servers",
+                    identifier=f"{self._endpoint['api_url']}/status",
+                    mute=True
+                )
+                if _success:
+                    self._logger.debug(_message)
+                else:
+                    self._logger.warn(_message)
             response = response.json()
             response = response['artifact']
             if response['model'] != self._model_family:

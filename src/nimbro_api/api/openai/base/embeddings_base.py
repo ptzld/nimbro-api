@@ -1,5 +1,6 @@
 import os
 import copy
+import math
 import time
 import datetime
 
@@ -31,14 +32,14 @@ class EmbeddingsBase(ClientBase):
 
         # logger_info_cutoff
         assert_type_value(obj=settings['logger_info_cutoff'], type_or_value=int, name="setting 'logger_info_cutoff'")
-        assert_log(expression=settings['logger_info_cutoff'] > 0, message=f"Expected setting 'logger_info_cutoff' to be greater than zero but got '{settings['logger_info_cutoff']}'.")
+        assert_log(expression=settings['logger_info_cutoff'] >= 0, message=f"Expected setting 'logger_info_cutoff' to be non-negative but got '{settings['logger_info_cutoff']}'.")
 
         # endpoints
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
             validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
@@ -69,22 +70,6 @@ class EmbeddingsBase(ClientBase):
                 message=f"Expected setting 'max_batch_size' to be greater than zero but got '{settings['max_batch_size']}'."
             )
 
-        # timeout_connect
-        assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
-        if settings['timeout_connect'] is not None:
-            assert_log(
-                expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
-            )
-
-        # timeout_read
-        assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
-        if settings['timeout_read'] is not None:
-            assert_log(
-                expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
-            )
-
         # cache_folder
         assert_type_value(obj=settings['cache_folder'], type_or_value=[str, None], name="setting 'cache_folder'")
         if settings['cache_folder'] in ["", None]:
@@ -105,6 +90,22 @@ class EmbeddingsBase(ClientBase):
 
         # cache_write
         assert_type_value(obj=settings['cache_write'], type_or_value=bool, name="setting 'cache_write'")
+
+        # timeout_connect
+        assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
+        if settings['timeout_connect'] is not None:
+            assert_log(
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
+            )
+
+        # timeout_read
+        assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
+        if settings['timeout_read'] is not None:
+            assert_log(
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
+            )
 
         # apply settings
         self._endpoint = settings['endpoints'][settings['endpoint']]
@@ -171,13 +172,17 @@ class EmbeddingsBase(ClientBase):
                         if 'files' in index:
                             assert_type_value(obj=index['files'], type_or_value=list, name="value of cache-index key 'files'")
                             if self._settings['endpoint'] in index['texts']:
-                                assert_type_value(obj=index['texts'], type_or_value=dict, name=f"value of cache-index key 'texts'>'{self._settings['endpoint']}'")
+                                assert_type_value(obj=index['texts'][self._settings['endpoint']], type_or_value=dict, name=f"value of cache-index key 'texts'>'{self._settings['endpoint']}'")
                                 if self._settings['model'] in index['texts'][self._settings['endpoint']]:
                                     assert_type_value(obj=index['texts'][self._settings['endpoint']][self._settings['model']], type_or_value=dict, name=f"value of cache-index key 'texts'>'{self._settings['endpoint']}'>'{self._settings['model']}'")
                                     for i, text in enumerate(texts):
                                         if text in index['texts'][self._settings['endpoint']][self._settings['model']]:
                                             assert_type_value(obj=index['texts'][self._settings['endpoint']][self._settings['model']][text], type_or_value=list, name=f"value of cache-index key 'texts'>'{self._settings['endpoint']}'>'{self._settings['model']}'>'{text}'")
                                             file_and_idx = copy.deepcopy(index['texts'][self._settings['endpoint']][self._settings['model']][text])
+                                            assert_log(expression=len(file_and_idx) == 2, message=f"Expected cache reference for text '{text}' to be a list of length '2' but got '{len(file_and_idx)}'.")
+                                            for j, value in enumerate(file_and_idx):
+                                                assert_type_value(obj=value, type_or_value=int, name=f"element '{j}' in cache reference for text '{text}'")
+                                                assert_log(expression=value >= 0, message=f"Expected element '{j}' in cache reference for text '{text}' to be non-negative but got '{value}'.")
                                             assert_log(expression=len(index['files']) > file_and_idx[0], message=f"Expected value of cache-index key 'files' be list that contains at least '{file_and_idx[0] + 1}' element{'' if file_and_idx[0] + 1 == 1 else 's'} but got '{len(index['files'])}'.")
                                             assert_type_value(obj=index['files'][file_and_idx[0]], type_or_value=list, name=f"value of element '{file_and_idx[0]}' in value of cache-index key '{text}'")
                                             assert_log(expression=len(index['files'][file_and_idx[0]]) == 2, message=f"Expected value of element '{file_and_idx[0]}' in value of cache-index key '{text}' to be a list of length '2' but got '{len(index['files'][file_and_idx[0]])}'.")
@@ -484,10 +489,11 @@ class EmbeddingsBase(ClientBase):
             text = text.strip()
             assert_log(expression=len(text) > 0, message="Expected argument 'text' provided as 'str' to be non-empty.")
         else:
+            text = list(text)
             for i, item in enumerate(text):
-                assert_type_value(obj=item, type_or_value=str, name="all elements in argument 'text' provided as 'list'")
+                assert_type_value(obj=item, type_or_value=str, name=f"element '{i}' in argument 'text'")
                 text[i] = item.strip()
-                assert_log(expression=len(item) > 0, message="Expected all elements in argument 'text' provided as 'list' to be non-empty strings.")
+                assert_log(expression=len(text[i]) > 0, message=f"Expected element '{i}' in argument 'text' to contain a non-whitespace character.")
 
         if isinstance(text, str):
             input_is_list = False
@@ -539,7 +545,7 @@ class EmbeddingsBase(ClientBase):
                 self._logger.info(message)
             else:
                 self._logger.debug(message)
-            self._logger.debug(f"Retrieving '{num_cached}' missing embedding{'' if num_cached == 1 else 's'} from Embeddings API.")
+            self._logger.debug(f"Retrieving '{len(texts) - num_cached}' missing embedding{'' if len(texts) - num_cached == 1 else 's'} from Embeddings API.")
 
         # associate missing embeddings
         missing_texts, missing_idx = [], []
@@ -632,7 +638,6 @@ class EmbeddingsBase(ClientBase):
                 api_url=self._endpoint['api_url'],
                 headers=headers,
                 data=data,
-                files=None,
                 timeout=(self._settings['timeout_connect'], self._settings['timeout_read']),
                 logger=self._logger
             )

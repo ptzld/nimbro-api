@@ -1,7 +1,7 @@
 from nimbro_api.utility.misc import assert_type_value, assert_log
 from ..client.no import No
 
-def test_1_run():
+def test_1_inference():
     client = No()
 
     success, message, response = client.no()

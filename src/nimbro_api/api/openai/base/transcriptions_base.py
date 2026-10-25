@@ -1,4 +1,5 @@
 import os
+import math
 import time
 
 from nimbro_api.client import ClientBase
@@ -24,8 +25,8 @@ class TranscriptionsBase(ClientBase):
         assert_type_value(obj=settings['endpoints'], type_or_value=dict, name="setting 'endpoints'")
         assert_log(expression=len(settings['endpoints']) > 0, message="Expected setting 'endpoints' to define at least one endpoint.")
         for endpoint in settings['endpoints']:
-            assert_type_value(obj=endpoint, type_or_value=str, name="all endpoint names in setting 'endpoints'")
-            assert_log(expression=len(endpoint) > 0, message="Expected all endpoint names in setting 'endpoints' to be non-empty.")
+            assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
+            assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
             validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=True, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
@@ -58,8 +59,7 @@ class TranscriptionsBase(ClientBase):
             expression=temperature_range[0] <= settings['temperature'] <= temperature_range[1],
             message=f"Expected setting 'temperature' to be in interval [0.0, 1.0] but got '{settings['temperature']}'."
         )
-        if isinstance(settings['temperature'], int):
-            settings['temperature'] = float(settings['temperature'])
+        settings['temperature'] = float(settings['temperature'])
 
         # prompt
         assert_type_value(obj=settings['prompt'], type_or_value=str, name="setting 'prompt'")
@@ -72,16 +72,16 @@ class TranscriptionsBase(ClientBase):
         assert_type_value(obj=settings['timeout_connect'], type_or_value=[float, int, None], name="setting 'timeout_connect'")
         if settings['timeout_connect'] is not None:
             assert_log(
-                expression=settings['timeout_connect'] > 0.0,
-                message=f"Expected setting 'timeout_connect' to be None or greater than zero but got '{settings['timeout_connect']}'."
+                expression=math.isfinite(settings['timeout_connect']) and settings['timeout_connect'] > 0.0,
+                message=f"Expected setting 'timeout_connect' to be None or positive and finite but got '{settings['timeout_connect']}'."
             )
 
         # timeout_read
         assert_type_value(obj=settings['timeout_read'], type_or_value=[float, int, None], name="setting 'timeout_read'")
         if settings['timeout_read'] is not None:
             assert_log(
-                expression=settings['timeout_read'] > 0.0,
-                message=f"Expected setting 'timeout_read' to be None or greater than zero but got '{settings['timeout_read']}'."
+                expression=math.isfinite(settings['timeout_read']) and settings['timeout_read'] > 0.0,
+                message=f"Expected setting 'timeout_read' to be None or positive and finite but got '{settings['timeout_read']}'."
             )
 
         # apply settings
@@ -135,7 +135,7 @@ class TranscriptionsBase(ClientBase):
             logger=self._logger
         )
         if success:
-            # parse API response
+            # parse response
             try:
                 transcription = transcription.json()
             except Exception:

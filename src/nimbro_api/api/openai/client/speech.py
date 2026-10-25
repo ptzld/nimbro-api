@@ -34,14 +34,14 @@ default_settings = {
     'voice': "alloy",
     'instructions': "",
     'speed': 1.0,
-    'timeout_connect': 2.0,
-    'timeout_read': 5.0,
     'return_path': True,
     'return_encoding': "base64",
     'cache_folder': os.path.join(get_cache_location(), "speech"),
     'cache_file': "cache_speech.json",
     'cache_read': 30.0,
     'cache_write': True,
+    'timeout_connect': 2.0,
+    'timeout_read': 5.0,
     'retry': 2
 }
 
@@ -65,6 +65,9 @@ class Speech(Client):
             **kwargs:
                 All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
+
+        Raises:
+            UnrecoverableError: If initialization fails, including invalid settings.
         """
         super().__init__(client_base=SpeechBase, settings=settings, default_settings=default_settings, **kwargs)
 
@@ -84,60 +87,68 @@ class Speech(Client):
                 Logger name shown in each log identifying this object.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
+                - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
                 - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url',
                   'key_type', and 'key_value', and the optional key 'models_url'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
-                Pass an endpoint definition (`dict`) with the additional key 'name' to automatically add/update the setting 'endpoints' and select it.
+                Pass an endpoint definition (`dict`) with the additional key 'name' (a string containing a non-whitespace character) to automatically add/update the setting 'endpoints' and select it.
             model (str):
                 Name of the model used (see `get_models()`).
             validate_model (float | int | bool):
+                Numeric cache ages must be non-negative. Use `0` to force a fresh check.
+                Checks are skipped when the selected endpoint has no 'models_url' or the requested speech is cached.
                 Validate the set 'model' is available with the Models API of the set 'endpoint' when using `get_speech()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
             voice_presets (str | None):
-                Path of a file containing voice presets. Use `None` to point to default voice presets.
+                Path of a file containing voice presets. Use "" for the bundled presets, or `None` to disable preset lookup.
             voice (str):
                 Voice used to generate speech. Use a supported voice directly or the name of a voice preset.
             instructions (str):
                 Supply additional instructions to shape the tonality of the generated speech.
                 Use an empty string (`str`) for no special instructions, or the name of a voice preset.
-            speed (float):
+            speed (float | int):
                 Speed of the generated speech in interval (from 0.25 to 4.0).
-            timeout_connect (float | int | None):
-                Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
-            timeout_read (float | int | None):
-                Time in seconds waited for receiving a response from the 'endpoint', or `None` to wait indefinitely.
             return_path (bool):
                 Return speech as file path (`str`) instead of returning the file directly according to 'return_encoding' (`str` or `bytes`).
             return_encoding (str):
                 File encoding when not using 'return_path'. Use "bytes" for returning `bytes` or "base64" for a Base64 encoding (`str`).
             cache_folder (str | None):
-                Folder path used to store all caching-related files. Use `None` to select the default location.
+                Folder path used to store all caching-related files. Use `None` or "" to select the default location.
             cache_file (str):
                 File name used as cache-index.
             cache_read (bool | float | int):
+                Numeric ages must be non-negative. Use `0` to read the cache-index from disk instead of reusing a process-wide cached copy.
+                A cache hit returns before credential retrieval and model validation.
                 Attempt to retrieve requested speech from either the process-wide cache, or from disk using 'cache_folder' and 'cache_file':
                 - Use `float` or `int` to set the time in seconds permitted for responses
                   cached in the process-wide cache to be reused before attempting to read cache from disk.
                 - Use `True` to force reading cache from disk, or `False` to deactivate reading cache in general.
             cache_write (bool):
                 Cache generated speech to disk using 'cache_folder' and 'cache_file'.
+            timeout_connect (float | int | None):
+                Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
+            timeout_read (float | int | None):
+                Time in seconds waited for receiving a response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             retry (bool | int):
-                Defines retry behavior in failure cases, if the cause is eligible for retry.
-                If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                Use a positive `int` to permit a specific number of retry attempts.
+                Defines retry behavior in failure cases, if the cause is eligible for retry:
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
             - See the global dictionary 'default_settings' on top of this file for defaults.
+            - A full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)
 
@@ -189,8 +200,9 @@ class Speech(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request being reused instead of sending a new one.
-                Use `None` to always reuse cached responses regardless of age, or 0 to force a new request. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -207,7 +219,7 @@ class Speech(Client):
 
         Notes:
             - Responses by the Models API are cached for the duration of this process:
-              `nimbro_api.query_cache(category="models", identifier=settings['endpoints'][settings['endpoint']]['models_url'])`
+              `nimbro_api.query_cache(category="models", identifier=settings['endpoint']['models_url'])`
         """
         return self._base.wrap(1, self._base.get_models, age, **kwargs)
 

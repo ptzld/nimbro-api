@@ -338,6 +338,15 @@ def load(self, flavor=None, age=0):
             message = f"Loaded model flavor '{flavor}'."
         else:
             message = f"Loaded model flavor '{flavor}' in favor of '{old_flavor}'."
+        _success, _message = nimbro_api.clear_cache(
+            category="nimbro_vision_servers",
+            identifier=f"{self._endpoint['api_url']}/status",
+            mute=True
+        )
+        if _success:
+            self._logger.debug(_message)
+        else:
+            self._logger.warn(_message)
 
     return success, message
 
@@ -385,8 +394,19 @@ def unload(self):
 
     if success:
         message = f"Unloaded model flavor '{flavor}'."
-    elif response.status_code == 503 and response.json()['detail'] == "No model loaded":
+    elif response is not None and response.status_code == 503 and response.json()['detail'] == "No model loaded":
         success = True
         message = "There was no model loaded."
+
+    if success:
+        _success, _message = nimbro_api.clear_cache(
+            category="nimbro_vision_servers",
+            identifier=f"{self._endpoint['api_url']}/status",
+            mute=True
+        )
+        if _success:
+            self._logger.debug(_message)
+        else:
+            self._logger.warn(_message)
 
     return success, message

@@ -55,6 +55,9 @@ class Translations(Client):
             **kwargs:
                 All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
+
+        Raises:
+            UnrecoverableError: If initialization fails, including invalid settings.
         """
         super().__init__(client_base=TranslationsBase, settings=settings, default_settings=default_settings, **kwargs)
 
@@ -74,16 +77,18 @@ class Translations(Client):
                 Logger name shown in each log identifying this object.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
+                - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
                 - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url',
                   'key_type', and 'key_value', and the optional key 'models_url'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
-                Pass an endpoint definition (`dict`) with the additional key 'name' to automatically add/update the setting 'endpoints' and select it.
+                Pass an endpoint definition (`dict`) with the additional key 'name' (a string containing a non-whitespace character) to automatically add/update the setting 'endpoints' and select it.
             model (str):
                 Name of the model used (see `get_models()`).
             validate_model (float | int | bool):
+                Checks are skipped when the selected endpoint has no 'models_url'.
                 Validate the set 'model' is available with the Models API of the set 'endpoint' when using `get_translation()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
@@ -95,21 +100,24 @@ class Translations(Client):
                 Response format in ["json", "verbose_json", "text", "srt", "vtt"].
             timeout_connect (float | int | None):
                 Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read (float | int | None):
                 Time in seconds waited for receiving a response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             retry (bool | int):
-                Defines retry behavior in failure cases, if the cause is eligible for retry.
-                If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                Use a positive `int` to permit a specific number of retry attempts.
+                Defines retry behavior in failure cases, if the cause is eligible for retry:
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
             - See the global dictionary 'default_settings' on top of this file for defaults.
+            - A full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)
 
@@ -161,8 +169,9 @@ class Translations(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request being reused instead of sending a new one.
-                Use `None` to always reuse cached responses regardless of age, or 0 to force a new request. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -179,7 +188,7 @@ class Translations(Client):
 
         Notes:
             - Responses by the Models API are cached for the duration of this process:
-              `nimbro_api.query_cache(category="models", identifier=settings['endpoints'][settings['endpoint']]['models_url'])`
+              `nimbro_api.query_cache(category="models", identifier=settings['endpoint']['models_url'])`
         """
         return self._base.wrap(1, self._base.get_models, age, **kwargs)
 
@@ -203,6 +212,11 @@ class Translations(Client):
             tuple[bool, str, dict | str | None]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
-                - dict | str | None: The translation result according to the set 'response_format', or `None` if not successful.
+                - dict | str | None: A JSON response dictionary (`dict`) containing 'text' (`str`) with additional provider fields preserved, a string (`str`) for text responses, or `None` if not successful.
+
+        Notes:
+            - With 'response_format' set to "text", a JSON dictionary response is reduced to its 'text' value.
+            - Non-JSON responses are returned as strings with leading and trailing whitespace removed, including subtitle formats. This fallback also applies when a JSON format was requested.
+            - JSON string responses are returned directly. Dictionary 'text' values and other metadata are not stripped or otherwise normalized. Empty text is permitted.
         """
         return self._base.wrap(1, self._base.get_translation, audio, **kwargs)

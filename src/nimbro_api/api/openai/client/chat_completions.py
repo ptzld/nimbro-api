@@ -8,7 +8,6 @@ default_settings = {
     'logger_info_prompt_threshold': 500,
     'logger_info_prompt_cutoff': 0,
     'logger_info_completion': True,
-    'logger_info_completion_cutoff': 1000,
     'logger_debug_chunks': False,
     'endpoints': {
         'OpenRouter': {
@@ -94,6 +93,9 @@ class ChatCompletions(Client):
             **kwargs:
                 All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
+
+        Raises:
+            UnrecoverableError: If initialization fails, including invalid settings.
         """
         super().__init__(client_base=ChatCompletionsBase, settings=settings, default_settings=default_settings, **kwargs)
 
@@ -112,36 +114,42 @@ class ChatCompletions(Client):
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
             logger_info_prompt (bool | int):
-                Logger behavior regarding an INFO log with each call of `prompt()`´:
+                Logger behavior regarding an INFO log with each call of `prompt()`:
                 - Use `False` to deactivate this log.
                 - Use `True` to log general info and all messages in context.
                 - Use 0 to log general info without any context messages.
                 - Use a positive `int` to restrict the number of context messages shown starting with the first.
                 - Use a negative `int` to restrict the number of context messages shown ending with the last.
             logger_info_prompt_threshold (int):
-                Number of characters above which logs of context messages related to 'logger_info_prompt' are cutoff.
+                Number of characters above which content is shortened in prompt logs. Must be positive.
+                Text is shortened to this length, followed by an ellipsis. Media URLs/data use 'logger_info_prompt_cutoff' instead.
             logger_info_prompt_cutoff (int):
-                Number of characters shown of context messages exceeding 'logger_info_prompt_threshold'.
+                Number of characters shown for media URLs/data exceeding 'logger_info_prompt_threshold', followed by an ellipsis. Must be non-negative.
+                Use `0` to show only an ellipsis. Does not affect text content.
             logger_info_completion (bool):
                 Emit an INFO log showing the contents of each received assistant response.
             logger_debug_chunks (bool):
                 Emit DEBUG logs showing the raw contents received from the API.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
+                - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
                 - Each endpoint must be a dictionary (`dict`), with the required keys 'api_flavor',
                   'api_url', 'key_type', and 'key_value', and the optional key 'models_url'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
-                Pass an endpoint definition (`dict`) with the additional key 'name' to automatically add/update the setting 'endpoints' and select it.
+                Pass an endpoint definition (`dict`) with the additional key 'name' (a string containing a non-whitespace character) to automatically add/update the setting 'endpoints' and select it.
             model (str):
                 Name of the model used (see `get_models()`).
             validate_model (float | int | bool):
+                Numeric cache ages must be non-negative. Use `0` to force a fresh check.
+                Checks are skipped when the selected endpoint has no 'models_url'.
                 Validate the set 'model' is available with the Models API of the set 'endpoint' when using `prompt()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
             choices (int):
+                Must be at least `1`.
                 Number of assistant responses generated (>= 1):
                 Use 1 to generate one assistant response:
                   - If valid, the generated assistant response is returned at the top-level of the returned dictionary (keys 'text', 'tools', 'reasoning', etc.).
@@ -154,7 +162,7 @@ class ChatCompletions(Client):
             top_p (float | int):
                 Model top_p parameter (from 0.0 to 2.0).
             max_tokens (int):
-                Maximum number of tokens generated per assistant response.
+                Maximum number of tokens generated per assistant response. Must be positive.
             presence_penalty (float | int):
                 Model presence_penalty parameter (from -2.0 to +2.0).
             frequency_penalty (float | int):
@@ -173,20 +181,25 @@ class ChatCompletions(Client):
             stream (bool):
                 Stream responses.
             max_tool_calls (int | None):
-                Maximum number of tool calls permitted in a single assistant response. Use `None` to put no restriction.
+                Maximum number of tool calls permitted in a single assistant response. Must be positive when provided as an integer (`int`). Use `None` to put no restriction.
             correction (bool):
                 Attempt automatic correction routines after invalid assistant responses before returning a failure:
                 - Invalid assistant messages and correction prompts are only added to context temporarily and removed afterwards.
             timeout_connect (float | int | None):
                 Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read (float | int | None):
                 Time in seconds waited for receiving a response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_chunk_first (float | int | None):
                 Time in seconds waited until the first response chunk is received when using 'stream', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_chunk_next (float | int | None):
                 Time in seconds waited until the next response chunk is received when using 'stream', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_completion (float | int | None):
                 Time in seconds waited until the complete response is received, or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             parser (list | str):
                 List of parsers executed sequentially:
                 - See template for using or creating parsers: nimbro_api/api/openai/parser/template.py
@@ -194,17 +207,18 @@ class ChatCompletions(Client):
                 - Use `str` to automatically set up a list with one completion parser.
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of retry attempts.
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
             - See the global dictionary 'default_settings' on top of this file for defaults.
+            - A full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)
 
@@ -256,8 +270,9 @@ class ChatCompletions(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request being reused instead of sending a new one.
-                Use `None` to always reuse cached responses regardless of age, or 0 to force a new request. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -274,7 +289,7 @@ class ChatCompletions(Client):
 
         Notes:
             - Responses by the Models API are cached for the duration of this process:
-              `nimbro_api.query_cache(category="models", identifier=settings['endpoints'][settings['endpoint']]['models_url'])`
+              `nimbro_api.query_cache(category="models", identifier=settings['endpoint']['models_url'])`
         """
         return self._base.wrap(1, self._base.get_models, age, **kwargs)
 
@@ -283,7 +298,7 @@ class ChatCompletions(Client):
         Request an assistant response.
 
         Args:
-            text (str | dict | list[str|dict] | None, optional):
+            text (str | dict | list[str | dict] | None, optional):
                 Content added to the context window:
                 - Use `str` to automatically format a context message as either user text or a tool response,
                   depending on whether a tool response is awaited (see `get_awaited_tools()`).
@@ -297,10 +312,10 @@ class ChatCompletions(Client):
                 - "none": Apply `text` and `reset_context` without triggering an assistant response.
                 - "auto": The assistant response is not restricted.
                 - "text": The assistant must respond with text only.
-                - "json": The assistant must respond with valid JSON, which gets encoded (`any`) in the 'text' response.
+                - "json": The assistant must respond with valid JSON, which gets decoded to a Python object in the 'text' response.
                 - "always": The assistant must respond with tool call(s) only.
                 - The name of a defined tool: The assistant must respond with tool call of this tool.
-                Defaults to `auto`.
+                Defaults to "auto".
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -310,8 +325,7 @@ class ChatCompletions(Client):
                         If `True`, all logs emitted by this function are muted. Defaults to `False`.
 
         Returns:
-            tuple[bool, str, dict | None]:
-                A tuple containing:
+            tuple[bool, str, dict | None]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
                 - dict | None: A dictionary containing the assistant response(s) as well as 'logs', 'usage' and possibly other items, or `None` if not successful.
@@ -368,13 +382,13 @@ class ChatCompletions(Client):
                 - "insert": Insert `messages` at the specified `index`. Use `index` 0 with `reverse_indexing` to append.
                 - "replace": Replace context message(s) starting at `index` by `messages`, where exceeding messages are appended.
                 - "remove": Remove context message at `index` from context.
-                Defaults to `reset`.
+                Defaults to "reset".
             messages (list[dict] | dict | None, optional):
                 New message(s) added to context according to `mode`. Defaults to `None`.
             index (int, optional):
-                Points at a specific point/message in the context window according to `mode`.
+                Points at a specific point/message in the context window according to 'mode'. Defaults to `0`.
             reverse_indexing (bool, optional):
-                Specifies whether `index` 0 points to the last (newest) or first (oldest) message in context.
+                Specifies whether 'index' `0` points to the last (newest) or first (oldest) message in context. Defaults to `True`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:

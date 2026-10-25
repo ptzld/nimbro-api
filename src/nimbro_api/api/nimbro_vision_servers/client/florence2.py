@@ -52,6 +52,9 @@ class Florence2(Client):
             **kwargs:
                 All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
+
+        Raises:
+            UnrecoverableError: If initialization fails, including invalid settings.
         """
         super().__init__(client_base=Florence2Base, settings=settings, default_settings=default_settings, **kwargs)
 
@@ -73,18 +76,20 @@ class Florence2(Client):
                 Include results in successful response messages when using `get_response()`.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
+                - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
                 - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url', 'key_type', and 'key_value'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
-                Pass an endpoint definition (`dict`) with the additional key 'name' to automatically add/update the setting 'endpoints' and select it.
+                Pass an endpoint definition (`dict`) with the additional key 'name' (a string containing a non-whitespace character) to automatically add/update the setting 'endpoints' and select it.
             validate_health (float | int | bool):
                 Validate the set 'endpoint' is healthy when using `get_response()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
             validate_flavor (float | int | bool):
-                Validate the set 'flavor' is available with the set 'endpoint' when using `load()` or `get_response()`:
+                Check the loaded 'flavor' when using `get_response()` and load the configured flavor if needed.
+                Explicit `load()` calls perform their own status and flavor checks regardless of this setting:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
             flavor (str):
@@ -101,25 +106,30 @@ class Florence2(Client):
                 Model max_batch_size parameter (> 0).
             timeout_connect (float | int | None):
                 Time in seconds waited for connecting to the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read (float | int | None):
                 Time in seconds waited for receiving a response from the 'endpoint' (except "load" and "infer"), or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read_load (float | int | None):
                 Time in seconds waited for receiving a "load" response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             timeout_read_infer (float | int | None):
                 Time in seconds waited for receiving an "infer" response from the 'endpoint', or `None` to wait indefinitely.
+                Numeric values must be positive and finite.
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of retry attempts.
+                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
+                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
-            any: A deep copy of the current settings (`dict`) or a single setting when providing 'name' (`any`).
+            object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
             - See the global dictionary 'default_settings' on top of this file for defaults.
+            - A full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)
 
@@ -171,8 +181,9 @@ class Florence2(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -195,8 +206,9 @@ class Florence2(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -219,8 +231,9 @@ class Florence2(Client):
 
         Args:
             age (float | int | None, optional):
-                The time in seconds permitted for cached responses to this request to be reused instead requesting a new one.
-                Use `None` to always reuse cached responses regardless of age. Defaults to 0.
+                Maximum cache age in seconds. Numeric values must be non-negative.
+                Use `0` to force a request, a positive value to reuse sufficiently recent cached responses, or `None` to allow any cache age.
+                A cache miss still requires a request. Defaults to `0`.
             **kwargs:
                 All settings (see `get_settings()`) can also be configured via keyword arguments from here.
                 Additionally, special keyword arguments can be passed to `wrap()`:
@@ -239,7 +252,7 @@ class Florence2(Client):
 
     def load(self, **kwargs):
         """
-        Request the set 'endpoint' to load the set 'model'.
+        Request the set 'endpoint' to load the set 'flavor'.
 
         Args:
             **kwargs:
@@ -296,6 +309,11 @@ class Florence2(Client):
             tuple[bool, str, dict | None]: A tuple containing:
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
-                - dict | None: A dictionary (`dict`) containing the model response according to the set 'prompt', or `None` if not successful.
+                - dict | None: A dictionary (`dict`) containing 'detections' and/or 'captions', according to the configured 'prompt', or `None` if not successful.
+
+        Notes:
+            - Detection entries and caption contents are returned unchanged from the server. Detection entries include 'label' when used for result logging.
+            - Each of 'detections' and 'captions' is omitted when its value is `None`, `[]`, or `[None]`. A successful result can therefore be an empty dictionary.
+            - Other server response fields, including 'model', are not included in the returned dictionary.
         """
         return self._base.wrap(1, self._base.get_response, image, **kwargs)
