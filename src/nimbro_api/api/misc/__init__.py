@@ -2,6 +2,7 @@ import importlib
 
 _CLIENTS = {
     'No': "no",
+    'SearXNG': "searxng",
     'SystemOne': "system_one",
     'VlmGist': "vlm_gist"
 }
