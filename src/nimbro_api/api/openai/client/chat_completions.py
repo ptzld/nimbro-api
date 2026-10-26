@@ -49,6 +49,7 @@ default_settings = {
     'endpoint': "OpenRouter",
     'model': "~anthropic/claude-sonnet-latest",
     'validate_model': 3600,
+    'service_tier': None,
     'choices': 1,
     'temperature': 1.0,
     'top_p': 1.0,
@@ -148,6 +149,15 @@ class ChatCompletions(Client):
                 Validate the set 'model' is available with the Models API of the set 'endpoint' when using `prompt()`:
                 - Use `float` or `int` to set the time in seconds permitted for cached responses to be reused before requesting a new one.
                 - Use `True` to force validation, or `False` to deactivate it.
+            service_tier (str | None):
+                Choose a service preference:
+                - `None`: Keep the endpoint's defaults without sending a service preference.
+                - "price": Prefer lower cost.
+                - "latency": Prefer a faster initial response.
+                - "throughput": Prefer faster token generation.
+                Support depends on the provider, model, and account. vLLM ignores this setting.
+                Speed preferences opt into premium tiers where available and may cost more.
+                The distinction between "latency" and "throughput" applies only to OpenRouter.
             choices (int):
                 Must be at least `1`.
                 Number of assistant responses generated (>= 1):

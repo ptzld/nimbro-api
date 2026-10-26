@@ -1925,3 +1925,170 @@ def test_100_vllm_tool_use_choices_stream():
         return "AIS endpoint is not hosting any models."
     model = models[-1]
     return _tool_use_choices(endpoint="AIS", model=model, choices=2, reasoning_effort="none", timeout_read=60, timeout_completion=60)
+
+# service tiers
+
+def _service_tier_completion(**kwargs):
+    assert_log(expression='service_tier' in kwargs, message="Expected setting 'service_tier' to be provided by test definition.")
+    kwargs['parser'] = []
+    kwargs['max_tokens'] = 256
+    client = ChatCompletions(kwargs)
+
+    success, message, completion = client.prompt(text="Reply with OK.", response_type="text")
+    assert_type_value(obj=success, type_or_value=bool, name="success")
+    assert_type_value(obj=message, type_or_value=str, name="message")
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=completion, type_or_value=dict, name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs', 'reasoning'], mode="whitelist", name="completion")
+    assert_keys(obj=completion, keys=['usage', 'text', 'logs'], mode="required", name="completion")
+    assert_type_value(obj=completion['usage'], type_or_value=dict, name="usage in completion")
+    assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
+    assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
+    assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
+    assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
+    for i, log in enumerate(completion['logs']):
+        assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
+
+def test_101_openrouter_service_tier_none():
+    return _service_tier_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier=None)
+
+def test_102_openrouter_service_tier_none_stream():
+    return _service_tier_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier=None)
+
+def test_103_openai_service_tier_none():
+    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier=None)
+
+def test_104_openai_service_tier_none_stream():
+    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier=None)
+
+def test_105_mistral_service_tier_none():
+    return _service_tier_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier=None)
+
+def test_106_mistral_service_tier_none_stream():
+    return _service_tier_completion(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier=None)
+
+def test_107_vllm_service_tier_none():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _service_tier_completion(stream=False, endpoint="AIS", model=model, reasoning_effort="none", service_tier=None, timeout_read=60, timeout_completion=60)
+
+def test_108_vllm_service_tier_none_stream():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _service_tier_completion(stream=True, endpoint="AIS", model=model, reasoning_effort="none", service_tier=None, timeout_read=60, timeout_completion=60)
+
+def test_109_openrouter_service_tier_price():
+    return _service_tier_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier="price")
+
+def test_110_openrouter_service_tier_price_stream():
+    return _service_tier_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier="price")
+
+def test_111_openai_service_tier_price():
+    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="price", timeout_read=900, timeout_completion=900)
+
+def test_112_openai_service_tier_price_stream():
+    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="price", timeout_read=900, timeout_completion=900, timeout_chunk_first=900, timeout_chunk_next=60)
+
+def test_113_mistral_service_tier_price():
+    return _service_tier_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier="price")
+
+def test_114_mistral_service_tier_price_stream():
+    return _service_tier_completion(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier="price")
+
+def test_115_vllm_service_tier_price():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _service_tier_completion(stream=False, endpoint="AIS", model=model, reasoning_effort="none", service_tier="price", timeout_read=60, timeout_completion=60)
+
+def test_116_vllm_service_tier_price_stream():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _service_tier_completion(stream=True, endpoint="AIS", model=model, reasoning_effort="none", service_tier="price", timeout_read=60, timeout_completion=60)
+
+def test_117_openrouter_service_tier_latency():
+    return _service_tier_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier="latency")
+
+def test_118_openrouter_service_tier_latency_stream():
+    return _service_tier_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier="latency")
+
+def test_119_openai_service_tier_latency():
+    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="latency")
+
+def test_120_openai_service_tier_latency_stream():
+    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="latency")
+
+def test_121_mistral_service_tier_latency():
+    return _service_tier_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier="latency")
+
+def test_122_mistral_service_tier_latency_stream():
+    return _service_tier_completion(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier="latency")
+
+def test_123_vllm_service_tier_latency():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _service_tier_completion(stream=False, endpoint="AIS", model=model, reasoning_effort="none", service_tier="latency", timeout_read=60, timeout_completion=60)
+
+def test_124_vllm_service_tier_latency_stream():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _service_tier_completion(stream=True, endpoint="AIS", model=model, reasoning_effort="none", service_tier="latency", timeout_read=60, timeout_completion=60)
+
+def test_125_openrouter_service_tier_throughput():
+    return _service_tier_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier="throughput")
+
+def test_126_openrouter_service_tier_throughput_stream():
+    return _service_tier_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier="throughput")
+
+def test_127_openai_service_tier_throughput():
+    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="throughput")
+
+def test_128_openai_service_tier_throughput_stream():
+    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="throughput")
+
+def test_129_mistral_service_tier_throughput():
+    return _service_tier_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier="throughput")
+
+def test_130_mistral_service_tier_throughput_stream():
+    return _service_tier_completion(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier="throughput")
+
+def test_131_vllm_service_tier_throughput():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _service_tier_completion(stream=False, endpoint="AIS", model=model, reasoning_effort="none", service_tier="throughput", timeout_read=60, timeout_completion=60)
+
+def test_132_vllm_service_tier_throughput_stream():
+    success, message, models = ChatCompletions(endpoint="AIS").get_models()
+    assert_log(expression=success, message=message)
+    assert_type_value(obj=models, type_or_value=list, name="models")
+    if len(models) == 0:
+        return "AIS endpoint is not hosting any models."
+    model = models[-1]
+    return _service_tier_completion(stream=True, endpoint="AIS", model=model, reasoning_effort="none", service_tier="throughput", timeout_read=60, timeout_completion=60)

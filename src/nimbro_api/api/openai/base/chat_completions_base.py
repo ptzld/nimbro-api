@@ -136,6 +136,9 @@ class ChatCompletionsBase(ClientBase):
                 message=f"Expected setting 'validate_model' provided as '{type(settings['validate_model']).__name__}' to be non-negative but got '{settings['validate_model']}'."
             )
 
+        # service_tier
+        assert_type_value(obj=settings['service_tier'], type_or_value=[None, "price", "latency", "throughput"], name="setting 'service_tier'")
+
         # choices
         assert_type_value(obj=settings['choices'], type_or_value=int, name="setting 'choices'")
         assert_log(
@@ -1204,10 +1207,11 @@ class ChatCompletionsBase(ClientBase):
                     'frequency_penalty': self._settings['frequency_penalty'],
                     'response_format': self.response_format,
                     # 'verbosity': "medium",
-                    # 'service_tier': "fast",
                     'n': self._settings['choices'],
                     'stream': self._settings['stream']
                 }
+                if self._settings['service_tier'] is not None:
+                    data['service_tier'] = "flex" if self._settings['service_tier'] == "price" else "priority"
                 if self._settings['reasoning_effort'] != "":
                     data['reasoning_effort'] = self._settings['reasoning_effort']
                 if len(self.tools) == 0:
@@ -1232,6 +1236,8 @@ class ChatCompletionsBase(ClientBase):
                     'n': self._settings['choices'],
                     'stream': self._settings['stream']
                 }
+                if self._settings['service_tier'] is not None:
+                    data['service_tier'] = "standard_only" if self._settings['service_tier'] == "price" else "auto"
                 if self._settings['reasoning_effort'] != "":
                     data['reasoning_effort'] = self._settings['reasoning_effort']
                 if len(self.tools) > 0:
@@ -1248,12 +1254,15 @@ class ChatCompletionsBase(ClientBase):
                     'presence_penalty': self._settings['presence_penalty'],
                     'frequency_penalty': self._settings['frequency_penalty'],
                     'response_format': self.response_format,
-                    # 'provider': {
-                    #     'sort': "latency"
-                    # },
                     'n': self._settings['choices'],
                     'stream': self._settings['stream']
                 }
+                if self._settings['service_tier'] is not None:
+                    data['provider'] = {
+                        'sort': self._settings['service_tier']
+                    }
+                    if self._settings['service_tier'] != "price":
+                        data['service_tier'] = "ultrafast"
                 if self._settings['reasoning_effort'] != "":
                     data['reasoning'] = {
                         'effort': self._settings['reasoning_effort'],
