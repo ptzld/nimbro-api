@@ -339,6 +339,17 @@ class ChatCompletions(Client):
                 - bool: `True` if the operation succeeded, `False` otherwise.
                 - str: A descriptive message about the operation result.
                 - dict | None: A dictionary containing the assistant response(s) as well as 'logs', 'usage' and possibly other items, or `None` if not successful.
+                    The 'usage' dictionary normalizes the provider's reported token counts:
+                    - 'tokens_input': Total input tokens, including media and cached input.
+                    - 'tokens_input_cached': Cached subset of input tokens.
+                    - 'tokens_input_uncached': Input minus cached tokens, assuming zero cached tokens when cache usage is unavailable.
+                    - 'tokens_output': Total output tokens across generated choices, including reasoning and media.
+                    - 'tokens_output_reasoning': Reasoning subset of output tokens.
+                    - 'tokens_total': Reported total tokens.
+                    Each token field is a non-negative integer (`int`) or `None` when unavailable; reported zeros are preserved.
+                    Missing or invalid reported counts emit warnings and remain `None`; processing continues.
+                    Subsets must not be added to the totals again. Counts describe the provider request, not the
+                    stored context after edits or removal of temporary correction messages.
         Notes:
             - With setting 'choices' set to 1, any valid assistant response is automatically added to the context window, allowing `prompt()` alone to implement a chat-style client.
             - With setting 'choices' set to 1, the generated assistant response is returned at the top-level of the returned dictionary (keys 'text', 'tools', 'reasoning', etc.).

@@ -893,15 +893,7 @@ class ChatCompletionsBase(ClientBase):
                             )
 
                         elif chunk['code'] == "USAGE":
-                            assert isinstance(chunk['content'], dict), f"Expected chunk content '{chunk['content']}' to be of type 'dict' but got '{type(chunk['content']).__name__}'."
-                            if 'prompt_tokens' not in chunk['content']:
-                                logs.append("Ignoring received usage message that misses expected key 'prompt_tokens'.")
-                                self._logger.warn(logs[-1])
-                            elif 'completion_tokens' not in chunk['content']:
-                                logs.append("Ignoring received usage message that misses expected key 'completion_tokens'.")
-                                self._logger.warn(logs[-1])
-                            else:
-                                usage = self.save_usage(chunk=chunk, stamp_start=datetime_start)
+                            usage = self.save_usage(chunk=chunk, stamp_start=datetime_start, logs=logs)
 
                         elif chunk['code'] == "ALL_CHUNKS_RECEIVED":
                             n = self._settings['choices']
@@ -1581,10 +1573,46 @@ class ChatCompletionsBase(ClientBase):
 
         self._logger.debug("Completion thread finished.")
 
-    def save_usage(self, chunk, stamp_start):
+    def save_usage(self, chunk, stamp_start, logs=None):
         stamp_stop = datetime.datetime.now(datetime.timezone.utc)
 
-        usage = {}
+        def read_count(key, *fallbacks):
+            for path in (key,) + fallbacks:
+                value = chunk['content']
+                parts = path.split('.')
+                for i, part in enumerate(parts):
+                    if not isinstance(value, dict):
+                        location = '.'.join(parts[:i])
+                        message = f"Expected a dictionary for key '{location}' in usage but got '{type(value).__name__}'."
+                        if logs is not None:
+                            logs.append(message)
+                        self._logger.warn(message)
+                        return None
+                    if part not in value:
+                        break
+                    value = value[part]
+                else:
+                    if type(value) is not int or value < 0:
+                        message = f"Expected a non-negative integer for key '{path}' in usage but got '{format_obj(value)}' of type '{type(value).__name__}'."
+                        if logs is not None:
+                            logs.append(message)
+                        self._logger.warn(message)
+                        return None
+                    return value
+            message = f"Received usage message that misses expected key '{key}'."
+            if logs is not None:
+                logs.append(message)
+            self._logger.warn(message)
+            return None
+
+        usage = {
+            'tokens_input': None,
+            'tokens_input_cached': None,
+            'tokens_input_uncached': None,
+            'tokens_output': None,
+            'tokens_output_reasoning': None,
+            'tokens_total': None
+        }
         # usage['api_type'] = "completions"
         # usage['api_endpoint'] = self._settings['endpoint']
         # usage['model_name'] = self._settings['model']
@@ -1593,16 +1621,35 @@ class ChatCompletionsBase(ClientBase):
         usage['duration'] = (stamp_stop - stamp_start).total_seconds()
 
         if chunk is not None:
-            # Ignoring everything other than 'prompt_tokens', 'cached_tokens', and 'completion_tokens' until model providers agree on a standard to deal with reasoning/audio/image tokens.
-            if chunk['content']['prompt_tokens'] > 0:
-                usage['tokens_input_uncached'] = chunk['content']['prompt_tokens']
-            if 'prompt_tokens_details' in chunk['content'] and chunk['content']['prompt_tokens_details'] is None:
-                del chunk['content']['prompt_tokens_details']
-            cashed = chunk['content'].get('prompt_tokens_details', {}).get('cached_tokens', 0)
-            if cashed > 0:
-                usage['tokens_input_cached'] = cashed
-            if chunk['content']['completion_tokens'] > 0:
-                usage['tokens_output'] = chunk['content']['completion_tokens']
+            data = chunk['content']
+            if not isinstance(data, dict):
+                message = f"Expected usage to be a dictionary but got '{type(data).__name__}'."
+                if logs is not None:
+                    logs.append(message)
+                self._logger.warn(message)
+            else:
+                usage['tokens_input'] = read_count('prompt_tokens')
+                if self._endpoint['api_flavor'] == "mistral":
+                    usage['tokens_input_cached'] = read_count('prompt_tokens_details.cached_tokens', 'prompt_token_details.cached_tokens', 'num_cached_tokens')
+                else:
+                    usage['tokens_input_cached'] = read_count('prompt_tokens_details.cached_tokens')
+                usage['tokens_output'] = read_count('completion_tokens')
+                usage['tokens_output_reasoning'] = read_count('completion_tokens_details.reasoning_tokens')
+                usage['tokens_total'] = read_count('total_tokens')
+                if usage['tokens_input'] is not None:
+                    if usage['tokens_input_cached'] is not None and usage['tokens_input_cached'] > usage['tokens_input']:
+                        message = f"Expected cached input tokens to be at most '{usage['tokens_input']}' but got '{usage['tokens_input_cached']}'."
+                        if logs is not None:
+                            logs.append(message)
+                        self._logger.warn(message)
+                        usage['tokens_input_cached'] = None
+                    usage['tokens_input_uncached'] = usage['tokens_input'] - (usage['tokens_input_cached'] or 0)
+                if usage['tokens_output'] is not None and usage['tokens_output_reasoning'] is not None and usage['tokens_output_reasoning'] > usage['tokens_output']:
+                    message = f"Expected reasoning output tokens to be at most '{usage['tokens_output']}' but got '{usage['tokens_output_reasoning']}'."
+                    if logs is not None:
+                        logs.append(message)
+                    self._logger.warn(message)
+                    usage['tokens_output_reasoning'] = None
 
             # def clean_dict(d):
             #     cleaned = {}
@@ -2073,12 +2120,12 @@ class ChatCompletionsBase(ClientBase):
                 else:
                     raise RuntimeError
 
-                if 'tokens_output' in usage:
+                if usage['tokens_output'] is not None:
                     logs.append(f"Generated {type_str}-completion with '{usage['tokens_output']}' token{'' if usage['tokens_output'] == 1 else 's'} in '{usage['duration']:.3f}s'{correction_str}.")
                 else:
                     logs.append(f"Generated {type_str}-completion in '{usage['duration']:.3f}s'{correction_str}.")
             else:
-                if 'tokens_output' in usage:
+                if usage['tokens_output'] is not None:
                     logs.append(f"Generated '{n}' completions with '{usage['tokens_output']}' token{'' if usage['tokens_output'] == 1 else 's'} in '{usage['duration']:.3f}s'{correction_str}.")
                 else:
                     logs.append(f"Generated '{n}' completions in '{usage['duration']:.3f}s'{correction_str}.")
