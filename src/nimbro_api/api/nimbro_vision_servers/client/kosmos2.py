@@ -80,6 +80,7 @@ class Kosmos2(Client):
                 - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url', 'key_type', and 'key_value'.
                 - The value of 'key_type' must be either "environment" or "plain".
                 - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
+                - Use 'key_type'="plain" and 'key_value'="" for an unauthenticated server.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
                 Pass an endpoint definition (`dict`) with the additional key 'name' (a string containing a non-whitespace character) to automatically add/update the setting 'endpoints' and select it.

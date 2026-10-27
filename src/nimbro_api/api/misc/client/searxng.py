@@ -7,7 +7,9 @@ default_settings = {
     'message_results': True,
     'endpoints': {
         'localhost': {
-            'api_url': "http://localhost:8080/search"
+            'api_url': "http://localhost:8080/search",
+            'key_type': "plain",
+            'key_value': ""
         }
     },
     'endpoint': "localhost",
@@ -68,8 +70,10 @@ class SearXNG(Client):
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
                 - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
-                - Each endpoint must be a dictionary (`dict`), with the required key 'api_url' and no other keys.
-                - The value of 'api_url' must be a non-empty string (`str`) giving the complete search URL, such as "https://example.org/search".
+                - Each endpoint must be a dictionary (`dict`), with the required keys 'api_url', 'key_type', and 'key_value'.
+                - The value of 'key_type' must be either "environment" or "plain".
+                - All values must be non-empty strings (`str`), except 'key_value', which may be empty.
+                - Use 'key_type'="plain" and 'key_value'="" for an unauthenticated server.
             endpoint (str | dict):
                 Name of the defined endpoint to be used from the list of keys in setting 'endpoints'.
                 Pass an endpoint definition (`dict`) with the additional key 'name' (a string containing a non-whitespace character) to automatically add/update the setting 'endpoints' and select it.
@@ -126,6 +130,27 @@ class SearXNG(Client):
                 - str: A descriptive message about the operation result.
         """
         return self._base.wrap(0, self._base.set_settings, settings, **kwargs)
+
+    def get_api_key(self, **kwargs):
+        """
+        Obtain the API key for the 'endpoint' currently set.
+
+        Args:
+            **kwargs:
+                All settings (see `get_settings()`) can also be configured via keyword arguments from here.
+                Additionally, special keyword arguments can be passed to `wrap()`:
+                    persist (bool):
+                        If `True`, settings applied via keyword arguments are not reverted after termination. Defaults to `False`.
+                    mute (bool):
+                        If `True`, all logs emitted by this function are muted. Defaults to `False`.
+
+        Returns:
+            tuple[bool, str, str | None]: A tuple containing:
+                - bool: `True` if the operation succeeded, `False` otherwise.
+                - str: A descriptive message about the operation result.
+                - str | None: The API key for the 'endpoint' currently set, or `None` if not successful.
+        """
+        return self._base.wrap(1, self._base.get_api_key, **kwargs)
 
     def search(self, query, page=1, **kwargs):
         """

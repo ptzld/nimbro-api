@@ -4,13 +4,14 @@ import time
 import httpx
 
 from nimbro_api.client import ClientBase
-from nimbro_api.utility.api import validate_endpoint, get_request
-from nimbro_api.utility.misc import assert_type_value, assert_keys, assert_log
+from nimbro_api.utility.api import get_api_key, validate_endpoint, get_request
+from nimbro_api.utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log
 
 class SearXNGBase(ClientBase):
 
     def __init__(self, settings, default_settings, **kwargs):
         super().__init__(settings=settings, default_settings=default_settings, **kwargs)
+        self.get_api_key = get_api_key.__get__(self)
         self._logger.debug(f"Initialized '{type(self).__name__}' object.")
         self._initialized = True
 
@@ -26,11 +27,11 @@ class SearXNGBase(ClientBase):
         for endpoint in settings['endpoints']:
             assert_type_value(obj=endpoint, type_or_value=str, name="endpoint name in setting 'endpoints'")
             assert_log(expression=len(endpoint.strip()) > 0, message=f"Expected a nonempty, non-whitespace endpoint name in setting 'endpoints' but got '{endpoint}'.")
-            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=False, require_name=False, allow_models=False, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
+            validate_endpoint(endpoint=settings['endpoints'][endpoint], flavors=None, require_key=True, require_name=False, allow_models=False, setting_name=f"endpoint '{endpoint}' in setting 'endpoints'")
 
         # endpoint
         if isinstance(settings['endpoint'], dict):
-            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=False, require_name=True, allow_models=False, setting_name="endpoint provided through setting 'endpoint'")
+            validate_endpoint(endpoint=settings['endpoint'], flavors=None, require_key=True, require_name=True, allow_models=False, setting_name="endpoint provided through setting 'endpoint'")
             settings['endpoints'][settings['endpoint']['name']] = settings['endpoint']
             settings['endpoint'] = settings['endpoint']['name']
             del settings['endpoints'][settings['endpoint']]['name']
@@ -78,13 +79,21 @@ class SearXNGBase(ClientBase):
         assert_type_value(obj=page, type_or_value=int, name="argument 'page'")
         assert_log(expression=page > 0, message=f"Expected argument 'page' to be positive but got '{page}'.")
 
+        # retrieve API key
+        success, message, api_key = self.get_api_key()
+        if not success:
+            raise UnrecoverableError(message)
+
         # construct payload
         headers = {
             'Accept': "application/json",
             'Content-Type': "application/json",
+            'Authorization': f"Bearer {api_key}",
             'HTTP-Referer': "https://github.com/ptzld/nimbro-api",
             'X-Title': "NimbRo API"
         }
+        if api_key == "":
+            del headers['Authorization']
         data = {
             'q': query,
             'pageno': page,
