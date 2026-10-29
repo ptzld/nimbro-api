@@ -35,7 +35,7 @@ import threading
 import traceback
 import importlib.util
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import DEFAULT, patch
 
 import nimbro_api
 
@@ -209,6 +209,22 @@ def _test_client(module, name):
     assert_log(expression=not success and "Hook failure." in message and result_payload is payload, message="Expected a normalized hook failure preserving the payload.")
     assert_log(expression=client.get_settings() == settings, message="Expected settings restoration after hook failure.")
     assert_log(expression=not base._lock_api.locked() and not base._lock_settings.locked() and not base._logger._bypass, message="Expected wrapper cleanup after hook failure.")
+
+    # inline endpoints and dotted nested overrides restore exactly
+    if isinstance(settings.get('endpoint'), dict):
+        registry = client.get_settings('endpoints')
+        endpoint = {**settings['endpoint'], 'name': "temporary endpoint"}
+        definition = {key: value for key, value in endpoint.items() if key != "name"}
+        for overrides in [{'endpoint': endpoint}, {'endpoints.temporary endpoint': definition}]:
+            success, message, active = base.wrap(1, lambda: (True, "Temporary settings.", client.get_settings('endpoints')), **overrides)
+            assert_log(expression=success and active != registry, message=message)
+            assert_log(expression=client.get_settings() == settings and client.get_settings('endpoints') == registry, message="Expected exact restoration of endpoint selection and registry.")
+
+    # emergency restoration remains available if normal restoration raises
+    with patch.object(base, 'set_settings', wraps=base.set_settings, side_effect=[DEFAULT, UnrecoverableError("Restoration failure."), DEFAULT]) as restore:
+        success, message, result_payload = base.wrap(1, operation, logger_name="temporary")
+    assert_log(expression=not success and result_payload is payload and restore.call_count == 3, message="Expected emergency restoration after normal restoration failed.")
+    assert_log(expression=client.get_settings() == settings and not base._lock_settings.locked() and not base._lock_api.locked(), message="Expected settings and locks restored after a restoration failure.")
 
     # retry hook boolean validation
     with patch.object(base, '_retry_allowed', return_value=1):

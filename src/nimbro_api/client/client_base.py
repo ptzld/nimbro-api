@@ -393,11 +393,16 @@ class ClientBase:
                 self._logger.debug(f"Wrapping '{function.__name__}()' with '{retry}' retr{'y' if retry == 1 else 'ies'}.")
 
             if len(kwargs) > 0 and function.__name__ != "set_settings":
-                settings = self.get_settings(name=None)
+                with self._lock_settings:
+                    settings = copy.deepcopy(self._settings)
                 for kwarg in copy.deepcopy(kwargs):
                     if kwarg in settings and settings[kwarg] == kwargs[kwarg]:
                         kwargs.pop(kwarg)
                 if len(kwargs) > 0:
+                    keys = {key.split(".", 1)[0] for key in kwargs}
+                    if keys.intersection({'endpoint', 'endpoints'}) and {'endpoint', 'endpoints'}.issubset(settings):
+                        keys.update({'endpoint', 'endpoints'})
+                    settings = {key: value for key, value in settings.items() if key in keys}
                     stage = 0
                 else:
                     stage = 1
@@ -622,8 +627,6 @@ class ClientBase:
 
                 if stage == 2:
                     # revert settings
-                    state['settings'] = None
-                    settings = {key: settings[key] for key in kwargs}
                     try:
                         success, message = self.set_settings(settings=settings, mode="revert")
                     except BaseException as e:
@@ -671,6 +674,7 @@ class ClientBase:
                             success = False
                             message = f"Expected 'set_settings()' to return a tuple where the second element is of type 'str' but got '{type(message).__name__}'."
                         if success:
+                            state['settings'] = None
                             self._logger.debug(f"Reverted '{num_overwritten_settings}' temporarily overwritten setting{'' if num_overwritten_settings == 1 else 's'}: {overwritten_settings} - {message}")
                             if response[0]:
                                 if attempt == 1:
@@ -990,7 +994,10 @@ class ClientBase:
             if self._settings.keys() != self._default_settings.keys():
                 raise RuntimeError("Unexpected mismatch between keys of settings and default settings.")
             self._walk_settings(self._settings, settings, mode=mode, tense="present")
-            if mode != "reset":
+            if mode == "revert":
+                # Restore complete saved values without retaining temporary nested keys.
+                settings = {**self._settings, **settings}
+            elif mode != "reset":
                 settings = update_dict(old_dict=self._settings, new_dict=settings)
         else:
             assert_log(expression=self._settings == {}, message="Expected internal settings to be empty before initializing.")
