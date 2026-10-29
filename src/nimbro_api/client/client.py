@@ -37,6 +37,8 @@ class Client:
             default_settings = {
                 'logger_severity': None,
                 'logger_name': "Client",
+                'logger_wrap_cutoff': None,
+                'logger_wrap_failure_prefix': True,
                 'retry': 2
             }
         self._base = client_base(settings=settings, default_settings=default_settings, **kwargs)
@@ -55,6 +57,12 @@ class Client:
                 Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log for identifying this object.
+            logger_wrap_cutoff (int | None):
+                Maximum visible message body length in wrapper result and retry logs, excluding prefixes. Longer bodies end with "...".
+                Use `0` to suppress result logs and retain only retry prefixes. Use `None` to apply no restriction.
+            logger_wrap_failure_prefix (bool):
+                Include function and attempt information before ordinary failure messages logged by the wrapper.
+                Use `False` to log only the operation message.
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
                 - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.

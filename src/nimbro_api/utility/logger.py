@@ -5,7 +5,7 @@ import datetime
 import threading
 
 import nimbro_api
-from .misc import escape, assert_type_value, assert_keys, assert_log, print_lines, update_dict
+from .misc import escape, assert_type_value, assert_keys, assert_log, print_lines, update_dict, visible_len, split_visible
 
 lock = threading.Lock()
 
@@ -78,7 +78,7 @@ class Logger:
     def _get_effective_name(self):
         return self._settings['name']
 
-    def _log(self, method, text, *, once=False, skip_first=False, throttle=None, suffix=None, core_settings=None):
+    def _log(self, method, text, *, once=False, skip_first=False, throttle=None, suffix=None, cutoff=None, core_settings=None):
         """
         Internal logging method applying filters and thread safety.
 
@@ -95,6 +95,10 @@ class Logger:
                 Minimum interval in seconds between logs for this call-site. Defaults to `None`.
             suffix (str | None, optional):
                 Optional string appended to the log prefix. Defaults to `None`.
+            cutoff (int | None, optional):
+                Positive visible message character limit, before appending "...".
+                Preserves ANSI escape sequences and leaves the original text unchanged.
+                Use `None` to apply no restriction. Defaults to `None`.
             core_settings (dict | None, optional):
                 Global process-wide configuration settings.
                 If not provided, they are pulled from the `nimbro_api` module. Defaults to `None`.
@@ -119,6 +123,9 @@ class Logger:
             return False
 
         # parse arguments
+        assert_type_value(obj=cutoff, type_or_value=[int, None], name="argument 'cutoff'")
+        if cutoff is not None:
+            assert_log(expression=cutoff > 0, message=f"Expected argument 'cutoff' to be positive but got '{cutoff}'.")
         assert_type_value(obj=method, type_or_value=list(self._method_severity.keys()), name="argument 'method'")
         assert_type_value(obj=once, type_or_value=bool, name="argument 'once'")
         assert_type_value(obj=skip_first, type_or_value=bool, name="argument 'skip_first'")
@@ -186,6 +193,8 @@ class Logger:
             else:
                 prefix_next_lines = " " * len(prefix_first_line)
 
+            if cutoff is not None and visible_len(text_str) > cutoff:
+                text_str = split_visible(text_str, cutoff)[0] + "..." + escape['end']
             print_lines(
                 string=text_str,
                 prefix_first_line=prefix_first_line,

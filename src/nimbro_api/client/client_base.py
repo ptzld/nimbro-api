@@ -4,7 +4,7 @@ import threading
 import traceback
 
 from ..utility.logger import Logger
-from ..utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log, update_dict, format_obj
+from ..utility.misc import UnrecoverableError, assert_type_value, assert_keys, assert_log, update_dict, format_obj, visible_len
 
 class ClientBase:
     """
@@ -96,6 +96,70 @@ class ClientBase:
     def _create_logger(self, settings, *, core_settings=None):
         return Logger(settings=settings, core_settings=core_settings)
 
+    def _wrap_start(self, function, args):
+        """
+        Capture per-call state after muting, before settings application and retries.
+
+        Args:
+            function (callable):
+                The wrapped implementation function.
+            args (tuple):
+                The operation arguments before settings processing.
+
+        Returns:
+            object: State passed to `_wrap_finish()`.
+
+        Notes:
+            Hooks run under the API lock, including during initialization of partially
+            initialized subclasses. They must not invoke wrapped operations on this client.
+        """
+        return None
+
+    def _retry_allowed(self, function, response):
+        """
+        Decide whether a validated unsuccessful operation may be repeated.
+
+        Args:
+            function (callable):
+                The wrapped implementation function.
+            response (tuple):
+                The validated unsuccessful operation response.
+
+        Returns:
+            bool: Whether to permit another operation attempt.
+
+        Notes:
+            Called only when the retry count permits another attempt.
+            Settings application/restoration retries do not use this hook.
+            The locking and initialization restrictions of `_wrap_start()` apply.
+        """
+        return True
+
+    def _wrap_finish(self, function, response, operation_response, state):
+        """
+        Finalize payloads after operation logging and settings restoration.
+
+        Args:
+            function (callable):
+                The wrapped implementation function.
+            response (tuple):
+                The wrapper response, possibly reporting a wrapper failure.
+            operation_response (tuple | None):
+                The last validated operation response, or `None` if unavailable.
+            state (object):
+                State returned by `_wrap_start()`.
+
+        Returns:
+            tuple: A response of the same length, preserving the success flag and message.
+
+        Notes:
+            Operation-outcome logs precede finalization and may be followed by a wrapper
+            failure diagnostic. Ordinary hook failures preserve available payloads.
+            Called only after `_wrap_start()` succeeds. The locking and initialization
+            restrictions of `_wrap_start()` apply.
+        """
+        return response
+
     def wrap(self, responses, function, *args, **kwargs):
         """
         Wrap an implementation function to provide a standardized execution
@@ -140,9 +204,60 @@ class ClientBase:
             except Exception:
                 self._logger.debug("Waiting for API lock in 'wrap()'.")
         self._lock_api.acquire()
+        state = {'operation_response': None, 'started': False, 'settings': None, 'logger_settings': None}
+        bypass = self._logger._bypass
+        response = False, "Wrapper did not complete.", *[None] * (responses if type(responses) is int and responses >= 0 else 0)
+        try:
+            try:
+                try:
+                    response = self._wrap_execute(responses, function, args, kwargs, state)
+                finally:
+                    if self._lock_settings_transient:
+                        self._lock_settings_transient = False
+                        self._lock_settings.release()
+                    if state['settings'] is not None:
+                        try:
+                            success, message = self.set_settings(state['settings'], mode="revert")
+                            assert_log(expression=success, message=message)
+                        finally:
+                            if self._lock_settings_transient:
+                                self._lock_settings_transient = False
+                                self._lock_settings.release()
+                    if state['logger_settings'] is not None:
+                        self._logger.set_settings(settings=state['logger_settings'])
+            except Exception:
+                response = self._wrap_failure(state['operation_response'] or response)
+            if state['started']:
+                try:
+                    result = self._wrap_finish(function, response, state['operation_response'], state['hook'])
+                    assert_type_value(obj=result, type_or_value=tuple, name="return value of '_wrap_finish()'")
+                    assert_log(expression=len(result) == len(response), message=f"Expected '_wrap_finish()' to return a tuple of length '{len(response)}' but got '{len(result)}'.")
+                    assert_type_value(obj=result[0], type_or_value=bool, name="success flag from '_wrap_finish()'")
+                    assert_type_value(obj=result[1], type_or_value=str, name="message from '_wrap_finish()'")
+                    assert_log(expression=result[:2] == response[:2], message="Expected '_wrap_finish()' to preserve the wrapper success flag and message.")
+                    response = result
+                except Exception:
+                    response = self._wrap_failure(response)
+            if not self._initialized and not response[0]:
+                raise UnrecoverableError(response[1])
+            return response
+        finally:
+            if self._lock_settings_transient:
+                self._lock_settings_transient = False
+                self._lock_settings.release()
+            self._logger._bypass = bypass
+            self._lock_api.release()
 
+    def _wrap_failure(self, response):
+        message = f"Unexpected error in wrapper or hook:\n{traceback.format_exc()}"
+        try:
+            self._logger.fatal(message)
+        except Exception:
+            pass # A broken logger must not prevent failure reporting or cleanup.
+        return False, message, *response[2:]
+
+    def _wrap_execute(self, responses, function, args, kwargs, state):
         skip = False
-        toggle_bypass = False
         raise_error = False
         reset_logger = False
 
@@ -177,7 +292,6 @@ class ClientBase:
                 if isinstance(mute, bool):
                     if mute and not self._logger._bypass:
                         self._logger._bypass = True
-                        toggle_bypass = True
                 else:
                     if self._initialized:
                         message = f"Failed in '{function.__name__}()': Expected argument 'mute' to be of type 'bool' but got '{type(mute).__name__}'."
@@ -188,6 +302,10 @@ class ClientBase:
                         self._logger.fatal(message)
                         raise_error = True
                     skip = True
+
+        if not skip:
+            state['hook'] = self._wrap_start(function, args)
+            state['started'] = True
 
         if not skip:
             if function.__name__ == "set_settings":
@@ -222,6 +340,7 @@ class ClientBase:
                             logger_settings_target['severity'] = args[0]['logger_severity']
                     if logger_settings_reset != logger_settings_target:
                         reset_logger = True
+                        state['logger_settings'] = logger_settings_reset
                         self._logger.debug("Fast tracking logger settings within 'set_settings()'.")
                         self._logger.set_settings(settings=logger_settings_target)
             elif len(kwargs) == 0:
@@ -293,6 +412,8 @@ class ClientBase:
 
                 if stage == 0:
                     # apply keyword arguments as settings
+                    if not persist:
+                        state['settings'] = settings
                     try:
                         success, message = self.set_settings(settings=kwargs, mode="set" if persist else "temp")
                     except BaseException as e:
@@ -343,11 +464,14 @@ class ClientBase:
                             self._logger.debug(f"Temporarily overwritten '{num_overwritten_settings}' setting{'' if num_overwritten_settings == 1 else 's'}: {overwritten_settings} - {message}")
                         else:
                             if retry == -1 or retry >= attempt:
+                                cutoff = self._settings.get('logger_wrap_cutoff')
+                                suffix = "." if cutoff == 0 else f": {message}"
                                 if retry == -1:
-                                    self._logger.warn(f"Retrying to {'' if persist else 'temporarily '}overwrite settings before '{function.__name__}()' until successful after attempt '{attempt}': {message}")
+                                    prefix = f"Retrying to {'' if persist else 'temporarily '}overwrite settings before '{function.__name__}()' until successful after attempt '{attempt}'"
                                 else:
                                     retries_left = retry - attempt + 1
-                                    self._logger.warn(f"Retrying to {'' if persist else 'temporarily '}overwrite settings before '{function.__name__}()' for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}': {message}")
+                                    prefix = f"Retrying to {'' if persist else 'temporarily '}overwrite settings before '{function.__name__}()' for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}'"
+                                self._logger.warn(prefix + suffix, cutoff=cutoff + visible_len(prefix + ": ") if cutoff else None)
                                 attempt += 1
                             else:
                                 if self._initialized:
@@ -420,9 +544,12 @@ class ClientBase:
                         else:
                             valid = True
                         if valid:
+                            state['operation_response'] = response
                             if response[0]:
-                                if function.__name__ != "set_settings":
-                                    self._logger.info(f"{response[1]}")
+                                if function.__name__ == "set_settings":
+                                    state['logger_settings'] = None
+                                if function.__name__ != "set_settings" and self._settings.get('logger_wrap_cutoff') != 0:
+                                    self._logger.info(f"{response[1]}", cutoff=self._settings.get('logger_wrap_cutoff'))
                                 if persist:
                                     if attempt == 1:
                                         message = f"Succeeded '{function.__name__}()'."
@@ -432,20 +559,38 @@ class ClientBase:
                                     break
                                 stage += 1
                             else:
-                                if retry == -1 or retry >= attempt:
+                                retry_allowed = retry == -1 or retry >= attempt
+                                if retry_allowed:
+                                    try:
+                                        retry_allowed = self._retry_allowed(function, response)
+                                        assert_type_value(obj=retry_allowed, type_or_value=bool, name="return value of '_retry_allowed()'")
+                                    except Exception:
+                                        message = f"Unexpected error deciding whether to retry '{function.__name__}()':\n{traceback.format_exc()}"
+                                        self._logger.fatal(message)
+                                        response = False, message, *response[2:]
+                                        retry_allowed = False
+                                if retry_allowed:
+                                    cutoff = self._settings.get('logger_wrap_cutoff')
+                                    suffix = "." if cutoff == 0 else f": {response[1]}"
                                     if retry == -1:
-                                        self._logger.warn(f"Retrying '{function.__name__}()' until successful after attempt '{attempt}': {response[1]}")
+                                        prefix = f"Retrying '{function.__name__}()' until successful after attempt '{attempt}'"
                                     else:
                                         retries_left = retry - attempt + 1
-                                        self._logger.warn(f"Retrying '{function.__name__}()' for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}': {response[1]}")
+                                        prefix = f"Retrying '{function.__name__}()' for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}'"
+                                    self._logger.warn(prefix + suffix, cutoff=cutoff + visible_len(prefix + ": ") if cutoff else None)
                                     attempt += 1
                                 else:
                                     if self._initialized:
-                                        if attempt == 1:
-                                            message = f"Failed in '{function.__name__}()': {response[1]}"
+                                        if not self._settings['logger_wrap_failure_prefix'] and response is state['operation_response']:
+                                            prefix = ""
+                                        elif attempt == 1:
+                                            prefix = f"Failed in '{function.__name__}()': "
                                         else:
-                                            message = f"Failed in '{function.__name__}()' after attempt '{attempt}': {response[1]}"
-                                        self._logger.error(message)
+                                            prefix = f"Failed in '{function.__name__}()' after attempt '{attempt}': "
+                                        message = prefix + response[1]
+                                        cutoff = self._settings.get('logger_wrap_cutoff')
+                                        if cutoff != 0:
+                                            self._logger.error(message, cutoff=cutoff + visible_len(prefix) if cutoff else None)
                                         # response = False, message, *[None] * responses
                                     else:
                                         if attempt == 1:
@@ -477,6 +622,7 @@ class ClientBase:
 
                 if stage == 2:
                     # revert settings
+                    state['settings'] = None
                     settings = {key: settings[key] for key in kwargs}
                     try:
                         success, message = self.set_settings(settings=settings, mode="revert")
@@ -539,11 +685,14 @@ class ClientBase:
                             self._logger.debug(message)
                             break
                         if retry == -1 or retry >= attempt:
+                            cutoff = self._settings.get('logger_wrap_cutoff')
+                            suffix = "." if cutoff == 0 else f": {message}"
                             if retry == -1:
-                                self._logger.warn(f"Retrying to revert settings after '{function.__name__}()' until successful after attempt '{attempt}': {message}")
+                                prefix = f"Retrying to revert settings after '{function.__name__}()' until successful after attempt '{attempt}'"
                             else:
                                 retries_left = retry - attempt + 1
-                                self._logger.warn(f"Retrying to revert settings after '{function.__name__}()' for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}': {message}")
+                                prefix = f"Retrying to revert settings after '{function.__name__}()' for '{retries_left}' more time{'' if retries_left == 1 else 's'} after failed attempt '{attempt}'"
+                            self._logger.warn(prefix + suffix, cutoff=cutoff + visible_len(prefix + ": ") if cutoff else None)
                             attempt += 1
                         else:
                             if self._initialized:
@@ -566,13 +715,7 @@ class ClientBase:
         if reset_logger and (raise_error or not response[0]):
             self._logger.debug("Resetting fast tracked logger settings after failure in 'set_settings()'.")
             self._logger.set_settings(settings=logger_settings_reset)
-        if toggle_bypass:
-            self._logger._bypass = not self._logger._bypass
-
-        if self._lock_settings_transient:
-            self._lock_settings_transient = False
-            self._lock_settings.release()
-        self._lock_api.release()
+        state['logger_settings'] = None
         if raise_error:
             raise UnrecoverableError(message)
         return response
@@ -863,6 +1006,10 @@ class ClientBase:
         else:
             assert_type_value(obj=settings['logger_severity'], type_or_value=[0, 10, 20, 30, 40, 50, "debug", "info", "warn", "error", "fatal", "off", None], name="setting 'logger_severity'")
         assert_type_value(obj=settings['logger_name'], type_or_value=[str, None], name="setting 'logger_name'")
+        assert_type_value(obj=settings['logger_wrap_cutoff'], type_or_value=[int, None], name="setting 'logger_wrap_cutoff'")
+        if settings['logger_wrap_cutoff'] is not None:
+            assert_log(expression=settings['logger_wrap_cutoff'] >= 0, message=f"Expected setting 'logger_wrap_cutoff' to be non-negative but got '{settings['logger_wrap_cutoff']}'.")
+        assert_type_value(obj=settings['logger_wrap_failure_prefix'], type_or_value=bool, name="setting 'logger_wrap_failure_prefix'")
         assert_type_value(obj=settings['retry'], type_or_value=[int, bool], name="setting 'retry'")
         if not isinstance(settings['retry'], bool):
             assert_log(

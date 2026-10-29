@@ -35,6 +35,7 @@ import threading
 import traceback
 import importlib.util
 from pathlib import Path
+from unittest.mock import patch
 
 import nimbro_api
 
@@ -176,6 +177,72 @@ def _test_client(module, name):
     assert_log(expression='logger_name' in settings, message="Expected to find setting 'logger_name'.")
     assert_type_value(obj=settings['logger_name'], type_or_value=str, name="setting 'logger_name'")
     assert_log(expression='retry' in settings, message="Expected to find setting 'retry'.")
+
+    # cutoff validation
+    assert_type_value(obj=settings['logger_wrap_cutoff'], type_or_value=None, name="setting 'logger_wrap_cutoff'")
+    for value in [True, False, -1, 1.0, "500"]:
+        success, message = client.set_settings(logger_wrap_cutoff=value)
+        assert_log(expression=not success, message=f"Expected rejection of setting 'logger_wrap_cutoff', but got {value!r}.")
+    for value in [0, 1, 500, None]:
+        success, message = client.set_settings(logger_wrap_cutoff=value)
+        assert_log(expression=success, message=message)
+
+    # hook ordering
+    base = client._base
+    payload = {'value': 1}
+    def operation():
+        return True, "Complete operation message.", payload
+
+    events = []
+    with patch.object(base, '_wrap_start', side_effect=lambda *args: events.append("start")), \
+            patch.object(base._logger, 'info', side_effect=lambda message, *, cutoff: events.append("log")) as log, \
+            patch.object(base, '_wrap_finish', side_effect=lambda function, response, operation_response, state: (events.append("finish") or response)) as finish:
+        response = base.wrap(1, operation)
+    assert_log(expression=response == operation(), message="Expected the complete operation response.")
+    assert_log(expression=events == ["start", "log", "finish"], message=f"Unexpected hook order '{events}'.")
+    assert_log(expression=log.call_args.kwargs == {'cutoff': None}, message="Expected the cutoff keyword even when truncation is disabled.")
+    assert_log(expression=finish.call_args.args[2] == response, message="Expected the validated operation response in the finish hook.")
+
+    # hook failure cleanup
+    with patch.object(base, '_wrap_finish', side_effect=ValueError("Hook failure.")):
+        success, message, result_payload = base.wrap(1, operation, mute=True, logger_name="temporary")
+    assert_log(expression=not success and "Hook failure." in message and result_payload is payload, message="Expected a normalized hook failure preserving the payload.")
+    assert_log(expression=client.get_settings() == settings, message="Expected settings restoration after hook failure.")
+    assert_log(expression=not base._lock_api.locked() and not base._lock_settings.locked() and not base._logger._bypass, message="Expected wrapper cleanup after hook failure.")
+
+    # retry hook boolean validation
+    with patch.object(base, '_retry_allowed', return_value=1):
+        response = base.wrap(1, lambda: (False, "Operation failure.", payload), retry=1, mute=True)
+    assert_log(expression=not response[0] and "_retry_allowed()" in response[1], message="Expected rejection of a non-boolean retry decision.")
+
+    # ANSI-safe truncation preserves returned messages
+    logger = Logger(severity="info", core_settings={**nimbro_api.get_settings(), 'logger_severity': "info", 'logger_mute': False, 'logger_line_length': 0})
+    with patch.object(base, '_logger', logger), patch('nimbro_api.utility.logger.print_lines') as printer:
+        response = base.wrap(1, lambda: (True, escape['red'] + "abcdef" + escape['end'], payload), logger_wrap_cutoff=3)
+    assert_log(expression=response[1] == escape['red'] + "abcdef" + escape['end'], message="Expected the full colored return message.")
+    assert_log(expression=any(call.kwargs['string'] == escape['red'] + "abc..." + escape['end'] for call in printer.call_args_list), message="Expected ANSI-safe visible-character truncation.")
+
+    # ordinary failure prefix selection
+    for prefix, retry in [(True, 0), (False, 0), (True, 1), (False, 1)]:
+        with patch.object(base._logger, 'error') as error, patch.object(base._logger, 'warn') as warn:
+            response = base.wrap(1, lambda: (False, "Failure body.", payload), retry=retry, logger_wrap_failure_prefix=prefix, logger_wrap_cutoff=3)
+        expected = ("Failed in '<lambda>()'" + (" after attempt '2'" if retry else "") + ": " if prefix else "") + "Failure body."
+        assert_log(expression=error.call_args.args[0] == expected and response == (False, "Failure body.", payload), message="Expected the selected failure prefix without changing the response.")
+        assert_log(expression=error.call_args.kwargs['cutoff'] == 3 + len(expected) - len("Failure body."), message="Expected the failure prefix not to consume the body cutoff.")
+        if retry:
+            assert_log(expression=warn.call_args.kwargs['cutoff'] == 3 + len(warn.call_args.args[0]) - len("Failure body."), message="Expected the retry prefix not to consume the body cutoff.")
+
+    # zero cutoff suppresses results but retains retry prefixes
+    success, message = client.set_settings(logger_wrap_cutoff=0)
+    assert_log(expression=success, message=message)
+    with patch.object(base._logger, 'info') as info, patch.object(base._logger, 'error') as error, patch.object(base._logger, 'warn') as warn:
+        response = base.wrap(1, operation)
+        assert_log(expression=response == operation() and not info.called, message="Expected zero cutoff to suppress success logs without changing the response.")
+        response = base.wrap(1, lambda: (False, "Failure body.", payload), retry=1)
+        assert_log(expression=response == (False, "Failure body.", payload) and not error.called, message="Expected zero cutoff to suppress failure logs without changing the response.")
+        assert_log(expression=warn.call_count == 1 and "Failure body." not in warn.call_args.args[0] and "attempt '1'." in warn.call_args.args[0] and warn.call_args.kwargs == {'cutoff': None}, message="Expected a complete retry prefix without the failure body.")
+    success, message = client.set_settings(logger_wrap_cutoff=None)
+    assert_log(expression=success, message=message)
 
     # set_settings
     success, message = client.set_settings(retry=True)

@@ -4,6 +4,8 @@ from ..client import Client
 default_settings = {
     'logger_severity': "info",
     'logger_name': "nimbro_api",
+    'logger_wrap_cutoff': None,
+    'logger_wrap_failure_prefix': True,
     'logger_mute': False,
     'logger_line_length': None,
     'logger_multi_line_prefix': False,
@@ -54,6 +56,12 @@ class Core(Client):
                 Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str).
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
+            logger_wrap_cutoff (int | None):
+                Maximum visible message body length in wrapper result and retry logs, excluding prefixes. Longer bodies end with "...".
+                Use `0` to suppress result logs and retain only retry prefixes. Use `None` to apply no restriction.
+            logger_wrap_failure_prefix (bool):
+                Include function and attempt information before ordinary failure messages logged by the wrapper.
+                Use `False` to log only the operation message.
             logger_mute (bool):
                 Mute all logs emitted within this process regardless of any individual 'logger_severity' setting.
             logger_line_length (int | None):

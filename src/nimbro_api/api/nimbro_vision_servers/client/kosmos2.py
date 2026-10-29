@@ -4,6 +4,8 @@ from ..base.kosmos2_base import Kosmos2Base
 default_settings = {
     'logger_severity': None,
     'logger_name': "Kosmos2",
+    'logger_wrap_cutoff': None,
+    'logger_wrap_failure_prefix': True,
     'message_results': True,
     'endpoints': {
         'AIS': {
@@ -72,6 +74,12 @@ class Kosmos2(Client):
                 Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
+            logger_wrap_cutoff (int | None):
+                Maximum visible message body length in wrapper result and retry logs, excluding prefixes. Longer bodies end with "...".
+                Use `0` to suppress result logs and retain only retry prefixes. Use `None` to apply no restriction.
+            logger_wrap_failure_prefix (bool):
+                Include function and attempt information before ordinary failure messages logged by the wrapper.
+                Use `False` to log only the operation message.
             message_results (bool):
                 Include results in successful response messages when using `get_response()`.
             endpoints (dict):

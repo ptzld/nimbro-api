@@ -4,6 +4,8 @@ from ..base.chat_completions_base import ChatCompletionsBase
 default_settings = {
     'logger_severity': None,
     'logger_name': "ChatCompletions",
+    'logger_wrap_cutoff': None,
+    'logger_wrap_failure_prefix': True,
     'logger_info_prompt': True,
     'logger_info_prompt_threshold': 500,
     'logger_info_prompt_cutoff': 0,
@@ -114,6 +116,12 @@ class ChatCompletions(Client):
                 Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log identifying this object.
+            logger_wrap_cutoff (int | None):
+                Maximum visible message body length in wrapper result and retry logs, excluding prefixes. Longer bodies end with "...".
+                Use `0` to suppress result logs and retain only retry prefixes. Use `None` to apply no restriction.
+            logger_wrap_failure_prefix (bool):
+                Include function and attempt information before ordinary failure messages logged by the wrapper.
+                Use `False` to log only the operation message.
             logger_info_prompt (bool | int):
                 Logger behavior regarding an INFO log with each call of `prompt()`:
                 - Use `False` to deactivate this log.
