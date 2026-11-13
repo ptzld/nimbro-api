@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=77.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "nimbro-api"
-version = "0.2.5"
+version = "0.2.6"
 description = "A robust and flexible framework for API clients in Python"
 readme = "README.md"
 license = "BSD-3-Clause"

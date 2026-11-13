@@ -77,7 +77,8 @@ class _HttpxStreamResponse:
         if self._iterator is None:
             self._iterator = self._response.aiter_bytes()
 
-        return await anext(self._iterator)
+        # The anext() built-in is unavailable on Python 3.9.
+        return await self._iterator.__anext__() # pylint: disable=unnecessary-dunder-call
 
     def _next(self):
         with self._lock:
@@ -102,6 +103,28 @@ class _HttpxStreamResponse:
             with self._lock:
                 if self._future is future:
                     self._future = None
+
+    def iter_chunks(self):
+        """
+        Yield available response bytes without waiting to fill a fixed-size buffer.
+
+        Notes:
+            - Chunk boundaries need not align with UTF-8 characters, SSE events, or network packets.
+              Callers must handle text decoding and event framing across chunks.
+            - Use the response as a context manager or explicitly call `close()` to ensure
+              prompt cleanup when stopping iteration early.
+        """
+        try:
+            if self._buffer:
+                chunk, self._buffer = self._buffer, b""
+                yield chunk
+            while not self._finished:
+                try:
+                    yield self._next()
+                except StopIteration:
+                    break
+        finally:
+            self.close()
 
     def iter_content(self, chunk_size=1):
         if not isinstance(chunk_size, int) or chunk_size <= 0:

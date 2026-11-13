@@ -177,10 +177,10 @@ def test_004_openrouter_text_completions_stream():
     return _text_completions(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
 def test_005_openai_text_completions():
-    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
+    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none")
 
 def test_006_openai_text_completions_stream():
-    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
+    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none")
 
 def test_007_mistral_text_completions():
     return _text_completions(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
@@ -353,10 +353,10 @@ def test_012_openrouter_text_completions_choices_stream():
     return "NOT SUPPORTED."
 
 def test_013_openai_text_completions_choices():
-    return _text_completions_choices(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", choices=2, reasoning_effort="none")
+    return _text_completions_choices(stream=False, endpoint="OpenAI", model="gpt-6-luna", choices=2, reasoning_effort="none")
 
 def test_014_openai_text_completions_choices_stream():
-    return _text_completions_choices(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", choices=2, reasoning_effort="none")
+    return _text_completions_choices(stream=True, endpoint="OpenAI", model="gpt-6-luna", choices=2, reasoning_effort="none")
 
 def test_015_mistral_text_completions_choices():
     return _text_completions_choices(stream=False, endpoint="Mistral", model="mistral-small-latest", choices=2, reasoning_effort="none")
@@ -430,10 +430,10 @@ def test_020_openrouter_json_stream():
     return _text_completions(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
 def test_021_openai_json():
-    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
+    return _text_completions(stream=False, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none")
 
 def test_022_openai_json_stream():
-    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
+    return _text_completions(stream=True, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none")
 
 def test_023_mistral_json():
     return _text_completions(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
@@ -477,7 +477,11 @@ def _reasoning_completion(**kwargs):
     #     "Reason through the constraints internally, check your result, and output "
     #     "only the final integer. Do not reveal calculations or intermediate steps."
     # )
-    text = "Tell me a joke about computer scientists. Briefly reason which one you should use and then only respond with the joke."
+    text = (
+        "Find the smallest positive integer n such that n modulo 97 is 37, n modulo 101 is 63, "
+        "and n modulo 103 is 79. Verify all constraints and prove minimality internally. "
+        "Output only the final integer in digits without separators."
+    )
     success, message, completion = client.prompt(text=text)
 
     assert_type_value(obj=success, type_or_value=bool, name="success")
@@ -489,6 +493,7 @@ def _reasoning_completion(**kwargs):
     assert_type_value(obj=completion['text'], type_or_value=str, name="text in completion")
     assert_log(expression=len(completion['text']) > 0, message="Expected text in completion to be a non-empty string.")
     assert_type_value(obj=completion['reasoning'], type_or_value=str, name="reasoning in completion")
+    assert_log(expression=completion['text'].strip() == "758674", message=f"Expected arithmetic answer '758674' but got '{completion['text']}'.")
     assert_log(expression=len(completion['reasoning']) > 0, message="Expected reasoning in completion to be a non-empty string.")
     assert_type_value(obj=completion['logs'], type_or_value=list, name="logs in completion")
     assert_log(expression=len(completion['logs']) > 0, message="Expected to find at least one log in completion.")
@@ -496,10 +501,10 @@ def _reasoning_completion(**kwargs):
         assert_type_value(obj=log, type_or_value=str, name=f"log '{i}' in completion logs")
 
 def test_027_openrouter_reasoning():
-    return _reasoning_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="high")
+    return _reasoning_completion(stream=False, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="low")
 
 def test_028_openrouter_reasoning_stream():
-    return _reasoning_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="high")
+    return _reasoning_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="low")
 
 def test_029_openai_reasoning():
     return "NOT SUPPORTED."
@@ -508,10 +513,10 @@ def test_030_openai_reasoning_stream():
     return "NOT SUPPORTED."
 
 def test_031_mistral_reasoning():
-    return _reasoning_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="high")
+    return _reasoning_completion(stream=False, endpoint="Mistral", model="mistral-large-latest", reasoning_effort="low")
 
 def test_032_mistral_reasoning_stream():
-    return _reasoning_completion(stream=True, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="high")
+    return _reasoning_completion(stream=True, endpoint="Mistral", model="mistral-large-latest", reasoning_effort="low")
 
 def test_033_vllm_reasoning():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
@@ -520,7 +525,7 @@ def test_033_vllm_reasoning():
     if len(models) == 0:
         return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _reasoning_completion(stream=False, endpoint="AIS", model=model, reasoning_effort="high", timeout_read=60, timeout_completion=60)
+    return _reasoning_completion(stream=False, endpoint="AIS", model=model, reasoning_effort="low", timeout_read=60, timeout_completion=60)
 
 def test_034_vllm_reasoning_stream():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
@@ -529,7 +534,7 @@ def test_034_vllm_reasoning_stream():
     if len(models) == 0:
         return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _reasoning_completion(stream=True, endpoint="AIS", model=model, reasoning_effort="high", timeout_read=60, timeout_completion=60)
+    return _reasoning_completion(stream=True, endpoint="AIS", model=model, reasoning_effort="low", timeout_read=60, timeout_completion=60)
 
 # reasoning choices
 
@@ -551,7 +556,11 @@ def _reasoning_choices_completion(**kwargs):
     #     "Reason through the constraints internally, check your result, and output "
     #     "only the final integer. Do not reveal calculations or intermediate steps."
     # )
-    text = "Tell me a joke about computer scientists. Briefly reason which one you should use and then only respond with the joke."
+    text = (
+        "Find the smallest positive integer n such that n modulo 97 is 37, n modulo 101 is 63, "
+        "and n modulo 103 is 79. Verify all constraints and prove minimality internally. "
+        "Output only the final integer in digits without separators."
+    )
     success, message, completion = client.prompt(text=text)
 
     assert_type_value(obj=success, type_or_value=bool, name="success")
@@ -569,6 +578,7 @@ def _reasoning_choices_completion(**kwargs):
         if 'text' in choice:
             assert_type_value(obj=choice['text'], type_or_value=str, name=f"text in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
             assert_log(expression=len(choice['text']) > 0, message=f"Expected text in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
+            assert_log(expression=choice['text'].strip() == "758674", message=f"Expected arithmetic answer '758674' in choice '{i + 1}' but got '{choice['text']}'.")
         if 'reasoning' in choice:
             assert_type_value(obj=choice['reasoning'], type_or_value=str, name=f"reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion")
             assert_log(expression=len(choice['reasoning']) > 0, message=f"Expected reasoning in choice '{i + 1}' of '{len(completion['choices'])}' in completion to be a non-empty string.")
@@ -595,10 +605,10 @@ def test_038_openai_reasoning_choices_stream():
     return "NOT SUPPORTED."
 
 def test_039_mistral_reasoning_choices():
-    return _reasoning_choices_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", choices=2, reasoning_effort="high")
+    return _reasoning_choices_completion(stream=False, endpoint="Mistral", model="mistral-large-latest", choices=2, reasoning_effort="low")
 
 def test_040_mistral_reasoning_choices_stream():
-    return _reasoning_choices_completion(stream=True, endpoint="Mistral", model="mistral-small-latest", choices=2, reasoning_effort="high")
+    return _reasoning_choices_completion(stream=True, endpoint="Mistral", model="mistral-large-latest", choices=2, reasoning_effort="low")
 
 def test_041_vllm_reasoning_choices():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
@@ -607,7 +617,7 @@ def test_041_vllm_reasoning_choices():
     if len(models) == 0:
         return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _reasoning_choices_completion(stream=False, endpoint="AIS", model=model, choices=2, reasoning_effort="high", timeout_read=60, timeout_completion=60)
+    return _reasoning_choices_completion(stream=False, endpoint="AIS", model=model, choices=2, reasoning_effort="low", timeout_read=60, timeout_completion=60)
 
 def test_042_vllm_reasoning_choices_stream():
     success, message, models = ChatCompletions(endpoint="AIS").get_models()
@@ -616,7 +626,7 @@ def test_042_vllm_reasoning_choices_stream():
     if len(models) == 0:
         return "AIS endpoint is not hosting any models."
     model = models[-1]
-    return _reasoning_choices_completion(stream=True, endpoint="AIS", model=model, choices=2, reasoning_effort="high", timeout_read=60, timeout_completion=60)
+    return _reasoning_choices_completion(stream=True, endpoint="AIS", model=model, choices=2, reasoning_effort="low", timeout_read=60, timeout_completion=60)
 
 # interrupt
 
@@ -728,7 +738,7 @@ def test_049_openrouter_image_file_input():
     return _image_file_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
 def test_050_openai_image_file_input():
-    return _image_file_input(endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
+    return _image_file_input(endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none")
 
 def test_051_mistral_image_file_input():
     return _image_file_input(endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
@@ -772,7 +782,7 @@ def test_053_openrouter_image_url_input():
     return _image_url_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
 def test_054_openai_image_url_input():
-    return _image_url_input(endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
+    return _image_url_input(endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none")
 
 def test_055_mistral_image_url_input():
     return _image_url_input(endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
@@ -977,7 +987,7 @@ def test_073_openrouter_file_local_input():
     return _file_local_input(endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
 def test_074_openai_file_local_input():
-    return _file_local_input(endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none")
+    return _file_local_input(endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none")
 
 def test_075_mistral_file_local_input():
     return "NOT SUPPORTED."
@@ -1665,10 +1675,10 @@ def test_086_openrouter_tool_use_stream():
     return _tool_use(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal")
 
 def test_087_openai_tool_use():
-    return _tool_use(stream=False, endpoint="OpenAI", model="gpt-5.2-2025-12-11", reasoning_effort="none")
+    return _tool_use(stream=False, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none")
 
 def test_088_openai_tool_use_stream():
-    return _tool_use(stream=True, endpoint="OpenAI", model="gpt-5.2-2025-12-11", reasoning_effort="none")
+    return _tool_use(stream=True, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none")
 
 def test_089_mistral_tool_use():
     return _tool_use(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none")
@@ -1897,7 +1907,7 @@ def test_094_openrouter_tool_use_choices_stream():
     return "NOT SUPPORTED."
 
 def test_095_openai_tool_use_choices():
-    return _tool_use_choices(stream=False, endpoint="OpenAI", model="gpt-5.2-2025-12-11", choices=2, reasoning_effort="none")
+    return _tool_use_choices(stream=False, endpoint="OpenAI", model="gpt-6-luna", choices=2, reasoning_effort="none")
 
 def test_096_openai_tool_use_choices_stream():
     return "NOT SUPPORTED."
@@ -1956,10 +1966,10 @@ def test_102_openrouter_service_tier_none_stream():
     return _service_tier_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier=None)
 
 def test_103_openai_service_tier_none():
-    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier=None)
+    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none", service_tier=None)
 
 def test_104_openai_service_tier_none_stream():
-    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier=None)
+    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none", service_tier=None)
 
 def test_105_mistral_service_tier_none():
     return _service_tier_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier=None)
@@ -1992,10 +2002,10 @@ def test_110_openrouter_service_tier_price_stream():
     return _service_tier_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier="price")
 
 def test_111_openai_service_tier_price():
-    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="price", timeout_read=900, timeout_completion=900)
+    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none", service_tier="price", timeout_read=900, timeout_completion=900)
 
 def test_112_openai_service_tier_price_stream():
-    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="price", timeout_read=900, timeout_completion=900, timeout_chunk_first=900, timeout_chunk_next=60)
+    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none", service_tier="price", timeout_read=900, timeout_completion=900, timeout_chunk_first=900, timeout_chunk_next=60)
 
 def test_113_mistral_service_tier_price():
     return _service_tier_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier="price")
@@ -2028,10 +2038,10 @@ def test_118_openrouter_service_tier_latency_stream():
     return _service_tier_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier="latency")
 
 def test_119_openai_service_tier_latency():
-    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="latency")
+    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none", service_tier="latency")
 
 def test_120_openai_service_tier_latency_stream():
-    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="latency")
+    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none", service_tier="latency")
 
 def test_121_mistral_service_tier_latency():
     return _service_tier_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier="latency")
@@ -2064,10 +2074,10 @@ def test_126_openrouter_service_tier_throughput_stream():
     return _service_tier_completion(stream=True, endpoint="OpenRouter", model="~google/gemini-flash-latest", reasoning_effort="minimal", service_tier="throughput")
 
 def test_127_openai_service_tier_throughput():
-    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="throughput")
+    return _service_tier_completion(stream=False, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none", service_tier="throughput")
 
 def test_128_openai_service_tier_throughput_stream():
-    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-5.6-luna", reasoning_effort="none", service_tier="throughput")
+    return _service_tier_completion(stream=True, endpoint="OpenAI", model="gpt-6-luna", reasoning_effort="none", service_tier="throughput")
 
 def test_129_mistral_service_tier_throughput():
     return _service_tier_completion(stream=False, endpoint="Mistral", model="mistral-small-latest", reasoning_effort="none", service_tier="throughput")

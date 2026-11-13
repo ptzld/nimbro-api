@@ -5,6 +5,7 @@ _CLIENTS = {
     'Classify': "classify",
     'Embeddings': "embeddings",
     'Images': "images",
+    'Responses': "responses",
     'Speech': "speech",
     'Transcriptions': "transcriptions",
     'Translations': "translations"

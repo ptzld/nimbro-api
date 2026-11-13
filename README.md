@@ -22,6 +22,7 @@
 | [nimbro_api.openai.Classify](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/classify.py) | [Classify](https://docs.vllm.ai/en/latest/models/pooling_models/classify) |
 | [nimbro_api.openai.Embeddings](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/embeddings.py) | [Embeddings](https://developers.openai.com/api/reference/resources/embeddings/methods/create) |
 | [nimbro_api.openai.Images](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/images.py) | [Images](https://developers.openai.com/api/reference/resources/images/methods/generate) |
+| [nimbro_api.openai.Responses](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/responses.py) | [Responses](https://developers.openai.com/api/reference/resources/responses/methods/create) |
 | [nimbro_api.openai.Speech](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/speech.py) | [Speech](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create) |
 | [nimbro_api.openai.Transcriptions](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/transcriptions.py) | [Transcriptions](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create) |
 | [nimbro_api.openai.Translations](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/translations.py) | [Translations](https://developers.openai.com/api/reference/resources/audio/subresources/translations/methods/create) |
@@ -83,6 +84,19 @@ import nimbro_api
 client = nimbro_api.openai.ChatCompletions(endpoint="OpenRouter", model="~google/gemini-flash-latest")
 success, message, response = client.prompt(text="Tell me a joke!")
 ```
+
+Use [Responses](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/responses.py) with local history and optional streaming:
+```python
+client = nimbro_api.openai.Responses(endpoint="OpenAI", model="gpt-6-luna")
+success, message, response = client.prompt("Remember the number 372.")
+
+success, message, response = client.prompt("What number did I give you?", stream=True)
+if success:
+    print(response['text'])
+    print(response['usage'])
+```
+
+`prompt()` retains local history and includes the full native response in its result. See the [client documentation](https://github.com/ptzld/nimbro-api/blob/main/src/nimbro_api/api/openai/client/responses.py) for provider setup, tool-use examples, structured output, media, service tiers, and compaction.
 
 ---
 

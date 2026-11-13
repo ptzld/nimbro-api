@@ -326,14 +326,24 @@ normalized or extracted result must match the public method's documented schema.
 
 ### Public Docstrings
 
+- Use the closest owning API as the documentation reference: clients for client
+  facades, utilities for utility functions. Copy exact wording for identical
+  contracts; preserve wording differences only when behavior differs.
+- Link to inherited or delegated contracts rather than restating them. Document
+  local arguments, extensions, constraints, and behavioral differences at their
+  owner.
 - Use triple double quotes on their own lines, including the opening delimiter.
   Start with a short summary, then a blank line before sections. The class
   introduces the API and its supported capabilities; the constructor says
   "Create a client implementing ..." and documents initialization.
 - Use the section order `Args`, `Settings` (on `get_settings()`), `Raises` when
   applicable, `Returns`, then `Notes`. Omit sections that do not apply.
-- Section headings end in `:`. Entries are indented four more spaces; their
-  descriptions another four. Use `name (type):` or `name (type, optional):`.
+- Section headings end in `:`. Entries are indented four more spaces. Under
+  `Args` and `Settings`, use `name (type):` or `name (type, optional):` and put
+  descriptions on the next line, indented four additional spaces. Under `Raises`
+  and `Returns`, put the description on the same line as the exception or return
+  type. Nested settings use `- name (type): Description.`, with indented
+  continuation lines as in `VlmGist.get_settings()`.
   `optional` describes an argument with a default, not merely one allowing `None`.
 - Use built-in type spellings, `|` for alternatives, and containers such as
   `list[str]` or `tuple[bool, str, dict | None]` in type descriptions.
@@ -350,10 +360,11 @@ normalized or extracted result must match the public method's documented schema.
 - Constructor/settings docstrings explain partial dictionaries, dotted keys,
   and the mutual exclusion with setting keyword arguments. Operational methods
   document setting overrides plus `persist` and `mute` under `**kwargs`.
-- `Returns` spells out the full tuple type followed by "A tuple containing:" and
-  a bullet for each element, in order. Describe payload structure and failure
-  values, not just "the result". Document raised exceptions only where they can
-  actually reach the caller; account for `wrap()` converting ordinary failures.
+- Tuple returns begin with `tuple[...]: A tuple containing:`, followed by
+  indented bullets for each element, in order. Spell out the full tuple type.
+  Describe payload structure and failure values, not just "the result".
+  Document raised exceptions only where they can actually reach the caller;
+  account for `wrap()` converting ordinary failures.
 - Describe accepted shapes, ranges, units, return structures, state changes,
   cache behavior, and media formats wherever applicable. Avoid boilerplate
   claims about models, caching, or conversions the client does not implement.

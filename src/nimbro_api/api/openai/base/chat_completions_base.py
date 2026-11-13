@@ -147,20 +147,22 @@ class ChatCompletionsBase(ClientBase):
         )
 
         # temperature
-        assert_type_value(obj=settings['temperature'], type_or_value=[float, int], name="setting 'temperature'")
-        assert_log(
-            expression=0.0 <= settings['temperature'] <= 1.5,
-            message=f"Expected setting 'temperature' to be between '0.0' and '1.5' (inclusive) but got '{settings['temperature']}'."
-        )
-        settings['temperature'] = float(settings['temperature'])
+        assert_type_value(obj=settings['temperature'], type_or_value=[float, int, None], name="setting 'temperature'")
+        if settings['temperature'] is not None:
+            assert_log(
+                expression=0.0 <= settings['temperature'] <= 2.0,
+                message=f"Expected setting 'temperature' to be between '0.0' and '2.0' (inclusive) but got '{settings['temperature']}'."
+            )
+            settings['temperature'] = float(settings['temperature'])
 
         # top_p
-        assert_type_value(obj=settings['top_p'], type_or_value=[float, int], name="setting 'top_p'")
-        assert_log(
-            expression=0.0 <= settings['top_p'] <= 2.0,
-            message=f"Expected setting 'top_p' to be between '0.0' and '+2.0' (inclusive) but got '{settings['top_p']}'."
-        )
-        settings['top_p'] = float(settings['top_p'])
+        assert_type_value(obj=settings['top_p'], type_or_value=[float, int, None], name="setting 'top_p'")
+        if settings['top_p'] is not None:
+            assert_log(
+                expression=0.0 <= settings['top_p'] <= 1.0,
+                message=f"Expected setting 'top_p' to be between '0.0' and '1.0' (inclusive) but got '{settings['top_p']}'."
+            )
+            settings['top_p'] = float(settings['top_p'])
 
         # max_tokens
         assert_type_value(obj=settings['max_tokens'], type_or_value=int, name="setting 'max_tokens'")
@@ -170,20 +172,22 @@ class ChatCompletionsBase(ClientBase):
         )
 
         # presence_penalty
-        assert_type_value(obj=settings['presence_penalty'], type_or_value=[float, int], name="setting 'presence_penalty'")
-        assert_log(
-            expression=-2.0 <= settings['presence_penalty'] <= 2.0,
-            message=f"Expected setting 'presence_penalty' to be between '-2.0' and '+2.0' (inclusive) but got '{settings['presence_penalty']}'."
-        )
-        settings['presence_penalty'] = float(settings['presence_penalty'])
+        assert_type_value(obj=settings['presence_penalty'], type_or_value=[float, int, None], name="setting 'presence_penalty'")
+        if settings['presence_penalty'] is not None:
+            assert_log(
+                expression=-2.0 <= settings['presence_penalty'] <= 2.0,
+                message=f"Expected setting 'presence_penalty' to be between '-2.0' and '+2.0' (inclusive) but got '{settings['presence_penalty']}'."
+            )
+            settings['presence_penalty'] = float(settings['presence_penalty'])
 
         # frequency_penalty
-        assert_type_value(obj=settings['frequency_penalty'], type_or_value=[float, int], name="setting 'frequency_penalty'")
-        assert_log(
-            expression=-2.0 <= settings['frequency_penalty'] <= 2.0,
-            message=f"Expected setting 'frequency_penalty' to be between '-2.0' and '+2.0' (inclusive) but got '{settings['frequency_penalty']}'."
-        )
-        settings['frequency_penalty'] = float(settings['frequency_penalty'])
+        assert_type_value(obj=settings['frequency_penalty'], type_or_value=[float, int, None], name="setting 'frequency_penalty'")
+        if settings['frequency_penalty'] is not None:
+            assert_log(
+                expression=-2.0 <= settings['frequency_penalty'] <= 2.0,
+                message=f"Expected setting 'frequency_penalty' to be between '-2.0' and '+2.0' (inclusive) but got '{settings['frequency_penalty']}'."
+            )
+            settings['frequency_penalty'] = float(settings['frequency_penalty'])
 
         # reasoning_effort
         assert_type_value(obj=settings['reasoning_effort'], type_or_value=str, name="setting 'reasoning_effort'")
@@ -1141,8 +1145,14 @@ class ChatCompletionsBase(ClientBase):
                         last += 1
                     contents = []
                     for j in range(first, last + 1, 1):
-                        for k in range(len(messages[j]['content'])):
-                            contents.append(messages[j]['content'][k])
+                        content = messages[j]['content']
+                        if isinstance(content, str):
+                            contents.append({
+                                'type': "text",
+                                'text': content
+                            })
+                        else:
+                            contents.extend(content)
                     self._logger.debug(f"Condensing '{len(contents)}' consecutive user messages ('{first}' to '{last}') into a single one.")
                     new_message = {'role': "user", 'content': contents}
                     messages = messages[: first] + [new_message] + messages[last + 1:]
@@ -1290,6 +1300,14 @@ class ChatCompletionsBase(ClientBase):
                 message = f"Undefined API flavor '{self._endpoint['api_flavor']}'."
                 pipe[1].send({'code': "ERROR", 'content': message})
                 return
+
+            if self._settings['temperature'] is None:
+                del data['temperature']
+            if self._settings['top_p'] is None:
+                del data['top_p']
+            for key in ['presence_penalty', 'frequency_penalty']:
+                if self._settings[key] is None:
+                    data.pop(key, None)
 
             completion = http_request(
                 "POST",
@@ -1576,11 +1594,13 @@ class ChatCompletionsBase(ClientBase):
     def save_usage(self, chunk, stamp_start, logs=None):
         stamp_stop = datetime.datetime.now(datetime.timezone.utc)
 
-        def read_count(key, *fallbacks):
+        def read_count(key, *fallbacks, optional=False):
             for path in (key,) + fallbacks:
                 value = chunk['content']
                 parts = path.split('.')
                 for i, part in enumerate(parts):
+                    if optional and value is None:
+                        break
                     if not isinstance(value, dict):
                         location = '.'.join(parts[:i])
                         message = f"Expected a dictionary for key '{location}' in usage but got '{type(value).__name__}'."
@@ -1592,6 +1612,8 @@ class ChatCompletionsBase(ClientBase):
                         break
                     value = value[part]
                 else:
+                    if optional and value is None:
+                        continue
                     if type(value) is not int or value < 0:
                         message = f"Expected a non-negative integer for key '{path}' in usage but got '{format_obj(value)}' of type '{type(value).__name__}'."
                         if logs is not None:
@@ -1599,6 +1621,8 @@ class ChatCompletionsBase(ClientBase):
                         self._logger.warn(message)
                         return None
                     return value
+            if optional:
+                return None
             message = f"Received usage message that misses expected key '{key}'."
             if logs is not None:
                 logs.append(message)
@@ -1630,11 +1654,11 @@ class ChatCompletionsBase(ClientBase):
             else:
                 usage['tokens_input'] = read_count('prompt_tokens')
                 if self._endpoint['api_flavor'] == "mistral":
-                    usage['tokens_input_cached'] = read_count('prompt_tokens_details.cached_tokens', 'prompt_token_details.cached_tokens', 'num_cached_tokens')
+                    usage['tokens_input_cached'] = read_count('prompt_tokens_details.cached_tokens', 'prompt_token_details.cached_tokens', 'num_cached_tokens', optional=True)
                 else:
-                    usage['tokens_input_cached'] = read_count('prompt_tokens_details.cached_tokens')
+                    usage['tokens_input_cached'] = read_count('prompt_tokens_details.cached_tokens', optional=True)
                 usage['tokens_output'] = read_count('completion_tokens')
-                usage['tokens_output_reasoning'] = read_count('completion_tokens_details.reasoning_tokens')
+                usage['tokens_output_reasoning'] = read_count('completion_tokens_details.reasoning_tokens', optional=True)
                 usage['tokens_total'] = read_count('total_tokens')
                 if usage['tokens_input'] is not None:
                     if usage['tokens_input_cached'] is not None and usage['tokens_input_cached'] > usage['tokens_input']:

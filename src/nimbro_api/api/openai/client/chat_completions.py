@@ -127,8 +127,8 @@ class ChatCompletions(Client):
                 - Use `False` to deactivate this log.
                 - Use `True` to log general info and all messages in context.
                 - Use 0 to log general info without any context messages.
-                - Use a positive `int` to restrict the number of context messages shown starting with the first.
-                - Use a negative `int` to restrict the number of context messages shown ending with the last.
+                - Use a positive `int` to restrict the number of context messages shown ending with the last.
+                - Use a negative `int` to restrict the number of context messages shown starting with the first.
             logger_info_prompt_threshold (int):
                 Number of characters above which content is shortened in prompt logs. Must be positive.
                 Text is shortened to this length, followed by an ellipsis. Media URLs/data use 'logger_info_prompt_cutoff' instead.
@@ -176,16 +176,16 @@ class ChatCompletions(Client):
                 Use >1 to generate multiple assistant responses:
                   - If valid, the generated assistant responses are returned behind the 'choices' key as a list of dictionaries (`list` of `dict` items with keys 'text', 'reasoning', 'tools', etc.).
                   - None of the generated completions are added to the managed context (use `set_context()`).
-            temperature (float | int):
-                Model temperature parameter (from 0.0 to 1.5).
-            top_p (float | int):
-                Model top_p parameter (from 0.0 to 2.0).
+            temperature (float | int | None):
+                Model temperature parameter (from 0.0 to 2.0 inclusive). Use `None` to omit the parameter.
+            top_p (float | int | None):
+                Model top_p parameter (from 0.0 to 1.0 inclusive). Use `None` to omit the parameter.
             max_tokens (int):
                 Maximum number of tokens generated per assistant response. Must be positive.
-            presence_penalty (float | int):
-                Model presence_penalty parameter (from -2.0 to +2.0).
-            frequency_penalty (float | int):
-                Model frequency_penalty parameter (from -2.0 to +2.0).
+            presence_penalty (float | int | None):
+                Model presence_penalty parameter (from -2.0 to +2.0 inclusive). Use `None` to omit the parameter.
+            frequency_penalty (float | int | None):
+                Model frequency_penalty parameter (from -2.0 to +2.0 inclusive). Use `None` to omit the parameter.
             reasoning_effort (str):
                 Model reasoning effort in ["", "none", "minimal", "low", "medium", "high", "xhigh", "max"].
                 Use an empty string to not pass this parameter explicitly and let the API choose a default instead.
@@ -356,7 +356,8 @@ class ChatCompletions(Client):
                     - 'tokens_output_reasoning': Reasoning subset of output tokens.
                     - 'tokens_total': Reported total tokens.
                     Each token field is a non-negative integer (`int`) or `None` when unavailable; reported zeros are preserved.
-                    Missing or invalid reported counts emit warnings and remain `None`; processing continues.
+                    Missing or null optional cached/reasoning details remain `None` without warnings.
+                    Missing primary counts or invalid reported counts emit warnings and remain `None`; processing continues.
                     Subsets must not be added to the totals again. Counts describe the provider request, not the
                     stored context after edits or removal of temporary correction messages.
         Notes:
