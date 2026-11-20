@@ -951,7 +951,7 @@ class ClientBase:
             self._logger.debug(f"{verbs[mode]} '{prefix}' from {from_str} to {to_str}.")
         else:
             verbs = {"set": "Set", "temp": "Temporarily set", "revert": "Reverted", "reset": "Reset"}
-            if prefix == "logger_mute":
+            if prefix == "logger_mute" or (mode in ("temp", "revert") and self._settings['logger_temporary_settings_debug']):
                 self._logger.debug(f"{verbs[mode]} '{prefix}' from {from_str} to {to_str}.")
             else:
                 self._logger.info(f"{verbs[mode]} '{prefix}' from {from_str} to {to_str}.")
@@ -1017,6 +1017,7 @@ class ClientBase:
         if settings['logger_wrap_cutoff'] is not None:
             assert_log(expression=settings['logger_wrap_cutoff'] >= 0, message=f"Expected setting 'logger_wrap_cutoff' to be non-negative but got '{settings['logger_wrap_cutoff']}'.")
         assert_type_value(obj=settings['logger_wrap_failure_prefix'], type_or_value=bool, name="setting 'logger_wrap_failure_prefix'")
+        assert_type_value(obj=settings['logger_temporary_settings_debug'], type_or_value=bool, name="setting 'logger_temporary_settings_debug'")
         assert_type_value(obj=settings['retry'], type_or_value=[int, bool], name="setting 'retry'")
         if not isinstance(settings['retry'], bool):
             assert_log(

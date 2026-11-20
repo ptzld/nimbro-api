@@ -9,6 +9,7 @@ default_settings = {
     'logger_name': "Embeddings",
     'logger_wrap_cutoff': None,
     'logger_wrap_failure_prefix': True,
+    'logger_temporary_settings_debug': False,
     'logger_info_requests': False,
     'logger_info_progress': True,
     'logger_info_cutoff': 100,
@@ -102,6 +103,9 @@ class Embeddings(Client):
             logger_wrap_failure_prefix (bool):
                 Include function and attempt information before ordinary failure messages logged by the wrapper.
                 Use `False` to log only the operation message.
+            logger_temporary_settings_debug (bool):
+                Log temporary setting changes and their reversions at DEBUG instead of INFO.
+                Explicit setting changes are unaffected.
             logger_info_requests (bool):
                 Emit an INFO log for every request sent within `get_embedding()`.
             logger_info_progress (bool):

@@ -6,6 +6,7 @@ default_settings = {
     'logger_name': "ChatCompletions",
     'logger_wrap_cutoff': None,
     'logger_wrap_failure_prefix': True,
+    'logger_temporary_settings_debug': False,
     'logger_info_prompt': True,
     'logger_info_prompt_threshold': 500,
     'logger_info_prompt_cutoff': 0,
@@ -122,6 +123,9 @@ class ChatCompletions(Client):
             logger_wrap_failure_prefix (bool):
                 Include function and attempt information before ordinary failure messages logged by the wrapper.
                 Use `False` to log only the operation message.
+            logger_temporary_settings_debug (bool):
+                Log temporary setting changes and their reversions at DEBUG instead of INFO.
+                Explicit setting changes are unaffected.
             logger_info_prompt (bool | int):
                 Logger behavior regarding an INFO log with each call of `prompt()`:
                 - Use `False` to deactivate this log.

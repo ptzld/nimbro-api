@@ -6,6 +6,7 @@ default_settings = {
     'logger_name': "SearXNG",
     'logger_wrap_cutoff': None,
     'logger_wrap_failure_prefix': True,
+    'logger_temporary_settings_debug': False,
     'message_results': True,
     'endpoints': {
         'localhost': {
@@ -72,6 +73,9 @@ class SearXNG(Client):
             logger_wrap_failure_prefix (bool):
                 Include function and attempt information before ordinary failure messages logged by the wrapper.
                 Use `False` to log only the operation message.
+            logger_temporary_settings_debug (bool):
+                Log temporary setting changes and their reversions at DEBUG instead of INFO.
+                Explicit setting changes are unaffected.
             message_results (bool):
                 Include formatted search results in successful response messages when using `search()`.
                 Does not change the returned response dictionary.

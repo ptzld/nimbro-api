@@ -39,6 +39,7 @@ class Client:
                 'logger_name': "Client",
                 'logger_wrap_cutoff': None,
                 'logger_wrap_failure_prefix': True,
+                'logger_temporary_settings_debug': False,
                 'retry': 2
             }
         self._base = client_base(settings=settings, default_settings=default_settings, **kwargs)
@@ -63,6 +64,9 @@ class Client:
             logger_wrap_failure_prefix (bool):
                 Include function and attempt information before ordinary failure messages logged by the wrapper.
                 Use `False` to log only the operation message.
+            logger_temporary_settings_debug (bool):
+                Log temporary setting changes and their reversions at DEBUG instead of INFO.
+                Explicit setting changes are unaffected.
             retry (bool | int):
                 Defines retry behavior in failure cases, if the cause is eligible for retry:
                 - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.

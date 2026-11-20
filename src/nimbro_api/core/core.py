@@ -6,6 +6,7 @@ default_settings = {
     'logger_name': "nimbro_api",
     'logger_wrap_cutoff': None,
     'logger_wrap_failure_prefix': True,
+    'logger_temporary_settings_debug': False,
     'logger_mute': False,
     'logger_line_length': None,
     'logger_multi_line_prefix': False,
@@ -62,6 +63,9 @@ class Core(Client):
             logger_wrap_failure_prefix (bool):
                 Include function and attempt information before ordinary failure messages logged by the wrapper.
                 Use `False` to log only the operation message.
+            logger_temporary_settings_debug (bool):
+                Log temporary setting changes and their reversions at DEBUG instead of INFO.
+                Explicit setting changes are unaffected.
             logger_mute (bool):
                 Mute all logs emitted within this process regardless of any individual 'logger_severity' setting.
             logger_line_length (int | None):

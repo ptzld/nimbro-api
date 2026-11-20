@@ -6,6 +6,7 @@ default_settings = {
     'logger_name': "VLM-GIST",
     'logger_wrap_cutoff': None,
     'logger_wrap_failure_prefix': True,
+    'logger_temporary_settings_debug': False,
     'message_process': True,
     'message_results': False,
     'include_image': False,
@@ -149,6 +150,9 @@ class VlmGist(Client):
             logger_wrap_failure_prefix (bool):
                 Include function and attempt information before ordinary failure messages logged by the wrapper.
                 Use `False` to log only the operation message.
+            logger_temporary_settings_debug (bool):
+                Log temporary setting changes and their reversions at DEBUG instead of INFO.
+                Explicit setting changes are unaffected.
             message_process (bool):
                 Emit an info log when starting to process an image.
             message_results (bool):

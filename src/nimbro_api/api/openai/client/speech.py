@@ -9,6 +9,7 @@ default_settings = {
     'logger_name': "Speech",
     'logger_wrap_cutoff': None,
     'logger_wrap_failure_prefix': True,
+    'logger_temporary_settings_debug': False,
     'endpoints': {
         'OpenAI': {
             'api_url': "https://api.openai.com/v1/audio/speech",
@@ -93,6 +94,9 @@ class Speech(Client):
             logger_wrap_failure_prefix (bool):
                 Include function and attempt information before ordinary failure messages logged by the wrapper.
                 Use `False` to log only the operation message.
+            logger_temporary_settings_debug (bool):
+                Log temporary setting changes and their reversions at DEBUG instead of INFO.
+                Explicit setting changes are unaffected.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
                 - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
