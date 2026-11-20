@@ -1961,7 +1961,7 @@ class ChatCompletionsBase(ClientBase):
             correction_messages[-1]['content'] = tool_call_is_valid_default_correction
         correction_messages.append({})
         correction_messages[-1]['role'] = "user"
-        correction_messages[-1]['content'] = "Your response is invalid. Please correct it based on the provided error messages and try again!"
+        correction_messages[-1]['content'] = "Your response is invalid and will be ignored. Please correct it based on the provided error messages and try again!"
 
         # test error cases
 
@@ -1995,7 +1995,7 @@ class ChatCompletionsBase(ClientBase):
         # error case: exceeding maximum number of tool-calls per response
         if self._settings['max_tool_calls'] is not None and len(tool_calls) > self._settings['max_tool_calls']:
             is_valid = False
-            logs.append(f"Completion contains '{len(tool_calls)}' tool-calls, but the maximum number of tool-calls allowed per completion is '{self._settings['max_tool_calls']}'.")
+            logs.append(f"Completion contains '{len(tool_calls)}' tool-calls ({[c['name'] for c in tool_calls]}), but the maximum number of tool-calls allowed per completion is '{self._settings['max_tool_calls']}'.")
             for i, message in enumerate(correction_messages):
                 if 'tool_call_id' in message:
                     correction_messages[i]['content'] = f"Your response must contain at most {self._settings['max_tool_calls']} tool-call{'' if self._settings['max_tool_calls'] == 1 else 's'}, but yours contains {len(tool_calls)} tool-calls. Please filter accordingly and try again!"
