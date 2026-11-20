@@ -1212,6 +1212,8 @@ class ChatCompletionsBase(ClientBase):
                     'n': self._settings['choices'],
                     'stream': self._settings['stream']
                 }
+                if data['n'] == 1:
+                    del data['n']
                 if self._settings['service_tier'] is not None:
                     data['service_tier'] = "flex" if self._settings['service_tier'] == "price" else "priority"
                 if self._settings['reasoning_effort'] != "":
