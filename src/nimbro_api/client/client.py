@@ -1,6 +1,15 @@
 from .client_base import ClientBase
 from ..utility.misc import assert_type_value, assert_log
 
+client_default_settings = {
+    'logger_severity': None,
+    'logger_name': "Client",
+    'logger_wrap_cutoff': None,
+    'logger_wrap_failure_prefix': True,
+    'logger_temporary_settings_debug': False,
+    'retry': 2
+}
+
 class Client:
     """
     This class serves as a container for all user-exposed API implementations
@@ -22,8 +31,8 @@ class Client:
                 Nested settings can be specified using dot-separated keys (e.g., "a.b.c" is equivalent to {"a": {"b": {"c": ...}}}).
                 Use `None` to initialize with default settings. Defaults to `None`.
             default_settings (dict | None, optional):
-                The default settings of this client.
-                Use `None` to use default settings. Defaults to `None`.
+                Client-specific additions and overrides to 'client_default_settings'.
+                Use `None` to inherit all shared defaults. Defaults to `None`.
             **kwargs:
                 All settings (see `get_settings()`) can also be initialized via keyword arguments.
                 When doing so, 'settings' must be `None` or an empty `dict`.
@@ -33,16 +42,11 @@ class Client:
         """
         assert_type_value(obj=client_base, type_or_value=type, name="argument 'client_base'")
         assert_log(expression=issubclass(client_base, ClientBase), message="Expected value of argument 'client_base' to be a subclass of 'ClientBase'.")
-        if default_settings is None:
-            default_settings = {
-                'logger_severity': None,
-                'logger_name': "Client",
-                'logger_wrap_cutoff': None,
-                'logger_wrap_failure_prefix': True,
-                'logger_temporary_settings_debug': False,
-                'retry': 2
-            }
-        self._base = client_base(settings=settings, default_settings=default_settings, **kwargs)
+        assert_type_value(obj=default_settings, type_or_value=[dict, None], name="argument 'default_settings'")
+        defaults = {} if default_settings is None else default_settings.copy()
+        for name, value in client_default_settings.items():
+            defaults.setdefault(name, value)
+        self._base = client_base(settings=settings, default_settings=defaults, **kwargs)
 
     def get_settings(self, name=None):
         """
@@ -53,9 +57,10 @@ class Client:
                 If provided, the one setting with this name is returned directly.
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
-        Settings: See the global dictionary for defaults.
-            logger_severity (str | None):
-                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
+        Settings:
+            logger_severity (str | int | None):
+                Logger severity for this client: "off" (`0`), "debug" (`10`), "info" (`20`),
+                "warn" (`30`), "error" (`40`), or "fatal" (`50`). Use `None` to adopt the process-wide severity.
             logger_name (str | None):
                 Logger name shown in each log for identifying this object.
             logger_wrap_cutoff (int | None):
@@ -79,7 +84,7 @@ class Client:
             object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
-            - Overwrite this function in the class inheriting from `Client` to provide documentation for all settings.
+            - See 'client_default_settings' for shared defaults. Subclasses document new settings and changed behavior.
             - For clients with endpoint settings, a full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)

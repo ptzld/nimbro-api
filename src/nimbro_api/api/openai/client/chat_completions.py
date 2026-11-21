@@ -2,11 +2,7 @@ from nimbro_api.client import Client
 from ..base.chat_completions_base import ChatCompletionsBase
 
 default_settings = {
-    'logger_severity': None,
     'logger_name': "ChatCompletions",
-    'logger_wrap_cutoff': None,
-    'logger_wrap_failure_prefix': True,
-    'logger_temporary_settings_debug': False,
     'logger_info_prompt': True,
     'logger_info_prompt_threshold': 500,
     'logger_info_prompt_cutoff': 0,
@@ -72,8 +68,7 @@ default_settings = {
     'timeout_chunk_first': 10.0,
     'timeout_chunk_next': 5.0,
     'timeout_completion': 30.0,
-    'parser': ["string_strip.py"],
-    'retry': 2
+    'parser': ["string_strip.py"]
 }
 
 class ChatCompletions(Client):
@@ -113,19 +108,6 @@ class ChatCompletions(Client):
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
         Settings:
-            logger_severity (str | None):
-                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
-            logger_name (str | None):
-                Logger name shown in each log identifying this object.
-            logger_wrap_cutoff (int | None):
-                Maximum visible message body length in wrapper result and retry logs, excluding prefixes. Longer bodies end with "...".
-                Use `0` to suppress result logs and retain only retry prefixes. Use `None` to apply no restriction.
-            logger_wrap_failure_prefix (bool):
-                Include function and attempt information before ordinary failure messages logged by the wrapper.
-                Use `False` to log only the operation message.
-            logger_temporary_settings_debug (bool):
-                Log temporary setting changes and their reversions at DEBUG instead of INFO.
-                Explicit setting changes are unaffected.
             logger_info_prompt (bool | int):
                 Logger behavior regarding an INFO log with each call of `prompt()`:
                 - Use `False` to deactivate this log.
@@ -228,10 +210,6 @@ class ChatCompletions(Client):
                 - See template for using or creating parsers: nimbro_api/api/openai/parser/template.py
                 - Parsers can be referenced either as path or as a name of a default parser in "nimbro_api/api/openai/parser".
                 - Use `str` to automatically set up a list with one completion parser.
-            retry (bool | int):
-                Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
@@ -240,7 +218,8 @@ class ChatCompletions(Client):
             object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
-            - See the global dictionary 'default_settings' on top of this file for defaults.
+            - See `nimbro_api.Client.get_settings()` for inherited settings.
+            - See the global dictionary 'default_settings' on top of this file for client-specific defaults.
             - A full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)

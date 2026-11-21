@@ -4,9 +4,6 @@ from ..client import Client
 default_settings = {
     'logger_severity': "info",
     'logger_name': "nimbro_api",
-    'logger_wrap_cutoff': None,
-    'logger_wrap_failure_prefix': True,
-    'logger_temporary_settings_debug': False,
     'logger_mute': False,
     'logger_line_length': None,
     'logger_multi_line_prefix': False,
@@ -52,20 +49,9 @@ class Core(Client):
                 If provided, the one setting with this name is returned directly.
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
-        Settings: See the global dictionary for defaults.
-            logger_severity (str | None):
-                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (str).
-            logger_name (str | None):
-                Logger name shown in each log identifying this object.
-            logger_wrap_cutoff (int | None):
-                Maximum visible message body length in wrapper result and retry logs, excluding prefixes. Longer bodies end with "...".
-                Use `0` to suppress result logs and retain only retry prefixes. Use `None` to apply no restriction.
-            logger_wrap_failure_prefix (bool):
-                Include function and attempt information before ordinary failure messages logged by the wrapper.
-                Use `False` to log only the operation message.
-            logger_temporary_settings_debug (bool):
-                Log temporary setting changes and their reversions at DEBUG instead of INFO.
-                Explicit setting changes are unaffected.
+        Settings:
+            logger_severity (str | int):
+                Defines the process-wide logger severity. Use a severity name or numeric level from `nimbro_api.Client.get_settings()`.
             logger_mute (bool):
                 Mute all logs emitted within this process regardless of any individual 'logger_severity' setting.
             logger_line_length (int | None):
@@ -107,16 +93,16 @@ class Core(Client):
                 Cache keys to minimize reading environment variables.
             defer_delay (int | float):
                 Time in seconds cache jobs are deferred after each registration of a new cache job.
-            retry (bool | int):
-                Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
 
         Returns:
             object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
+
+        Notes:
+            - See `nimbro_api.Client.get_settings()` for inherited settings.
+            - See the global dictionary 'default_settings' on top of this file for client-specific defaults.
         """
         return self._base.get_settings(name)
 

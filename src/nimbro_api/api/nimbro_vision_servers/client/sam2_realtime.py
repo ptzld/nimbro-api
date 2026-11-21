@@ -2,11 +2,7 @@ from nimbro_api.client import Client
 from ..base.sam2_realtime_base import Sam2RealtimeBase
 
 default_settings = {
-    'logger_severity': None,
     'logger_name': "SAM2Realtime",
-    'logger_wrap_cutoff': None,
-    'logger_wrap_failure_prefix': True,
-    'logger_temporary_settings_debug': False,
     'endpoints': {
         'AIS': {
             'api_url': "https://api-code.ais.uni-bonn.de/v1/vision/sam2_realtime",
@@ -26,8 +22,7 @@ default_settings = {
     'timeout_connect': 2.0,
     'timeout_read': 5.0,
     'timeout_read_load': 5.0,
-    'timeout_read_infer': 5.0,
-    'retry': 2
+    'timeout_read_infer': 5.0
 }
 
 class Sam2Realtime(Client):
@@ -66,19 +61,6 @@ class Sam2Realtime(Client):
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
         Settings:
-            logger_severity (str | None):
-                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
-            logger_name (str | None):
-                Logger name shown in each log identifying this object.
-            logger_wrap_cutoff (int | None):
-                Maximum visible message body length in wrapper result and retry logs, excluding prefixes. Longer bodies end with "...".
-                Use `0` to suppress result logs and retain only retry prefixes. Use `None` to apply no restriction.
-            logger_wrap_failure_prefix (bool):
-                Include function and attempt information before ordinary failure messages logged by the wrapper.
-                Use `False` to log only the operation message.
-            logger_temporary_settings_debug (bool):
-                Log temporary setting changes and their reversions at DEBUG instead of INFO.
-                Explicit setting changes are unaffected.
             endpoints (dict):
                 Endpoint definitions mapping names (`str`) to endpoints/providers (`dict`) of the targeted API.
                 - The mapping must contain at least one endpoint and all names must contain a non-whitespace character.
@@ -113,10 +95,6 @@ class Sam2Realtime(Client):
             timeout_read_infer (float | int | None):
                 Time in seconds waited for receiving an "infer" or "update" response from the 'endpoint', or `None` to wait indefinitely.
                 Numeric values must be positive and finite.
-            retry (bool | int):
-                Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
@@ -125,7 +103,8 @@ class Sam2Realtime(Client):
             object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
-            - See the global dictionary 'default_settings' on top of this file for defaults.
+            - See `nimbro_api.Client.get_settings()` for inherited settings.
+            - See the global dictionary 'default_settings' on top of this file for client-specific defaults.
             - A full settings snapshot consolidates the selected endpoint into 'endpoint', including its 'name', and omits 'endpoints'.
         """
         return self._base.get_settings(name)

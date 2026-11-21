@@ -2,11 +2,7 @@ from nimbro_api.client import Client
 from ..base.responses_base import ResponsesBase
 
 default_settings = {
-    'logger_severity': None,
     'logger_name': "Responses",
-    'logger_wrap_cutoff': None,
-    'logger_wrap_failure_prefix': True,
-    'logger_temporary_settings_debug': False,
     'logger_info_prompt': True,
     'logger_info_prompt_threshold': 500,
     'logger_info_prompt_cutoff': 0,
@@ -63,8 +59,7 @@ default_settings = {
     'timeout_read': 20.0,
     'timeout_chunk_first': 10.0,
     'timeout_chunk_next': 5.0,
-    'timeout_response': 30.0,
-    'retry': 2
+    'timeout_response': 30.0
 }
 
 class Responses(Client):
@@ -125,19 +120,6 @@ class Responses(Client):
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
         Settings:
-            logger_severity (str | None):
-                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
-            logger_name (str | None):
-                Logger name shown in each log identifying this object.
-            logger_wrap_cutoff (int | None):
-                Maximum visible message body length in wrapper result and retry logs, excluding prefixes. Longer bodies end with "...".
-                Use `0` to suppress result logs and retain only retry prefixes. Use `None` to apply no restriction.
-            logger_wrap_failure_prefix (bool):
-                Include function and attempt information before ordinary failure messages logged by the wrapper.
-                Use `False` to log only the operation message.
-            logger_temporary_settings_debug (bool):
-                Log temporary setting changes and their reversions at DEBUG instead of INFO.
-                Explicit setting changes are unaffected.
             logger_info_prompt (bool | int):
                 Logger behavior regarding an INFO log with each call of `prompt()`:
                 - Use `False` to deactivate this log.
@@ -256,10 +238,6 @@ class Responses(Client):
             timeout_response (float | int | None):
                 Time in seconds waited until the complete response is received, or `None` to wait indefinitely.
                 Numeric values must be positive and finite.
-            retry (bool | int):
-                Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
@@ -268,7 +246,8 @@ class Responses(Client):
             object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
-            - See the global dictionary 'default_settings' on top of this file for defaults.
+            - See `nimbro_api.Client.get_settings()` for inherited settings.
+            - See the global dictionary 'default_settings' on top of this file for client-specific defaults.
             - 'max_tokens' includes reasoning tokens and is sent as 'max_output_tokens'.
             - Endpoint 'api_flavor' is "openai", "openrouter", "vllm", or "openresponses".
               Model IDs must contain a non-whitespace character. Supported models and options depend on the endpoint.

@@ -123,9 +123,8 @@ instance through its public facade or another `wrap()` call.
 
 ### Settings
 
-Every concrete default dictionary includes `logger_severity`, `logger_name`, and
-`retry`. Ordinary API clients use `logger_severity=None` to inherit process-wide
-severity, a descriptive `logger_name`, and normally `retry=2`.
+List inherited settings in concrete `default_settings` only when overriding
+their values, for example a client-specific `logger_name`.
 
 Keep defaults, the `Settings` docstring, and per-setting validation in matching
 logical order: logging/display controls, endpoint registry and selection,
@@ -353,8 +352,10 @@ normalized or extracted result must match the public method's documented schema.
   and "". Backticks mark Python types, non-string literals, expressions, and
   callable references: `dict`, `None`, `True`, `get_settings()`,
   `result['data'][0]`. Do not treat these three forms as interchangeable emphasis.
-- Document all settings in `get_settings()` in defaults order, including nested
-  structures and conditional applicability. Refer to module-level
+- In `get_settings()`, document new settings and changed behavior in defaults
+  order, including nested structures and conditional applicability.
+  Refer to `Client.get_settings()` for inherited settings; a different
+  default alone needs no description. Refer to module-level
   'default_settings' for setting defaults; describe argument defaults explicitly
   with "Defaults to ..." and explain special values with "Use ... to ...".
 - Constructor/settings docstrings explain partial dictionaries, dotted keys,

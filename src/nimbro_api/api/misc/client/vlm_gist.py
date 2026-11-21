@@ -2,11 +2,7 @@ from nimbro_api.client import Client
 from ..base.vlm_gist_base import VlmGistBase
 
 default_settings = {
-    'logger_severity': None,
     'logger_name': "VLM-GIST",
-    'logger_wrap_cutoff': None,
-    'logger_wrap_failure_prefix': True,
-    'logger_temporary_settings_debug': False,
     'message_process': True,
     'message_results': False,
     'include_image': False,
@@ -99,8 +95,7 @@ default_settings = {
         'size': 8,
         'style': "threading",
         'retry': 2
-    },
-    'retry': 2
+    }
 }
 
 class VlmGist(Client):
@@ -140,19 +135,6 @@ class VlmGist(Client):
                 Use `None` to return all settings as a dictionary. Defaults to `None`.
 
         Settings:
-            logger_severity (str | None):
-                Logger severity in ["debug", "info", "warn", "error", "fatal", "off"] (`str`) or `None` to adopt global process-wide severity.
-            logger_name (str | None):
-                Logger name shown in each log identifying this object.
-            logger_wrap_cutoff (int | None):
-                Maximum visible message body length in wrapper result and retry logs, excluding prefixes. Longer bodies end with "...".
-                Use `0` to suppress result logs and retain only retry prefixes. Use `None` to apply no restriction.
-            logger_wrap_failure_prefix (bool):
-                Include function and attempt information before ordinary failure messages logged by the wrapper.
-                Use `False` to log only the operation message.
-            logger_temporary_settings_debug (bool):
-                Log temporary setting changes and their reversions at DEBUG instead of INFO.
-                Explicit setting changes are unaffected.
             message_process (bool):
                 Emit an info log when starting to process an image.
             message_results (bool):
@@ -225,11 +207,6 @@ class VlmGist(Client):
                 - style (str): Parallelization backend used for batch processing. One of ["threading", "multiprocessing"].
                 - retry (bool | int): Retry behavior for a single worker when passing multiple images.
                   Then, the global 'retry' setting is applied to the entire batch, triggering retry when at least one worker failed (after using up all their retry attempts).
-            retry (bool | int):
-                Defines retry behavior in failure cases, if the cause is eligible for retry:
-                - If `True`, retries indefinitely. If `False` or `0`, failure is returned immediately.
-                - Use a positive integer (`int`) to permit a specific number of additional retry attempts.
-                - Scope depends on mode (see 'batch.retry').
 
         Raises:
             UnrecoverableError: If 'name' is provided and does not refer to an existing setting.
@@ -238,7 +215,8 @@ class VlmGist(Client):
             object: A deep copy of the current settings (`dict`) or a single setting when providing 'name'.
 
         Notes:
-            - See the global dictionary 'default_settings' on top of this file for defaults.
+            - See `nimbro_api.Client.get_settings()` for inherited settings.
+            - See the global dictionary 'default_settings' on top of this file for client-specific defaults.
         """
         return self._base.get_settings(name)
 
